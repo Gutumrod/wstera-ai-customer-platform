@@ -27,10 +27,10 @@ LINE OA ───────┘       │
 - [Roadmap](plans/ROADMAP.md): phases 0–4, QA/security/commercial gates.
 - [Codex Task 001](tasks/TASK-001-FOUNDATION.md) and [Task 002](tasks/TASK-002-RAG-CONTRACT.md): assigned work briefs.
 - [AGENTS.md](AGENTS.md): Cloud Codex rules and safety boundaries.
-- `platform/src/`: **new** minimal TypeScript boundary contracts (trusted workspace, signed LINE ingress, LINE text reply, approved-source candidate filtering), with tests.
+- `platform/src/`: **new** minimal TypeScript boundary contracts (trusted workspace, bounded signed LINE ingress, LINE text reply, durable deduplication port, approved-source candidate filtering), with tests.
 - `.github/workflows/ci.yml`: Node CI for typecheck and tests.
 
-**Not implemented yet:** document ingestion or actual RAG, chat UI, database/RLS, complete answerability validation, production HTTP webhook, event deduplication store, billing, human Inbox or live LINE roundtrip.
+**Not implemented yet:** document ingestion or actual RAG, chat UI, database/RLS, complete answerability validation, production HTTP webhook, durable event deduplication implementation, billing, human Inbox or live LINE roundtrip. The dedupe helper only defines and exercises the required storage port contract.
 
 ## Quick start
 
