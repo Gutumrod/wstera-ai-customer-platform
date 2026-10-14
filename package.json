@@ -1,0 +1,17 @@
+{
+  "name": "wstera-ai-customer-platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "npm run build && node --test dist/src/tests/core.test.js",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.3"
+  }
+}

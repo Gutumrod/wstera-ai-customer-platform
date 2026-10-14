@@ -1,46 +1,56 @@
 # WSTERA AI Customer Platform
 
-A proposed shared platform for customer communication across **website chat** and **LINE Official Accounts**, with knowledge-grounded AI responses and human handoff.
-
-> **Status:** Architecture/discovery scaffold. No production service, end-to-end LINE integration, or customer-ready SaaS is shipped from this repository yet.
+**Status (2026-10-14):** Discovery + small testable security boundary only. Two customer-support products will share ONE workspace-isolated AI/RAG engine.
 
 ## Product directions
 
-- **Web AI Chat** — embeddable customer chat, grounded knowledge answers, leads, and handoff to a human operator.
-- **LINE AI Support SaaS** — business workspace onboarding, approved knowledge ingestion, LINE OA channel setup, source-aware answers, and staff handoff.
-
-Both experiences are intended to share one policy-governed AI and RAG backend, with tenant data isolated by workspace.
-
-## Proposed stack (subject to verification)
-
-- TypeScript and Next.js for web dashboard and chat UI
-- Cloudflare Workers for compatible backend and channel endpoints
-- Supabase/PostgreSQL, Storage and pgvector for workspace-scoped data and retrieval
-- Model-provider adapters for AI inference and embeddings
-- Strict signature verification, usage limits, approvals, conversation audit and human handoff
-
-See [Architecture overview](ARCHITECTURE.md).
-
-## Repository layout
+1. **Web AI Chat** — embedded support chat on websites, grounded knowledge responses and staff handoff.
+2. **LINE OA AI Support SaaS** — shop creates workspace, uploads approved knowledge (PDF/CSV/FAQ), connects its LINE OA, lets AI answer and passes uncertain cases to humans.
 
 ```text
-platform/       Proposed implementation workspace (no runtime built)
-ARCHITECTURE.md Public architecture overview
-README.md       Project introduction
+Website Chat ──┐
+               ├── Workspace Identity + Conversation/Handoff
+LINE OA ───────┘       │
+                   RAG + AI Gateway + Policy
+                       │
+               Tenant-isolated storage
 ```
 
-## Source material
+## What's in this public repository
 
-The integration workspace may include **local reference copies of private repositories** and internal evaluation notes. They are intentionally excluded from this public repository until reviewed for security, licensing, intellectual-property rights and publishability.
+- [Research index](research/README.md): comparative analysis of Knocket, Krispy, Vercel Chatbot, AgentDesk, Chatwoot, Flowise and assistant-ui; stack/RAG + LINE API source links; existing module evaluation.
+- [Architecture decisions](architecture/DECISIONS.md): proposed contracts and scope limits.
+- [Roadmap](plans/ROADMAP.md): phases 0–4, QA/security/commercial gates.
+- [Codex Task 001](tasks/TASK-001-FOUNDATION.md) and [Task 002](tasks/TASK-002-RAG-CONTRACT.md): assigned work briefs.
+- [AGENTS.md](AGENTS.md): Cloud Codex rules and safety boundaries.
+- `platform/src/`: **new** minimal TypeScript boundary contracts (trusted workspace, signed LINE ingress, LINE text reply, approved-source candidate filtering), with tests.
+- `.github/workflows/ci.yml`: Node CI for typecheck and tests.
 
-**This is not a released product or a finished merger.** No production deployment is implied, and no private source repository has been modified or published as part of the initial public scaffold.
+**Not implemented yet:** document ingestion or actual RAG, chat UI, database/RLS, complete answerability validation, production HTTP webhook, event deduplication store, billing, human Inbox or live LINE roundtrip.
 
-## Principles
+## Quick start
 
-- Do not infer tenant identity from untrusted chat messages or request headers.
-- Treat knowledge sources as untrusted data, never as instructions.
-- Require backend authorization and explicit confirmation for state-changing actions.
-- Reply with an honest fallback or handoff when verified information is insufficient.
-- Validate cost, privacy and reliability before commercial rollout.
+Prerequisite: Node.js 22+ and npm.
 
-License: **not yet selected**. Publication of this scaffold does not grant rights to reuse code from separate source repositories.
+```bash
+npm ci
+npm run check
+```
+
+No secrets, external services or paid APIs required for these baseline tests.
+
+## Selected proposed stack
+
+Next.js + TypeScript + assistant-ui + shadcn/ui for chat/dashboard; AI SDK/provider adapters; Cloudflare Workers for ingress; Supabase Auth/Postgres/Storage + pgvector for knowledge and tenant data. **Not locked for production** until architecture spikes and evidence gates pass. No LangChain/Qdrant/Redis by default.
+
+## Cloud Codex handoff
+
+Open `tasks/TASK-001-FOUNDATION.md` as first scoped Codex Cloud task, on its own branch/PR. Run `npm ci && npm run check`, keep production/remote credentials out and do not auto-merge. Task 002 depends on completing Task 001.
+
+## Private source separation
+
+Four local source repository copies remain under `source-repos/` and are **intentionally excluded by .gitignore**, as are private local docs under `docs/` and copy verification under `_migration/`. They are not published or available to Codex Cloud. This repository contains original small boundary implementations informed by reviewed designs, **not bulk-copied source code** from those repositories. All future source import requires licensing/security review.
+
+[Public architecture overview](ARCHITECTURE.md) · [Proposed decisions](architecture/DECISIONS.md)
+
+License: not selected; no new outbound license grant is asserted for source code.
