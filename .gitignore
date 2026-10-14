@@ -1,0 +1,40 @@
+# Source baselines are copies of PRIVATE repositories.
+# Never publish these directories as part of the public umbrella repo.
+/source-repos/
+/_migration/
+
+# Local-only internal consolidation documents, source paths and verification evidence.
+/docs/
+
+# Credentials and local configuration.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.secret
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Runtime/build artifacts.
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+**/dist/
+coverage/
+**/coverage/
+.wrangler/
+**/.wrangler/
+.vercel/
+**/.vercel/
+.DS_Store
+Thumbs.db
