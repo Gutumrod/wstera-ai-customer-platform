@@ -14,6 +14,7 @@ Updated: 2026-10-15. Evidence baseline from GitHub and local repository; this fi
 | PR #5 / Phase 0C | OPEN; head `346089013a5456b096f29d2341be7033198c20a7`; base is current main; CI SUCCESS; Owner comment says PASS WITH NOTES | Independent review by a reviewer other than PR author, then Owner merge decision |
 | Task 002 / RAG contracts | PLANNED in current `main` | Do not implement until a scoped task is approved and PR #5 contract dependency is accepted |
 | G1 | NOT STARTED | Product-wide G1 gate evidence absent |
+| Execution-plan change | PR #6 OPEN on `codex/g1-execution-plan-20261015` | Documentation review pending; CI runs on the latest PR head |
 
 ## G1 completion target
 
