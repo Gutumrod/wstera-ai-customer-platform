@@ -1,8 +1,8 @@
 # G1-B Document Ingestion — Local Evidence
 
-**Recorded:** 2026-10-15 (Asia/Bangkok)  
-**Task branch:** `codex/g1b-document-ingestion-20261015`  
-**Implementation commit:** `f21b6bd` (`feat: add bounded PDF and CSV knowledge ingestion`)  
+**Recorded:** 2026-10-15 (Asia/Bangkok)
+**Task branch:** `codex/g1b-document-ingestion-20261015`
+**Implementation commit:** `f21b6bd` (`feat: add bounded PDF and CSV knowledge ingestion`)
 **Stack base:** PR #7 head `ea97db2ea7044f87f8e71728e45e71d9fed48bb1`; PR #7 remains open.
 
 ## Delivered in this slice
