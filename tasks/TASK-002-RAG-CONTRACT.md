@@ -1,6 +1,6 @@
 # Codex Cloud Task 002 — Knowledge/RAG Contracts (AFTER 001)
 
-**Status:** PARTIALLY IMPLEMENTED LOCALLY on stacked branch `codex/g1a-knowledge-contracts-20261015`; PR #5 remains unmerged and Owner review is pending. The scoped G1a code/tests are present in this worktree; this does not certify the full task or unlock merge/deploy.
+**Status:** PARTIALLY IMPLEMENTED LOCALLY across G1a–G1c branches; PR #7 is stacked on PR #5, PR #8 is stacked on PR #7, and PR #9 adds the diagnostic baseline. Parent PR/security/Owner gates remain open; this does not unlock merge/deploy.
 **Goal:** Create a safe source/version/chunk/retrieval contract for approved knowledge per workspace, without pretending that embeddings alone guarantee factual answers.
 
 **Design authority:** [Master Brief](../BRIEF.md) (L-02/L-03/L-04/L-08/L-12), [Knowledge module ownership](../architecture/REPOSITORY-STRUCTURE.md) and [Port contracts](../architecture/PORTS-AND-ADAPTERS.md). Implement through provider-neutral contracts; do not import Supabase/pgvector directly into the knowledge domain.
@@ -20,15 +20,15 @@
 
 ### Still not implemented from this task
 
-- Durable async ingestion and persistent adapters; Thai retrieval comparison/evaluation against pgvector/tokenizer/reranker options; full adapter integration and broader cross-adapter contract evidence.
+- Durable async ingestion and persistent adapters; comparison of pgvector/tokenizer/reranker options; full adapter integration and broader cross-adapter contract evidence. A 30-query lexical diagnostic baseline now exists in Task 004, but it does not set pass thresholds or choose the production retrieval technology.
 
-- Source and version type schema (PDF/CSV/FAQ), approval, removal, chunk source reference (document ID, page/row, timestamp), and workspace isolation contract.
-- Async ingestion state machine: uploaded -> validating -> extracting -> indexed -> approved OR quarantined/failed; explicit delete/re-index.
-- Retriever port supports hybrid search and exact SKU lookup; never returns another workspace's chunks.
-- Source-backed answer policy: evidence sufficient? cite chunk IDs; if absent/conflicting/stale, fallback + handoff. Test prompt-injection fixture.
-- Synthetic Thai shop fixtures only; no real customer data.
-- Short comparison of pgvector + lexical retrieval for Thai vs alternative tokenization/rerank strategies based on proof.
-- Tests for tampered workspace, revoked source, version conflict, 0 results and mixed-language SKUs.
+- Source/version/chunk schema, approval/revoke lifecycle and workspace scope are present; durable deletion, retention, re-index operation, source checksums and timestamps remain absent.
+- Lifecycle statuses exist from uploaded through extraction/index/approval and failure/quarantine, but no durable async worker or persistent adapter executes them.
+- Retrieval is provider-neutral and currently lexical with exact-token SKU bonus. Hybrid/vector retrieval and cross-adapter isolation evidence remain open.
+- There is no factual sufficiency/conflict/forbidden-topic answerability policy. The candidate filter is not an Answerability Gate.
+- Synthetic-only evidence: Task 004 records a 30-query baseline (recall@3 0.963, precision@3 0.346, citation precision 1.0, abstention 0.667); it is diagnostic, not a quality pass.
+- No comparison of pgvector/tokenizer/reranker options has been made, and no thresholds are set pending Owner review.
+- Existing tests cover workspace tampering, revoked sources, version conflicts, no results and mixed-language SKUs; broader contract tests against a durable adapter are still needed.
 
 ## Non-goals
 

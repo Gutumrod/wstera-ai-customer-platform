@@ -25,4 +25,4 @@ An authenticated upload path, durable async ingestion state machine, persistent 
 
 ## Next executable slice
 
-Add a persisted repository and authenticated upload/approval path with isolation tests. Keep retrieval behind `KnowledgeRetrievalPort`; evaluate Thai/SKU recall before selecting pgvector/tokenizer/reranking. Web chat, model generation and staff handoff remain later slices.
+Add a persisted repository and authenticated upload/approval path with isolation tests. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Web chat and model generation remain later slices. Handoff domain state exists separately, but no production delivery path is integrated.

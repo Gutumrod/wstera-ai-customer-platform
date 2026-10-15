@@ -49,7 +49,8 @@ HMAC fail-closed, event replay dedupe, workspace ownership enforcement, empty ve
 2. [Task 002 — Data and RAG contract](../tasks/TASK-002-RAG-CONTRACT.md)
 3. [Task 003 — bounded PDF/CSV document extraction](../tasks/TASK-003-DOCUMENT-INGESTION.md): local parser and source locators. Authenticated upload, persistence, async processing, and approval workflow remain separate implementation work.
 4. [Task 004 — Thai retrieval evaluation baseline](../tasks/TASK-004-THAI-RETRIEVAL-EVALUATION.md): establish synthetic retrieval/citation/abstention metrics before choosing a retrieval stack; no pass threshold until Owner review.
-5. Task 005 (not yet issued): Web Chat, shared response path, and human handoff, to be split into scoped tasks.
-6. Task 006 (not yet issued): real LINE sandbox pilot.
+5. [Task 005 — shared conversation/handoff core](../tasks/TASK-005-CONVERSATION-HANDOFF.md): local state machine and ports; durable persistence and channel delivery remain separate gates.
+6. Task 006 (not yet issued): grounded shared response path and Web Chat integration; requires answerability policy and provider/cost decisions.
+7. Task 007 (not yet issued): real LINE sandbox pilot.
 
 **Owner is final approval authority.** Do not merge features / deploy without review.
