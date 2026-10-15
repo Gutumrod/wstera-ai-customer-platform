@@ -20,15 +20,11 @@
 
 ### Still not implemented from this task
 
-- Durable async ingestion and persistent adapters; Thai retrieval comparison/evaluation against pgvector/tokenizer/reranker options; full adapter integration and broader cross-adapter contract evidence.
-
-- Source and version type schema (PDF/CSV/FAQ), approval, removal, chunk source reference (document ID, page/row, timestamp), and workspace isolation contract.
-- Async ingestion state machine: uploaded -> validating -> extracting -> indexed -> approved OR quarantined/failed; explicit delete/re-index.
-- Retriever port supports hybrid search and exact SKU lookup; never returns another workspace's chunks.
-- Source-backed answer policy: evidence sufficient? cite chunk IDs; if absent/conflicting/stale, fallback + handoff. Test prompt-injection fixture.
-- Synthetic Thai shop fixtures only; no real customer data.
-- Short comparison of pgvector + lexical retrieval for Thai vs alternative tokenization/rerank strategies based on proof.
-- Tests for tampered workspace, revoked source, version conflict, 0 results and mixed-language SKUs.
+- Durable async ingestion, persistent adapters, and the uploaded -> validating -> extracting -> indexed -> approved/quarantined/failed state machine; delete/re-index workflow.
+- Production hybrid/vector retrieval, persistent exact-SKU lookup, and cross-adapter isolation evidence. Current lexical behavior and tenant checks are in-memory only.
+- Source-backed answerability policy: decide evidence sufficiency, resolve conflicting/stale content, cite selected chunks, or fall back and hand off.
+- Thai retrieval comparison against pgvector/tokenizer/reranker options based on representative evidence; current fixtures and metrics are synthetic only.
+- Broader contract/security evidence against real persistence adapters and concurrent tenant access.
 
 ## Non-goals
 
