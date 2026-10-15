@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { deflateSync } from "node:zlib";
 import { createTrustedWorkspace } from "../tenancy/workspace.js";
 import {
   KnowledgeError,
   createFaqVersion,
+  createImportedKnowledgeVersion,
   retrieveKnowledge,
   type KnowledgeSource,
 } from "./index.js";
@@ -97,6 +99,59 @@ test("repository refuses a caller-supplied approved status at version creation",
     () => repository.createVersion(shopA, { ...version, status: "approved", approvedBy: "staff-1", approvedAt: new Date(0).toISOString() } as never),
     (error: unknown) => error instanceof KnowledgeError && error.code === "INVALID_VERSION_TRANSITION",
   );
+});
+
+test("repository rejects an imported version whose kind differs from its source", () => {
+  const repository = new InMemoryKnowledgeRepository();
+  repository.createSource(shopA, { sourceId: "catalog-pdf", title: "PDF catalog", kind: "pdf" });
+  const csvVersion = createImportedKnowledgeVersion({
+    workspace: shopA,
+    sourceId: "catalog-pdf",
+    versionId: "v1",
+    title: "CSV payload",
+    kind: "csv",
+    segments: [{ text: "SKU: TIE-77", locator: { kind: "row", row: 2 } }],
+  });
+
+  assert.throws(
+    () => repository.createVersion(shopA, csvVersion),
+    (error: unknown) => error instanceof KnowledgeError && error.code === "INVALID_KNOWLEDGE_INPUT",
+  );
+});
+
+test("retrieval locator order is deterministic when repository rows are reversed", async () => {
+  const repository = new InMemoryKnowledgeRepository();
+  repository.createSource(shopA, { sourceId: "catalog", title: "Catalog", kind: "csv" });
+  const version = createImportedKnowledgeVersion({
+    workspace: shopA,
+    sourceId: "catalog",
+    versionId: "v1",
+    title: "Catalog",
+    kind: "csv",
+    segments: [
+      { text: "SKU: TIE-77 ราคา 100 บาท", locator: { kind: "row", row: 2 } },
+      { text: "SKU: TIE-77 ราคา 100 บาท", locator: { kind: "row", row: 3 } },
+    ],
+  });
+  repository.createVersion(shopA, version);
+  repository.transitionVersion(shopA, "catalog", "v1", "validating");
+  repository.transitionVersion(shopA, "catalog", "v1", "extracting");
+  repository.transitionVersion(shopA, "catalog", "v1", "indexed");
+  repository.approveVersion(shopA, "catalog", "v1", { approvedBy: "staff-1" });
+  const reorderedRepository = {
+    listRetrievableChunks: (workspace: typeof shopA) => [...repository.listRetrievableChunks(workspace)].reverse(),
+  } as unknown as Parameters<typeof retrieveKnowledge>[0];
+
+  const natural = await retrieveKnowledge(repository, { workspace: shopA, query: "TIE-77", limit: 2 });
+  const reversed = await retrieveKnowledge(reorderedRepository, { workspace: shopA, query: "TIE-77", limit: 2 });
+  const locators = (result: typeof natural) => result.kind === "evidence"
+    ? result.hits.map((hit) => hit.citation.locator)
+    : [];
+  assert.deepEqual(locators(natural), locators(reversed));
+  assert.deepEqual(locators(reversed), [
+    { kind: "row", row: 2, chunkIndex: 0 },
+    { kind: "row", row: 3, chunkIndex: 0 },
+  ]);
 });
 
 test("repository derives tenant scope from trusted context and rejects forged or mismatched workspace data", async () => {
@@ -315,7 +370,7 @@ async function loadLocalDocumentExtractor(): Promise<unknown> {
   return import(adapterUrl.href).catch(() => ({}));
 }
 
-function makePdfFixture(pages: readonly string[]): Uint8Array {
+function makePdfFixture(pages: readonly string[], compressed = false): Uint8Array {
   const pageObjectIds = pages.map((_, index) => 4 + index * 2);
   const objects = new Map<number, string>();
   objects.set(1, "<< /Type /Catalog /Pages 2 0 R >>");
@@ -324,10 +379,17 @@ function makePdfFixture(pages: readonly string[]): Uint8Array {
   pages.forEach((pageText, index) => {
     const pageId = pageObjectIds[index]!;
     const contentId = pageId + 1;
-    const escaped = pageText.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
-    const stream = `BT /F1 12 Tf 72 720 Td (${escaped}) Tj ET`;
+    const escape = (text: string) => text.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+    const sourceText = compressed && pageText.length > 100_000
+      ? `BT /F1 1 Tf ${Array.from({ length: Math.ceil(pageText.length / 30) }, (_, chunk) => {
+        const text = pageText.slice(chunk * 30, chunk * 30 + 30);
+        return `1 0 0 1 10 700 Tm (${escape(text)}) Tj`;
+      }).join(" ")} ET`
+      : `BT /F1 12 Tf 72 720 Td (${escape(pageText)}) Tj ET`;
+    const source = Buffer.from(sourceText, "ascii");
+    const stream = compressed ? deflateSync(source) : source;
     objects.set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
-    objects.set(contentId, `<< /Length ${Buffer.byteLength(stream, "ascii")} >>\nstream\n${stream}\nendstream`);
+    objects.set(contentId, `<< /Length ${stream.byteLength}${compressed ? " /Filter /FlateDecode" : ""} >>\nstream\n${stream.toString("latin1")}\nendstream`);
   });
   const objectCount = Math.max(...objects.keys());
   let document = "%PDF-1.4\n";
@@ -342,7 +404,7 @@ function makePdfFixture(pages: readonly string[]): Uint8Array {
   document += `xref\n0 ${objectCount + 1}\n0000000000 65535 f \n`;
   for (let id = 1; id <= objectCount; id += 1) document += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
   document += `trailer\n<< /Size ${objectCount + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return new TextEncoder().encode(document);
+  return Buffer.from(document, "latin1");
 }
 
 test("CSV extractor handles UTF-8 BOM, Thai, quoted commas and maps the data row", async () => {
@@ -378,6 +440,41 @@ test("PDF extractor returns per-page text and rejects image-only PDFs without OC
 
   const imageOnly = await extractor.extract({ kind: "pdf", bytes: makePdfFixture([""]) });
   assert.deepEqual(imageOnly, { kind: "failure", code: "NO_TEXT_CONTENT" });
+});
+
+test("PDF extractor fails closed on highly-compressible page output", async () => {
+  const loaded = await loadLocalDocumentExtractor();
+  const Factory = (loaded as { LocalKnowledgeDocumentExtractor?: new () => DocumentExtractor }).LocalKnowledgeDocumentExtractor;
+  assert.equal(typeof Factory, "function");
+  if (typeof Factory !== "function") return;
+
+  const compressedBomb = makePdfFixture(["ZX-77 ".repeat(20_000)], true);
+  assert.ok(compressedBomb.byteLength < 20_000, "fixture should expand far beyond its compressed PDF bytes");
+  const result = await new Factory().extract({ kind: "pdf", bytes: compressedBomb });
+  assert.equal(result.kind, "failure", "compressed content that exceeds safe processing limits must never be accepted");
+  if (result.kind === "failure") assert.ok(["OUTPUT_TOO_LARGE", "PROCESSING_LIMIT"].includes(result.code));
+});
+
+test("PDF text consumer cancels the stream as soon as the extraction cap is crossed", async () => {
+  type Consumer = (stream: ReadableStream<unknown>, maxChars: number) => Promise<Readonly<{ kind: "success"; text: string } | { kind: "too_large" }>>;
+  const loaded = await import("../../adapters/knowledge/pdf-text-worker.js").catch(() => ({}));
+  const consume = (loaded as { consumePdfTextStream?: Consumer }).consumePdfTextStream;
+  assert.equal(typeof consume, "function", "PDF extraction must expose a bounded streaming consumer");
+  if (typeof consume !== "function") return;
+
+  let pulls = 0;
+  let cancelled = false;
+  const stream = new ReadableStream<unknown>({
+    pull(controller) {
+      pulls += 1;
+      controller.enqueue({ items: [{ str: "X".repeat(20), hasEOL: false }] });
+      if (pulls > 1) controller.enqueue({ items: [{ str: "must-not-be-read", hasEOL: false }] });
+    },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  assert.deepEqual(await consume(stream, 10), { kind: "too_large" });
+  assert.equal(cancelled, true);
+  assert.equal(pulls, 1);
 });
 
 test("document extractor fails closed for invalid UTF-8, malformed files and oversized input", async () => {
@@ -482,9 +579,13 @@ test("document preparation converts thrown or malformed extractor results to saf
   const invalidSegment = {
     extract: async () => ({ kind: "success", segments: [null] }),
   } as unknown as DocumentExtractor;
+  const processingLimited = {
+    extract: async () => ({ kind: "failure", code: "PROCESSING_LIMIT" }),
+  } as unknown as DocumentExtractor;
   const thrownError = { extract: async () => { throw new Error("private parser detail"); } } as DocumentExtractor;
 
   assert.deepEqual(await prepare(nullResult, input), { kind: "failure", code: "MALFORMED_FILE" });
   assert.deepEqual(await prepare(invalidSegment, input), { kind: "failure", code: "MALFORMED_FILE" });
+  assert.deepEqual(await prepare(processingLimited, input), { kind: "failure", code: "PROCESSING_LIMIT" });
   assert.deepEqual(await prepare(thrownError, input), { kind: "failure", code: "MALFORMED_FILE" });
 });

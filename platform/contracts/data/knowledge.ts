@@ -38,6 +38,7 @@ export type KnowledgeVersion = Readonly<{
   workspaceId: string;
   sourceId: string;
   versionId: string;
+  kind: KnowledgeSourceKind;
   title: string;
   content: string;
   status: KnowledgeVersionStatus;
@@ -86,7 +87,8 @@ export type KnowledgeExtractionFailureCode =
   | "TOO_MANY_ROWS"
   | "TOO_MANY_COLUMNS"
   | "RECORD_TOO_LARGE"
-  | "OUTPUT_TOO_LARGE";
+  | "OUTPUT_TOO_LARGE"
+  | "PROCESSING_LIMIT";
 
 export type KnowledgeDocumentExtractionResult =
   | Readonly<{ kind: "success"; segments: readonly KnowledgeExtractedSegment[] }>
