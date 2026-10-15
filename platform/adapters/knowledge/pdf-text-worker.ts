@@ -48,6 +48,7 @@ export async function consumePdfTextStream(stream: ReadableStream<unknown>, maxC
         const separator = rawText.length === 0 ? "" : " ";
         const suffix = "hasEOL" in rawItem && rawItem.hasEOL === true ? "\n" : "";
         if (rawText.length + separator.length + rawItem.str.length + suffix.length > maxChars) {
+          if (!/\S/u.test(rawItem.str)) continue;
           await reader.cancel("PDF_TEXT_LIMIT").catch(() => undefined);
           return Object.freeze({ kind: "too_large" });
         }
