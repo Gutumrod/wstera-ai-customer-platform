@@ -7,18 +7,23 @@ Build WSTERA AI Customer Platform: two channel products (website support chat an
 ## Start here
 
 Read in this order:
-1. `research/01-CHAT-PLATFORM-COMPARISON.md`
-2. `research/02-STACK-AND-RAG-DESIGN.md`
-3. `research/03-LINE-OA-API-AND-RISKS.md`
-4. `research/04-SOURCE-REUSE-AUDIT.md`
-5. `architecture/DECISIONS.md`
-6. `plans/ROADMAP.md`
-7. The assigned `tasks/TASK-*.md` and associated acceptance tests.
+1. **`BRIEF.md` — owner-locked product goals and safety invariants.**
+2. `architecture/REPOSITORY-STRUCTURE.md` — module ownership and target layout.
+3. `architecture/PORTS-AND-ADAPTERS.md` — dependency direction and extension rules.
+4. `plans/PHASE-BREAKDOWN.md` — phase sequencing and acceptance gates.
+5. `research/01-CHAT-PLATFORM-COMPARISON.md`
+6. `research/02-STACK-AND-RAG-DESIGN.md`
+7. `research/03-LINE-OA-API-AND-RISKS.md`
+8. `research/04-SOURCE-REUSE-AUDIT.md`
+9. `architecture/DECISIONS.md` and `plans/ROADMAP.md`
+10. The specifically assigned `tasks/TASK-*.md` and acceptance tests. Do not execute a PLANNED/BLOCKED task.
 
 ## Mandatory rules
 
 - **Do not read, modify, commit, push, delete, move or publish** private source material under `source-repos/`, `_migration/`, or the locally ignored `docs/` folder. They are intentionally unavailable in Codex Cloud.
 - Use **new code** where possible, informed by audited public design notes; copying private source files into this public repo requires prior licensing, secret and provenance review.
+- Architecture is **ports/adapters**: app/adapter implementations depend on shared contracts; pure `platform/modules/` never import LINE/Next.js/Supabase/vendor SDKs. New provider/channel/knowledge backend must be replaceable via interface + adapter tests, not second engine.
+- Newly added folder READMEs are responsibility markers, not implemented modules. Do not move `platform/src/` until Task 001 and its review are accepted and a scoped migration task is approved.
 - No real LINE credentials, customer PII, real payment/account data, hard-coded tokens or fallback mock success in a production path.
 - Multi-tenancy: workspace identity resolved server-side from trusted authentication/connection ownership. NEVER trust `x-tenant-id`, user message, document text or LLM output. Enforce cross-tenant denial at DB/API/retriever boundary.
 - AI never directly authorizes a state-changing business action. Validate -> Authorize -> Confirm -> Idempotent Execute -> Verify -> Audit.

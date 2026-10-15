@@ -2,6 +2,8 @@
 
 Status: proposed work plan for Codex Cloud. No implied production approval.
 
+**Product authority:** [BRIEF.md](../BRIEF.md) documents the locked goals and safety invariants. Detailed incremental work breakdown: [PHASE-BREAKDOWN.md](PHASE-BREAKDOWN.md). Adapter-oriented module ownership: [REPOSITORY-STRUCTURE.md](../architecture/REPOSITORY-STRUCTURE.md).
+
 ## Product vision (locked for planning)
 
 1. **Web AI Chat**: business installs a website widget; AI answers from approved workspace knowledge; offers staff takeover when needed.
