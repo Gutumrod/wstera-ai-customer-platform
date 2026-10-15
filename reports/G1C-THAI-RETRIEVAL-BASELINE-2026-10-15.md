@@ -2,6 +2,7 @@
 
 **Recorded:** 2026-10-15 (Asia/Bangkok)
 **Task branch:** `codex/g1c-retrieval-evaluation-20261015`
+**Verified code commit:** `f9799e88339019133d2f6da22519b80fbc944e25`
 **Stack:** PR #9 will target PR #8 (`codex/g1b-document-ingestion-20261015`), which targets PR #7.
 **Corpus:** 30 synthetic queries; 27 retrieval-answerable, 2 retrieval-abstention cases, and 1 separate policy-abstention case; `k = 3`.
 
