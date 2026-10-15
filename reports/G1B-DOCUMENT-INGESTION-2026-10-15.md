@@ -4,6 +4,7 @@
 **Task branch:** `codex/g1b-document-ingestion-20261015`
 **Initial implementation:** `f21b6bd` (`feat: add bounded PDF and CSV knowledge ingestion`)
 **Review-fix commit:** `7dbdf7a3b54fb04e2b5e338f8372ac7037c42865` (`fix: harden bounded knowledge ingestion`)
+**PDF boundary-fix commit:** `bf8b8171c9995c54cb802f65c078d26919bbb153` (`fix: account for blank pages at PDF extraction limit`)
 **Stack base:** PR #7 head `ea97db2ea7044f87f8e71728e45e71d9fed48bb1`; PR #7 remains open.
 
 ## Delivered in this slice
@@ -12,22 +13,23 @@
 - Preserved PDF page and logical CSV record locators through draft version creation, the test repository, approval, and retrieval citation.
 - Added safe failure codes and bounds: 5 MiB input; 100 PDF pages; 5,000 CSV data rows; 100 columns; 16,384 characters per CSV record; 100,000 extracted characters. PDF.js now runs in an isolated worker with 128 MiB old-generation and 32 MiB young-generation heap limits plus a 15-second timeout. Text is consumed incrementally and the stream is cancelled at the configured output cap.
 - Bound each knowledge version to its `faq`/`pdf`/`csv` source kind. The repository rejects mismatches. Retrieval ties now use stable page, row, span, and chunk locator ordering.
+- Fixed PDF output accounting so blank trailing pages receive a zero-length budget without being rejected, while non-empty later pages still include the two-character page separator in the aggregate cap.
 - Added synthetic tests for Thai CSV, BOM and quoted delimiters, multi-page PDF, image-only/no-text PDF, invalid encoding, malformed input, input size, citations, malformed extractor output, compressed PDF fail-closed behavior, stream cancellation, source-kind mismatch, and retrieval order under reversed repository results.
 - Added Task 003 brief and updated task/roadmap status to match the implementation.
 
 ## Verification evidence
 
-Exact tested code candidate: `7dbdf7a3b54fb04e2b5e338f8372ac7037c42865` on `codex/g1b-document-ingestion-20261015`, Node `v24.19.0`, npm `11.11.1`:
+Exact tested code candidate: `bf8b8171c9995c54cb802f65c078d26919bbb153` on `codex/g1b-document-ingestion-20261015`, Node `v24.19.0`, npm `11.11.1`:
 
 | Command | Result |
 |---|---|
-| `npm run check` | Exit 0; typecheck/build passed; **33 tests passed, 0 failed** |
+| `npm run check` | Exit 0; typecheck/build passed; **34 tests passed, 0 failed** |
 | `npm audit --json` | Exit 0; **0 vulnerabilities** (0 info/low/moderate/high/critical), 17 total dependencies |
 | `git diff --check origin/codex/g1b-document-ingestion-20261015...HEAD` | Exit 0 |
 
-Test-first evidence for the review fixes was observed on this branch before production changes: `npm test` failed at the new source-kind assertion (“Missing expected exception”) and reversed-repository assertion (row 3 sorted before row 2). After fixes, the exact candidate passed all 33 tests. The streaming-consumer regression verifies that crossing the cap cancels the input stream before a second pull; the synthetic highly-compressible PDF fails closed as either `OUTPUT_TOO_LARGE` or `PROCESSING_LIMIT`.
+Test-first evidence: before the PDF accounting helper was added, the new page-budget regression failed because the worker exposed no page-budget/append-boundary behavior. The test now verifies zero remaining budget at the exact cap, one character just below it, acceptance at the exact separator-inclusive boundary, and rejection one character beyond it. Earlier review fixes also had observed RED tests for source-kind mismatch and reversed repository order. The streaming-consumer regression verifies that crossing the cap cancels the input stream before a second pull; the synthetic highly-compressible PDF fails closed as either `OUTPUT_TOO_LARGE` or `PROCESSING_LIMIT`.
 
-The repository has no lint script, so lint was not available to run. The CI workflow currently triggers pull-request checks only when the PR base is `main`; this stacked PR targets PR #7 and therefore currently has no hosted check run. Independent review identified the three corrected defects above; follow-up review of commit `7dbdf7a` is pending. Local evidence does not replace hosted CI or independent review.
+The repository has no lint script, so lint was not available to run. The CI workflow currently triggers pull-request checks only when the PR base is `main`; this stacked PR targets PR #7 and therefore currently has no hosted check run. Independent review identified the PDF boundary defect corrected in `bf8b817`; follow-up review of that fix is pending. Local evidence does not replace hosted CI or independent review.
 
 ## Security, cost, and limitations
 
