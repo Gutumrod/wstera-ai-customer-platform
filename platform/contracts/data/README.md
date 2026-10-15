@@ -1,15 +1,13 @@
-# Persistence/Knowledge Ports
+# Persistence and Knowledge Ports
 
-**Status:** FOLDER CONTRACT ONLY - not implemented. **Planned phase:** Phase 1/2.
+**Status:** Provider-neutral knowledge source/version/chunk and retrieval contracts are implemented in `knowledge.ts`; no persistence, object storage, vector index, queue, or durable delivery adapter is implemented.
 
 ## Responsibility
 
-Workspace repositories, object storage, retrieval, durable delivery claim/retry, queue interfaces.
+Workspace repositories, object storage, retrieval, durable delivery claim/retry, and queue interfaces. The knowledge contracts define scoped DTOs, lifecycle, citations, and replaceable repository/retrieval ports.
 
 ## Dependency and security rule
 
-Implementations must apply workspace isolation and recovery semantics.
+Implementations must apply workspace isolation and recovery semantics. Repository methods receive a server-resolved `TrustedWorkspaceContext`; adapters must enforce scope at their storage boundary rather than trusting row fields.
 
-Do not add vendor SDK calls to core modules. Follow [the master brief](../../../BRIEF.md), [repository structure](../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
-
-No runtime code exists in this folder until a separately reviewed implementation task.
+No database, object-storage, vector-index, queue, or durable delivery implementation exists here. See `../modules/knowledge/README.md` for the bounded local knowledge implementation and verification status.
