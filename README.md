@@ -2,7 +2,7 @@
 
 **Status (2026-10-15):** Discovery + small testable security boundary only. Two customer-support products will share ONE workspace-isolated AI/RAG engine.
 
-**Start here:** [Master Product Brief — locked goals](BRIEF.md) · [Modular folder layout](architecture/REPOSITORY-STRUCTURE.md) · [Adapter contracts](architecture/PORTS-AND-ADAPTERS.md) · [Detailed phase plan](plans/PHASE-BREAKDOWN.md).
+**Start here:** [Concise Project Goal](BRIEF.md) · [Detailed Requirements](architecture/PRODUCT-REQUIREMENTS-DETAIL.md) · [Modular folder layout](architecture/REPOSITORY-STRUCTURE.md) · [Adapter contracts](architecture/PORTS-AND-ADAPTERS.md) · [Detailed phase plan](plans/PHASE-BREAKDOWN.md).
 
 **The new module folders are architecture placeholders, not implemented features.** Existing executable security-boundary code remains in `platform/src/` while Task 001 is reviewed.
 
