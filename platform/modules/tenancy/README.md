@@ -1,10 +1,12 @@
 # Workspace & Tenancy Module
 
-**Status:** FOLDER CONTRACT ONLY - not implemented. **Planned phase:** Phase 1 minimal; Phase 3 self-service.
+**Status:** Minimal trusted workspace context implementation migrated in Phase 0C; membership, connection ownership and lifecycle remain unimplemented. **Planned phase:** Phase 1 minimal; Phase 3 self-service.
 
 ## Responsibility
 
 Workspace membership, connection ownership, scoped authorizations and lifecycles.
+
+`workspace.ts` contains the existing trusted context constructor and workspace assertion. It has no persistence or authentication resolver; a host must still bind it to a trusted connection. The old `platform/src/core/workspace.ts` path re-exports this API for compatibility.
 
 ## Dependency and security rule
 

@@ -1,10 +1,12 @@
 # Channel Ports
 
-**Status:** FOLDER CONTRACT ONLY - not implemented. **Planned phase:** Phase 0 contracts.
+**Status:** Initial provider-neutral TypeScript contracts implemented in Phase 0C; transport adapters and runtime validation remain unimplemented. **Planned phase:** Phase 0 contracts.
 
 ## Responsibility
 
 Provider-neutral inbound message, outbound reply, origin/capability and delivery contracts.
+
+`index.ts` defines `InboundMessage`, `TrustedWorkspaceContext`, `ChannelPort` and normalized `ChannelError`. A normalized message is data only: `connectionId` and external IDs must be resolved/used by trusted server code and do not authorize a workspace.
 
 ## Dependency and security rule
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHmac } from "node:crypto";
 import { createTrustedWorkspace, enforceWorkspace } from "../core/workspace.js";
+import { ChannelError, type ChannelPort, type InboundMessage, type TrustedWorkspaceContext } from "../../contracts/channels/index.js";
 import { verifyLineSignature } from "../line/signature.js";
 import { parseSignedLineTextEvents, type LineEventDeduplicator } from "../line/ingress.js";
 import { LineHttpError, sendLineReply } from "../line/client.js";
@@ -19,6 +20,41 @@ test("trusted workspace enforces a strict, immutable context", () => {
   assert.equal(Object.isFrozen(ctx), true);
   assert.throws(() => createTrustedWorkspace({ workspaceId: "", connectionId: "x", channel: "line" }));
   assert.throws(() => enforceWorkspace(ctx, "shop-2"), /CROSS_WORKSPACE/);
+});
+
+test("shared channel contracts keep message identity connection-scoped and errors normalized", async () => {
+  const context: TrustedWorkspaceContext = createTrustedWorkspace({
+    workspaceId: "shop-1", connectionId: "conn-line", channel: "line",
+  });
+  const message: InboundMessage = Object.freeze({
+    channel: "line",
+    connectionId: context.connectionId,
+    externalMessageId: "event-1",
+    externalUserId: "user-1",
+    receivedAt: "2026-10-15T00:00:00.000Z",
+    text: "สวัสดี",
+  });
+  assert.equal(message.connectionId, context.connectionId);
+  const sameExternalUserOnAnotherConnection: InboundMessage = Object.freeze({
+    ...message,
+    connectionId: "conn-web",
+    externalMessageId: "event-1",
+  });
+  assert.equal(message.externalUserId, sameExternalUserOnAnotherConnection.externalUserId);
+  assert.notEqual(message.connectionId, sameExternalUserOnAnotherConnection.connectionId);
+
+  const channel: ChannelPort = {
+    async send() {
+      throw new ChannelError("TEMPORARY_UNAVAILABLE", true);
+    },
+  };
+  await assert.rejects(
+    () => channel.send({workspaceId: context.workspaceId, connectionId: context.connectionId, threadId: "thread-1", text: "ตอบ"}),
+    (error: unknown) => error instanceof ChannelError
+      && error.code === "TEMPORARY_UNAVAILABLE"
+      && error.retryable
+      && error.message === "TEMPORARY_UNAVAILABLE",
+  );
 });
 
 test("LINE HMAC verifies raw bytes and rejects modifications/missing secret", async () => {
