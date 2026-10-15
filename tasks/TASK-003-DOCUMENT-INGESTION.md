@@ -11,7 +11,10 @@ Add a replaceable document-extraction adapter that turns local PDF and CSV bytes
 - Keep PDF/CSV parsing outside the knowledge domain behind `KnowledgeDocumentExtractorPort`.
 - Support text-based PDFs and UTF-8 CSV with a required header row.
 - Preserve PDF page numbers and logical CSV record numbers (header is record 1).
-- Bound input, page/row/column/record and extracted-text sizes; return stable failure codes for rejected input.
+- Bound input, page/row/column/record and extracted-text sizes; extract PDF text as a stream and cancel at the output cap.
+- Run PDF.js in a worker with a 128 MiB old-generation heap limit, 32 MiB young-generation limit, and 15-second timeout; return `PROCESSING_LIMIT` when that boundary is hit.
+- Bind each immutable version to its source kind and reject mismatches at the repository boundary.
+- Make equal-score retrieval order stable by citation locator, regardless of repository row order.
 - Treat extracted text as untrusted data. No OCR, model calls, external services, real customer data, or production credentials.
 - Do not imply this adds upload authorization, persistent storage, async processing, production RLS, UI, or approval controls. The caller must persist and approve a draft through the repository.
 
@@ -20,6 +23,8 @@ Add a replaceable document-extraction adapter that turns local PDF and CSV bytes
 - CSV handles Thai UTF-8, BOM, quoted delimiters, strict row shape, and exact data-record locators.
 - PDF extraction produces per-page text and rejects empty/image-only input without claiming OCR.
 - Invalid encoding, malformed files, oversized data, and malformed extractor-port results fail closed with safe codes.
+- Highly-compressible PDF content cannot exceed the extraction cap silently; the stream is cancelled or the worker fails closed at its processing boundary.
+- PDF/CSV/FAQ versions cannot be attached to a source of another kind; retrieval ties sort by page, row, or chunk position.
 - A synthetic extracted CSV record can be prepared as a draft, approved in the test repository, retrieved, and cited by row.
 - Typecheck, full existing test command, dependency audit, and diff hygiene have recorded evidence.
 

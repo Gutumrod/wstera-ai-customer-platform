@@ -1,8 +1,6 @@
 import { Readable } from "node:stream";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { Worker } from "node:worker_threads";
 import { parse as createCsvParser } from "csv-parse";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type {
   KnowledgeDocumentExtractionResult,
   KnowledgeDocumentExtractorPort,
@@ -15,25 +13,18 @@ const MAX_CSV_DATA_ROWS = 5_000;
 const MAX_CSV_COLUMNS = 100;
 const MAX_CSV_RECORD_CHARS = 16_384;
 const MAX_EXTRACTED_CHARS = 100_000;
-const PDFJS_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.resolve("pdfjs-dist/legacy/build/pdf.mjs")))));
-const PDFJS_STANDARD_FONTS = `${join(PDFJS_ROOT, "standard_fonts").replaceAll("\\", "/")}/`;
-const PDFJS_CMAPS = `${join(PDFJS_ROOT, "cmaps").replaceAll("\\", "/")}/`;
+const PDF_WORKER_TIMEOUT_MS = 15_000;
+const PDF_WORKER_RESOURCE_LIMITS = Object.freeze({
+  maxOldGenerationSizeMb: 128,
+  maxYoungGenerationSizeMb: 32,
+  stackSizeMb: 4,
+});
 
 const failure = (code: Extract<KnowledgeDocumentExtractionResult, { kind: "failure" }>["code"]): KnowledgeDocumentExtractionResult =>
   Object.freeze({ kind: "failure", code });
 
 function isSafeCell(value: string): boolean {
   return !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u.test(value);
-}
-
-function normalizePdfPageText(items: readonly unknown[]): string {
-  const parts: string[] = [];
-  for (const item of items) {
-    if (typeof item !== "object" || item === null || !("str" in item) || typeof item.str !== "string") continue;
-    if (item.str.length > 0) parts.push(item.str);
-    if ("hasEOL" in item && item.hasEOL === true) parts.push("\n");
-  }
-  return parts.join(" ").replace(/[ \t]*\n[ \t]*/gu, "\n").replace(/[ \t]{2,}/gu, " ").trim();
 }
 
 export class LocalKnowledgeDocumentExtractor implements KnowledgeDocumentExtractorPort {
@@ -113,40 +104,31 @@ export class LocalKnowledgeDocumentExtractor implements KnowledgeDocumentExtract
   private async extractPdf(bytes: Uint8Array): Promise<KnowledgeDocumentExtractionResult> {
     const header = Buffer.from(bytes.subarray(0, Math.min(bytes.byteLength, 1_024))).includes("%PDF-");
     if (!header) return failure("MALFORMED_FILE");
-
-    let loadingTask: ReturnType<typeof getDocument> | undefined;
-    try {
-      loadingTask = getDocument({
-        data: bytes.slice(),
-        cMapUrl: PDFJS_CMAPS,
-        cMapPacked: true,
-        standardFontDataUrl: PDFJS_STANDARD_FONTS,
-        stopAtErrors: true,
+    return new Promise((resolve) => {
+      let settled = false;
+      const worker = new Worker(new URL("./pdf-text-worker.js", import.meta.url), {
+        workerData: { bytes: bytes.slice() },
+        resourceLimits: PDF_WORKER_RESOURCE_LIMITS,
       });
-      const document = await loadingTask.promise;
-      if (document.numPages > MAX_PDF_PAGES) return failure("TOO_MANY_PAGES");
-
-      const segments: KnowledgeExtractedSegment[] = [];
-      let outputChars = 0;
-      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-        const page = await document.getPage(pageNumber);
-        try {
-          const textContent = await page.getTextContent();
-          const pageText = normalizePdfPageText(textContent.items);
-          if (!pageText) continue;
-          if (outputChars + (segments.length > 0 ? 2 : 0) + pageText.length > MAX_EXTRACTED_CHARS) return failure("OUTPUT_TOO_LARGE");
-          outputChars += (segments.length > 0 ? 2 : 0) + pageText.length;
-          segments.push(Object.freeze({ text: pageText, locator: Object.freeze({ kind: "page", page: pageNumber }) }));
-        } finally {
-          page.cleanup();
+      const timer = setTimeout(() => finish(failure("PROCESSING_LIMIT"), true), PDF_WORKER_TIMEOUT_MS);
+      const finish = (result: KnowledgeDocumentExtractionResult, terminate = false) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (terminate) void worker.terminate();
+        resolve(result);
+      };
+      worker.once("message", (result: unknown) => {
+        if (typeof result !== "object" || result === null || !("kind" in result)) {
+          finish(failure("MALFORMED_FILE"), true);
+          return;
         }
-      }
-      if (segments.length === 0) return failure("NO_TEXT_CONTENT");
-      return Object.freeze({ kind: "success", segments: Object.freeze(segments) });
-    } catch {
-      return failure("MALFORMED_FILE");
-    } finally {
-      if (loadingTask) await loadingTask.destroy().catch(() => undefined);
-    }
+        finish(result as KnowledgeDocumentExtractionResult);
+      });
+      worker.once("error", () => finish(failure("PROCESSING_LIMIT")));
+      worker.once("exit", () => {
+        if (!settled) finish(failure("PROCESSING_LIMIT"));
+      });
+    });
   }
 }

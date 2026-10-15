@@ -53,7 +53,7 @@ const MAX_QUERY_CHARS = 500;
 const MAX_RETRIEVAL_LIMIT = 20;
 const extractionFailureCodes = new Set<KnowledgeExtractionFailureCode>([
   "UNSUPPORTED_FORMAT", "FILE_TOO_LARGE", "MALFORMED_FILE", "INVALID_ENCODING", "NO_TEXT_CONTENT",
-  "TOO_MANY_PAGES", "TOO_MANY_ROWS", "TOO_MANY_COLUMNS", "RECORD_TOO_LARGE", "OUTPUT_TOO_LARGE",
+  "TOO_MANY_PAGES", "TOO_MANY_ROWS", "TOO_MANY_COLUMNS", "RECORD_TOO_LARGE", "OUTPUT_TOO_LARGE", "PROCESSING_LIMIT",
 ]);
 
 function assertId(value: string): void {
@@ -197,6 +197,7 @@ export function createFaqVersion(input: Readonly<{
     workspaceId: input.workspace.workspaceId,
     sourceId: input.sourceId,
     versionId: input.versionId,
+    kind: "faq",
     title: input.title.trim(),
     content: input.content,
     status: "uploaded",
@@ -241,6 +242,7 @@ export function createImportedKnowledgeVersion(input: Readonly<{
     workspaceId: input.workspace.workspaceId,
     sourceId: input.sourceId,
     versionId: input.versionId,
+    kind: input.kind,
     title: input.title.trim(),
     content,
     status: "uploaded",
@@ -372,6 +374,21 @@ function score(queryTerms: ReadonlySet<string>, text: string): number {
   return (exactSku ? 2 : 0) + matches.length / Math.max(queryTerms.size, 1);
 }
 
+function compareLocator(a: KnowledgeCitationLocator, b: KnowledgeCitationLocator): number {
+  if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+  if (a.kind === "span" && b.kind === "span") {
+    return a.chunkIndex - b.chunkIndex || a.start - b.start || a.end - b.end;
+  }
+  if (a.kind === "page" && b.kind === "page") {
+    return a.page - b.page || (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0);
+  }
+  if (a.kind === "row" && b.kind === "row") {
+    return a.row - b.row || (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0);
+  }
+  if (a.kind === "chunk" && b.kind === "chunk") return a.chunkIndex - b.chunkIndex;
+  return 0;
+}
+
 export async function retrieveKnowledge(
   repository: KnowledgeRepositoryPort,
   query: KnowledgeRetrievalQuery,
@@ -411,8 +428,8 @@ export async function retrieveKnowledge(
   candidates.sort((a, b) => b.score - a.score
     || a.sourceId.localeCompare(b.sourceId)
     || a.versionId.localeCompare(b.versionId)
-    || (a.citation.locator.kind === "span" ? a.citation.locator.chunkIndex : 0)
-      - (b.citation.locator.kind === "span" ? b.citation.locator.chunkIndex : 0));
+    || compareLocator(a.citation.locator, b.citation.locator)
+    || a.citation.chunkId.localeCompare(b.citation.chunkId));
   const hits = Object.freeze(candidates.slice(0, query.limit));
   return hits.length > 0 ? Object.freeze({ kind: "evidence", hits }) : Object.freeze({ kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
 }
