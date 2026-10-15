@@ -1,6 +1,6 @@
 # Codex Cloud Task 002 — Knowledge/RAG Contracts (AFTER 001)
 
-**Status:** PARTIALLY IMPLEMENTED LOCALLY on stacked branch `codex/g1a-knowledge-contracts-20261015`; PR #5 remains unmerged and Owner review is pending. The scoped G1a code/tests are present in this worktree; this does not certify the full task or unlock merge/deploy.
+**Status:** PARTIALLY IMPLEMENTED on stacked branches `codex/g1a-knowledge-contracts-20261015` and `codex/g1b-document-ingestion-20261015`; PR #5 and PR #8 remain open and Owner review is pending. G1a contracts and G1b bounded local PDF/CSV extraction are implemented and tested. This does not certify the full task or unlock merge/deploy.
 **Goal:** Create a safe source/version/chunk/retrieval contract for approved knowledge per workspace, without pretending that embeddings alone guarantee factual answers.
 
 **Design authority:** [Master Brief](../BRIEF.md) (L-02/L-03/L-04/L-08/L-12), [Knowledge module ownership](../architecture/REPOSITORY-STRUCTURE.md) and [Port contracts](../architecture/PORTS-AND-ADAPTERS.md). Implement through provider-neutral contracts; do not import Supabase/pgvector directly into the knowledge domain.
@@ -13,7 +13,7 @@
 - Pure FAQ text validation/chunking, lifecycle transitions, approval/revocation, immutable approved content, deterministic lexical/SKU retrieval, and no-answer behavior in `platform/modules/knowledge/`.
 - Synthetic regression tests for scope, approval/revocation, version conflict, exact citations, Thai/SKU queries, no-match, malformed/oversized content, and instruction-like text.
 
-### Implemented in the stacked G1b local slice
+### Implemented in the stacked G1b slice
 
 - Bounded local Node PDF text and UTF-8 CSV extraction, with page and logical CSV record locators, through `KnowledgeDocumentExtractorPort`.
 - Orchestration from extracted segments into a draft knowledge version and exact row/page citations in retrieval.

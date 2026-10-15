@@ -19,6 +19,19 @@ function normalizePdfPageText(text: string): string {
   return text.replace(/[ \t]*\n[ \t]*/gu, "\n").replace(/[ \t]{2,}/gu, " ").trim();
 }
 
+export function getRemainingPdfPageBudget(outputChars: number, maxOutputChars: number): number {
+  return Math.max(0, maxOutputChars - outputChars);
+}
+
+export function canAppendPdfPage(
+  outputChars: number,
+  pageChars: number,
+  maxOutputChars: number,
+  hasPrevious: boolean,
+): boolean {
+  return outputChars + (hasPrevious ? 2 : 0) + pageChars <= maxOutputChars;
+}
+
 /** Consume PDF.js text incrementally; cancel before retaining any content beyond the caller's budget. */
 export async function consumePdfTextStream(stream: ReadableStream<unknown>, maxChars: number): Promise<PageText> {
   const reader = stream.getReader();
@@ -68,10 +81,13 @@ async function extractPdf(bytes: Uint8Array): Promise<KnowledgeDocumentExtractio
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       try {
-        const remaining = MAX_EXTRACTED_CHARS - outputChars - (segments.length > 0 ? 2 : 0);
+        const remaining = getRemainingPdfPageBudget(outputChars, MAX_EXTRACTED_CHARS);
         const pageText = await consumePdfTextStream(page.streamTextContent(), remaining);
         if (pageText.kind === "too_large") return Object.freeze({ kind: "failure", code: "OUTPUT_TOO_LARGE" });
         if (!pageText.text) continue;
+        if (!canAppendPdfPage(outputChars, pageText.text.length, MAX_EXTRACTED_CHARS, segments.length > 0)) {
+          return Object.freeze({ kind: "failure", code: "OUTPUT_TOO_LARGE" });
+        }
         outputChars += (segments.length > 0 ? 2 : 0) + pageText.text.length;
         segments.push(Object.freeze({ text: pageText.text, locator: Object.freeze({ kind: "page", page: pageNumber }) }));
       } finally {

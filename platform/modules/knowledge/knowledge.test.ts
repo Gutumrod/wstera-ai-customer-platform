@@ -477,6 +477,21 @@ test("PDF text consumer cancels the stream as soon as the extraction cap is cros
   assert.equal(pulls, 1);
 });
 
+test("PDF page budgets do not reject an empty trailing page at the extraction ceiling", async () => {
+  type RemainingBudget = (outputChars: number, maxOutputChars: number) => number;
+  type CanAppendPage = (outputChars: number, pageChars: number, maxOutputChars: number, hasPrevious: boolean) => boolean;
+  const loaded = await import("../../adapters/knowledge/pdf-text-worker.js");
+  const remainingBudget = (loaded as { getRemainingPdfPageBudget?: RemainingBudget }).getRemainingPdfPageBudget;
+  const canAppendPage = (loaded as { canAppendPdfPage?: CanAppendPage }).canAppendPdfPage;
+  assert.equal(typeof remainingBudget, "function", "PDF page accounting must reserve separators only for non-empty pages");
+  assert.equal(typeof canAppendPage, "function", "PDF page accounting must include separators only when appending text");
+  if (typeof remainingBudget !== "function" || typeof canAppendPage !== "function") return;
+  assert.equal(remainingBudget(99_999, 100_000), 1);
+  assert.equal(remainingBudget(100_000, 100_000), 0);
+  assert.equal(canAppendPage(99_997, 1, 100_000, true), true);
+  assert.equal(canAppendPage(99_998, 1, 100_000, true), false);
+});
+
 test("document extractor fails closed for invalid UTF-8, malformed files and oversized input", async () => {
   const loaded = await loadLocalDocumentExtractor();
   const Factory = (loaded as { LocalKnowledgeDocumentExtractor?: new () => DocumentExtractor }).LocalKnowledgeDocumentExtractor;
