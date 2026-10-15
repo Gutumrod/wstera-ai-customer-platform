@@ -13,9 +13,14 @@
 - Pure FAQ text validation/chunking, lifecycle transitions, approval/revocation, immutable approved content, deterministic lexical/SKU retrieval, and no-answer behavior in `platform/modules/knowledge/`.
 - Synthetic regression tests for scope, approval/revocation, version conflict, exact citations, Thai/SKU queries, no-match, malformed/oversized content, and instruction-like text.
 
+### Implemented in the stacked G1b local slice
+
+- Bounded local Node PDF text and UTF-8 CSV extraction, with page and logical CSV record locators, through `KnowledgeDocumentExtractorPort`.
+- Orchestration from extracted segments into a draft knowledge version and exact row/page citations in retrieval.
+
 ### Still not implemented from this task
 
-- PDF/CSV extraction and page/row locator production; durable async ingestion and persistent adapters; Thai retrieval comparison/evaluation against pgvector/tokenizer/reranker options; full adapter integration and broader cross-adapter contract evidence.
+- Durable async ingestion and persistent adapters; Thai retrieval comparison/evaluation against pgvector/tokenizer/reranker options; full adapter integration and broader cross-adapter contract evidence.
 
 - Source and version type schema (PDF/CSV/FAQ), approval, removal, chunk source reference (document ID, page/row, timestamp), and workspace isolation contract.
 - Async ingestion state machine: uploaded -> validating -> extracting -> indexed -> approved OR quarantined/failed; explicit delete/re-index.

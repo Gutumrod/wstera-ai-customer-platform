@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22.13.0 || >=24"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc",
@@ -13,5 +15,9 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.3",
+    "pdfjs-dist": "6.4.299"
   }
 }
