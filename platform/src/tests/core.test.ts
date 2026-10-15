@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { createHmac } from "node:crypto";
 import { createTrustedWorkspace, enforceWorkspace } from "../core/workspace.js";
 import { verifyLineSignature } from "../line/signature.js";
-import { claimFirstLineDeliveries, parseSignedLineTextEvents, type VerifiedLineEvent } from "../line/ingress.js";
+import { parseSignedLineTextEvents, type LineEventDeduplicator } from "../line/ingress.js";
 import { LineHttpError, sendLineReply } from "../line/client.js";
 import { evaluateAnswerSources } from "../policy/answer-gate.js";
 
@@ -58,6 +58,12 @@ test("empty signed LINE verification event is accepted and invalid destination i
     return { workspaceId:"shop-1", connectionId:"conn-1", channelSecret:"secret" };
   };
   assert.deepEqual(await parseSignedLineTextEvents(body, sign(body, "secret"), lookup), []);
+  // LINE's URL connectivity probe uses a placeholder destination and no events.
+  // It is acknowledged without binding a workspace or looking up a tenant.
+  const probe = raw('{"destination":"xxxxxxxxxx","events":[]}');
+  assert.deepEqual(await parseSignedLineTextEvents(probe, null, lookup), []);
+  await assert.rejects(() => parseSignedLineTextEvents(raw('{"destination":"xxxxxxxxxx","events":[{}]}'), null, lookup), /INVALID_LINE_WEBHOOK/);
+  await assert.rejects(() => parseSignedLineTextEvents(raw('{"destination":"xxxxxxxxxx","events":[],"extra":true}'), null, lookup), /INVALID_LINE_WEBHOOK/);
   const bad = raw(JSON.stringify({ destination: "U_destination", events: [] }));
   await assert.rejects(() => parseSignedLineTextEvents(bad, sign(bad, "secret"), lookup), /INVALID_LINE_DESTINATION/);
   assert.equal(lookupCalls, 1);
@@ -72,6 +78,16 @@ test("LINE ingress fails closed for malformed signed payloads and bounds input",
     JSON.stringify({ destination: destinationA, events: [{ type:"message", message:{type:"text",text:"x".repeat(5001)}, source:{type:"user",userId}, webhookEventId:"ev", timestamp:1 }] }),
   ]) {
     const body = raw(payload);
+    await assert.rejects(() => parseSignedLineTextEvents(body, sign(body, "secret"), lookup));
+  }
+  const tooMany = raw(JSON.stringify({ destination:destinationA, events:Array.from({length:101}, () => ({type:"follow"})) }));
+  await assert.rejects(() => parseSignedLineTextEvents(tooMany, sign(tooMany, "secret"), lookup), /TOO_MANY_LINE_EVENTS/);
+  for (const event of [
+    { type:"message", webhookEventId:"bad event id", timestamp:1, message:{type:"text",text:"hi"}, source:{type:"user",userId} },
+    { type:"message", webhookEventId:"ev", timestamp:1, replyToken:"x".repeat(513), message:{type:"text",text:"hi"}, source:{type:"user",userId} },
+    [],
+  ]) {
+    const body = raw(JSON.stringify({ destination:destinationA, events:[event] }));
     await assert.rejects(() => parseSignedLineTextEvents(body, sign(body, "secret"), lookup));
   }
   await assert.rejects(() => parseSignedLineTextEvents(raw(" ".repeat(256 * 1024 + 1)), "signature", lookup), /INVALID_LINE_WEBHOOK/);
@@ -95,27 +111,62 @@ test("same LINE user in two connections resolves to separate workspace identitie
   assert.notEqual(a?.workspace.workspaceId, b?.workspace.workspaceId);
 });
 
-test("durable event dedupe port claims by workspace, connection, and event id", async () => {
-  const workspaceA = createTrustedWorkspace({workspaceId:"shop-a",connectionId:"conn-a",channel:"line"});
-  const workspaceB = createTrustedWorkspace({workspaceId:"shop-b",connectionId:"conn-b",channel:"line"});
-  const event = (workspace: typeof workspaceA): VerifiedLineEvent => ({
-    workspace, webhookEventId:"same-event", userId, text:"hello", replyToken:null, timestamp:123,
-  });
-  const claimed = new Set<string>();
-  const deduplicator = {
-    async claimOnce(input: {workspaceId:string;connectionId:string;webhookEventId:string}) {
-      const key = `${input.workspaceId}/${input.connectionId}/${input.webhookEventId}`;
-      if (claimed.has(key)) return false;
-      claimed.add(key);
-      return true;
+test("dedupe lease contract recovers a failed first event before redelivery", async () => {
+  type Key = {workspaceId:string;connectionId:string;webhookEventId:string};
+  type State = {status:"processing"|"completed";leaseToken:string;expiresAt:number};
+  let now = 100;
+  let nextToken = 0;
+  const states = new Map<string, State>();
+  const keyOf = (key: Key) => `${key.workspaceId}/${key.connectionId}/${key.webhookEventId}`;
+  const deduplicator: LineEventDeduplicator = {
+    async claim(key: Key) {
+      const id = keyOf(key);
+      const state = states.get(id);
+      if (state?.status === "completed" || (state?.status === "processing" && state.expiresAt > now)) return null;
+      const lease = {leaseToken:`lease-${++nextToken}`,expiresAt:now + 10};
+      states.set(id, {...lease,status:"processing"});
+      return lease;
+    },
+    async complete(key: Key & {leaseToken:string}) {
+      const state = states.get(keyOf(key));
+      if (!state || state.status !== "processing" || state.leaseToken !== key.leaseToken || state.expiresAt <= now) throw new Error("STALE_LEASE");
+      states.set(keyOf(key), {...state,status:"completed"});
+    },
+    async releaseForRetry(key: Key & {leaseToken:string}) {
+      const state = states.get(keyOf(key));
+      if (!state || state.status !== "processing" || state.leaseToken !== key.leaseToken || state.expiresAt <= now) throw new Error("STALE_LEASE");
+      states.delete(keyOf(key));
     },
   };
-  assert.equal((await claimFirstLineDeliveries([event(workspaceA), event(workspaceA)], deduplicator)).length, 1);
-  assert.equal((await claimFirstLineDeliveries([event(workspaceB)], deduplicator)).length, 1);
-  // This fake only checks the port contract. A durable store is NOT implemented.
+  const a: Key = {workspaceId:"shop-a",connectionId:"conn-a",webhookEventId:"event-a"};
+  const b: Key = {workspaceId:"shop-a",connectionId:"conn-a",webhookEventId:"event-b"};
+  const c: Key = {workspaceId:"shop-a",connectionId:"conn-a",webhookEventId:"event-c"};
+
+  const firstA = await deduplicator.claim(a);
+  assert.ok(firstA);
+  assert.equal(await deduplicator.claim(a), null); // redelivery while first attempt owns an active lease
+  await deduplicator.releaseForRetry({...a,leaseToken:firstA.leaseToken}); // first event failed before event B was reached
+
+  // The retried batch can reclaim both events because the failed claim was released.
+  const retryA = await deduplicator.claim(a);
+  const retryB = await deduplicator.claim(b);
+  assert.ok(retryA);
+  assert.ok(retryB);
+  await deduplicator.complete({...a,leaseToken:retryA.leaseToken});
+  await assert.rejects(() => deduplicator.complete({...a,leaseToken:firstA.leaseToken}), /STALE_LEASE/);
+  assert.equal(await deduplicator.claim(a), null);
+  const crashedAttempt = await deduplicator.claim(c);
+  assert.ok(crashedAttempt);
+  now += 11; // Worker crash: lease expiration allows a new delivery to recover.
+  const recoveredAttempt = await deduplicator.claim(c);
+  assert.ok(recoveredAttempt);
+  assert.notEqual(recoveredAttempt.leaseToken, crashedAttempt.leaseToken);
+  await assert.rejects(() => deduplicator.complete({...c,leaseToken:crashedAttempt.leaseToken}), /STALE_LEASE/);
+  await assert.rejects(() => deduplicator.releaseForRetry({...c,leaseToken:crashedAttempt.leaseToken}), /STALE_LEASE/);
+  // Test double exercises the lease/retry contract only; durable storage remains NOT IMPLEMENTED.
 });
 
-test("the source gate refuses cross-shop knowledge and requires approved excerpts", () => {
+test("source gate filters scope and approval while preserving excerpt text as untrusted data", () => {
   const ctx = createTrustedWorkspace({workspaceId:"shop-1",connectionId:"c",channel:"web"});
   assert.deepEqual(evaluateAnswerSources(ctx, []), { kind: "handoff", reason: "NO_APPROVED_KNOWLEDGE" });
   assert.deepEqual(evaluateAnswerSources(ctx, [{workspaceId:"shop-1",sourceId:"doc",excerpt:"text",approved:false}]), { kind:"handoff", reason:"NO_APPROVED_KNOWLEDGE" });

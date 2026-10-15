@@ -30,7 +30,7 @@ LINE OA ───────┘       │
 - `platform/src/`: **new** minimal TypeScript boundary contracts (trusted workspace, bounded signed LINE ingress, LINE text reply, durable deduplication port, approved-source candidate filtering), with tests.
 - `.github/workflows/ci.yml`: Node CI for typecheck and tests.
 
-**Not implemented yet:** document ingestion or actual RAG, chat UI, database/RLS, complete answerability validation, production HTTP webhook, durable event deduplication implementation, billing, human Inbox or live LINE roundtrip. The dedupe helper only defines and exercises the required storage port contract.
+**Not implemented yet:** document ingestion or actual RAG, chat UI, database/RLS, complete answerability validation, production HTTP webhook, durable event deduplication implementation, billing, human Inbox or live LINE roundtrip. The event lease port only specifies claim, completion, retry-release and expiry semantics; its test double is not durable storage. The unsigned LINE URL connectivity probe is acknowledged only when its payload has no events and creates no tenant context.
 
 ## Quick start
 

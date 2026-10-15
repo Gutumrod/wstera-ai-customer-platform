@@ -4,7 +4,8 @@ import { verifyLineSignature } from "./signature.js";
 /**
  * The destination is untrusted until the signature is verified. It is only
  * a lookup key for the SERVER-STORED secret; not authorization to tenant data.
- * No DB, HTTP endpoint, queue or durable dedupe is implemented in this slice.
+ * The unsigned URL-test probe path below emits no events and creates no tenant
+ * context. No DB, HTTP endpoint, queue or durable dedupe is implemented here.
  */
 export interface LineConnection {
   workspaceId: string;
@@ -28,17 +29,33 @@ export interface VerifiedLineEvent {
   timestamp: number;
 }
 
+export type LineEventKey = Readonly<{
+  workspaceId: string;
+  connectionId: string;
+  webhookEventId: string;
+}>;
+
+export type LineEventLease = Readonly<{
+  /** Opaque fencing token; only its current owner may complete or release it. */
+  leaseToken: string;
+  /** Expiry according to the store's clock, after which another delivery may claim. */
+  expiresAt: number;
+}>;
+
 /**
- * Port for an atomic, durable event claim (for example a database unique
- * constraint). `true` means this delivery owns first processing; `false`
- * means the event was already claimed. No durable implementation is shipped.
+ * Port for durable event processing state. `claim` must atomically return a
+ * lease only for unseen or expired, non-completed events. A duplicate with an
+ * active lease or completed state returns null. Crashed workers become
+ * retryable after lease expiry. A worker should release a lease after a
+ * recoverable processing failure and complete only after durable effects.
+ * Processing is at-least-once: side effects must be idempotent because a
+ * worker can fail after an effect but before completion. Implementations must
+ * fence stale lease tokens. No durable implementation is shipped.
  */
 export interface LineEventDeduplicator {
-  claimOnce(input: {
-    workspaceId: string;
-    connectionId: string;
-    webhookEventId: string;
-  }): Promise<boolean>;
+  claim(input: LineEventKey): Promise<LineEventLease | null>;
+  complete(input: LineEventKey & { leaseToken: string }): Promise<void>;
+  releaseForRetry(input: LineEventKey & { leaseToken: string }): Promise<void>;
 }
 
 const destinationPattern = /^U[a-f0-9]{32}$/i;
@@ -54,7 +71,7 @@ export async function parseSignedLineTextEvents(
   signature: string | null | undefined,
   lookup: LineConnectionLookup,
 ): Promise<VerifiedLineEvent[]> {
-  if (!signature || rawBody.byteLength === 0 || rawBody.byteLength > MAX_BODY_BYTES) {
+  if (rawBody.byteLength === 0 || rawBody.byteLength > MAX_BODY_BYTES) {
     throw new Error("INVALID_LINE_WEBHOOK");
   }
 
@@ -66,6 +83,11 @@ export async function parseSignedLineTextEvents(
   } catch {
     throw new Error("INVALID_LINE_PAYLOAD");
   }
+  // LINE's URL communication test may be an unsigned empty-event POST with a
+  // placeholder destination. It has no tenant context or side effects, so
+  // acknowledge only this exact bounded envelope without weakening event auth.
+  if (!signature && isLineUrlVerificationProbe(envelope)) return [];
+  if (!signature) throw new Error("INVALID_LINE_WEBHOOK");
   if (!isRecord(envelope) || typeof envelope.destination !== "string" || !destinationPattern.test(envelope.destination)) {
     throw new Error("INVALID_LINE_DESTINATION");
   }
@@ -109,24 +131,13 @@ export async function parseSignedLineTextEvents(
   return accepted;
 }
 
-/**
- * Ask a durable deduplicator to atomically claim each verified event before
- * processing it. This helper does not provide persistence on its own.
- */
-export async function claimFirstLineDeliveries(
-  events: readonly VerifiedLineEvent[],
-  deduplicator: LineEventDeduplicator,
-): Promise<VerifiedLineEvent[]> {
-  const firstDeliveries: VerifiedLineEvent[] = [];
-  for (const event of events) {
-    const first = await deduplicator.claimOnce({
-      workspaceId: event.workspace.workspaceId,
-      connectionId: event.workspace.connectionId,
-      webhookEventId: event.webhookEventId,
-    });
-    if (first) firstDeliveries.push(event);
-  }
-  return firstDeliveries;
+function isLineUrlVerificationProbe(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === 2 &&
+    keys.includes("destination") && keys.includes("events") &&
+    typeof value.destination === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value.destination) &&
+    Array.isArray(value.events) && value.events.length === 0;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

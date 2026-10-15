@@ -47,9 +47,10 @@ Web Widget / LINE OA
 
 ## Current demonstrated scope
 
-- **Implemented + unit-testable only:** typed trusted workspace context, HMAC signature verification, canonical LINE destination validation, bounded signed LINE text-event normalization (lookup injected), LINE text reply transport, a durable event-deduplication port/helper, simple candidate-source filter.
+- **Implemented + unit-testable only:** typed trusted workspace context, HMAC signature verification, canonical LINE destination validation for signed events, bounded signed LINE text-event normalization (lookup injected), no-event URL-probe acknowledgement, LINE text reply transport, a durable event-processing lease port, simple candidate-source filter.
 - **Security boundary:** LINE destination is untrusted until signature verification and is used only to look up a server-owned connection. Accepted user events require bounded, validated IDs, timestamps and text. Unsupported event types and non-user/non-text messages are ignored.
-- **Durability boundary:** `LineEventDeduplicator` defines an atomic `claimOnce` contract scoped by workspace, connection and webhook event ID. The helper and tests do not provide durable storage or prove distributed deduplication; that remains NOT IMPLEMENTED.
+- **URL-probe boundary:** the documented unsigned connectivity probe is acknowledged only for an exact, bounded envelope with `events: []`; it creates no workspace context, performs no connection lookup and emits no events. Signed Console verification still uses the canonical destination and raw-body HMAC path.
+- **Durability boundary:** `LineEventDeduplicator` defines atomic lease claim, completion, retry release and expiry semantics scoped by workspace, connection and webhook event ID. The port and in-memory test double do not provide durable storage or prove distributed deduplication; that remains NOT IMPLEMENTED.
 - **Knowledge boundary:** approved excerpts are still untrusted data. The candidate filter does not sanitize prompt injection or establish factual relevance; model policy and retrieval remain unimplemented.
 - **NOT implemented:** HTTP server, durable storage, real LINE API E2E, pdf upload, embeddings, answer model, Web UI, operator Inbox, SaaS billing or workspace management.
 - The candidate-source filter does **not** check semantic relevance or factual sufficiency. Do not call it a complete Answerability Gate.
