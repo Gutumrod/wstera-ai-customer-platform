@@ -3,6 +3,8 @@
 **Status:** PLANNED / DEPENDS ON TASK 001.
 **Goal:** Create a safe source/version/chunk/retrieval contract for approved knowledge per workspace, without pretending that embeddings alone guarantee factual answers.
 
+**Design authority:** [Master Brief](../BRIEF.md) (L-02/L-03/L-04/L-08/L-12), [Knowledge module ownership](../architecture/REPOSITORY-STRUCTURE.md) and [Port contracts](../architecture/PORTS-AND-ADAPTERS.md). Implement through provider-neutral contracts; do not import Supabase/pgvector directly into the knowledge domain.
+
 ## Deliverables
 
 - Source and version type schema (PDF/CSV/FAQ), approval, removal, chunk source reference (document ID, page/row, timestamp), and workspace isolation contract.

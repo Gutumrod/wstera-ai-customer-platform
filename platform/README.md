@@ -1,6 +1,10 @@
 # Platform — Boundary-Level TypeScript Scaffold
 
-This directory now contains **newly authored** small reusable contracts selected from prior source audit. Its code is informed by owned legacy modules, but **no private repositories have been copied into the Public umbrella repository**.
+This directory contains the **existing executable TypeScript baseline** in `src/`, plus new responsibility-only folder scaffolding under `apps/`, `modules/`, `contracts/`, `adapters/`, `composition/` and `tests/`.
+
+**Master goals:** [BRIEF.md](../BRIEF.md). **Module ownership:** [REPOSITORY-STRUCTURE.md](../architecture/REPOSITORY-STRUCTURE.md). **Extension ports:** [PORTS-AND-ADAPTERS.md](../architecture/PORTS-AND-ADAPTERS.md).
+
+New folders are READMEs only; they are not new working services. No private legacy repo files have been committed to Public Git. Do not move/duplicate existing `src/` during PR #2 review.
 
 ## Implemented
 
