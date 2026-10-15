@@ -26,6 +26,7 @@ wstera-ai-customer-platform/
 │  │  └─ usage/                 Usage caps and spend budget contracts
 │  ├─ contracts/                Host-independent ports and DTO schemas
 │  │  ├─ channels/              Inbound/outbound normalized envelopes
+│  │  ├─ tenancy/               Trusted workspace identity contracts
 │  │  ├─ models/                Model/embedding provider interfaces
 │  │  ├─ data/                  Repository, vector, object-store, job queue ports
 │  │  └─ business-actions/      Auth/confirm/audit action lifecycle

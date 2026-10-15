@@ -4,10 +4,11 @@
 
 ## Phase 0C migration slice — approved scope
 
-- **Specification:** define provider-neutral `InboundMessage`, `TrustedWorkspaceContext`, `ChannelPort`, and normalized channel error contracts; relocate only the existing trusted workspace constructor/assertion into `platform/modules/tenancy/`; preserve the old `platform/src/core/workspace.ts` imports with a re-export.
+- **Specification:** define provider-neutral `InboundMessage`, `ChannelPort`, and normalized channel error contracts under channels; own `TrustedWorkspaceContext` and `ChannelId` under `platform/contracts/tenancy/`; relocate only the existing trusted workspace constructor/assertion into `platform/modules/tenancy/`; preserve old workspace API and channel type imports with compatibility re-exports.
 - **Acceptance criteria:** existing behavior and exports remain compatible; message/user IDs are connection-scoped by contract; channel delivery failures use bounded normalized metadata; tenancy module depends only on contracts; all baseline and new contract tests pass; no adapters, network calls, database migration, or duplicate engine is added.
 - **Dependencies:** Task 001 merged and reviewed; Phase 0B architecture/docs merged; Owner approved this scope. These are now satisfied for this slice.
 - **Owner decision locked for this slice:** migrate the workspace boundary and add shared channel contracts only. Keep the legacy path as a compatibility re-export; defer I3 composition/fake adapters and I5 deletion of compatibility code to later scoped work.
+- **Runtime boundary:** the context constructor and assertion do not implement membership, connection ownership lookup, or runtime tenant authorization; those remain NOT IMPLEMENTED and require trusted host binding plus API/database enforcement. Web and LINE are the current channel IDs; any additional channel remains a later explicit design decision.
 
 ## Goal
 

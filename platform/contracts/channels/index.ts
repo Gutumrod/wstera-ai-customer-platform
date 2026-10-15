@@ -2,14 +2,12 @@
  * Shared channel boundary contracts. These values describe a normalized
  * transport event; they never establish workspace authorization by themselves.
  */
-export type Channel = "line" | "web";
+import type { ChannelId } from "../tenancy/index.js";
 
-/** Created by a trusted server-side connection resolver, never by request data. */
-export type TrustedWorkspaceContext = Readonly<{
-  workspaceId: string;
-  connectionId: string;
-  channel: Channel;
-}>;
+export type Channel = ChannelId;
+
+/** @deprecated Import this type from contracts/tenancy instead. */
+export type { TrustedWorkspaceContext } from "../tenancy/index.js";
 
 /** Provider-neutral customer message. User and message IDs are scoped to connectionId. */
 export type InboundMessage = Readonly<{

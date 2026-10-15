@@ -1,4 +1,4 @@
-import type { TrustedWorkspaceContext } from "../../contracts/channels/index.js";
+import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
 
 /**
  * Only a trusted host resolver may create this context. Never trust

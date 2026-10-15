@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHmac } from "node:crypto";
 import { createTrustedWorkspace, enforceWorkspace } from "../core/workspace.js";
-import { ChannelError, type ChannelPort, type InboundMessage, type TrustedWorkspaceContext } from "../../contracts/channels/index.js";
+import { createTrustedWorkspace as createTenancyWorkspace, enforceWorkspace as enforceTenancyWorkspace } from "../../modules/tenancy/workspace.js";
+import { ChannelError, type ChannelPort, type InboundMessage, type TrustedWorkspaceContext as LegacyTrustedWorkspaceContext } from "../../contracts/channels/index.js";
+import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
 import { verifyLineSignature } from "../line/signature.js";
 import { parseSignedLineTextEvents, type LineEventDeduplicator } from "../line/ingress.js";
 import { LineHttpError, sendLineReply } from "../line/client.js";
@@ -20,6 +22,23 @@ test("trusted workspace enforces a strict, immutable context", () => {
   assert.equal(Object.isFrozen(ctx), true);
   assert.throws(() => createTrustedWorkspace({ workspaceId: "", connectionId: "x", channel: "line" }));
   assert.throws(() => enforceWorkspace(ctx, "shop-2"), /CROSS_WORKSPACE/);
+});
+
+test("tenancy contract and legacy workspace APIs preserve constructor and enforcement parity", () => {
+  const input: TrustedWorkspaceContext = { workspaceId: "shop-1", connectionId: "conn-1", channel: "web" };
+  const current = createTenancyWorkspace(input);
+  const legacy = createTrustedWorkspace(input);
+  const legacyContract: LegacyTrustedWorkspaceContext = current;
+
+  assert.deepEqual(current, legacy);
+  assert.equal(Object.isFrozen(current), true);
+  assert.equal(legacyContract.workspaceId, "shop-1");
+  assert.throws(() => createTenancyWorkspace({ ...input, workspaceId: "" }), /INVALID_TRUSTED_WORKSPACE/);
+  assert.throws(() => createTrustedWorkspace({ ...input, workspaceId: "" }), /INVALID_TRUSTED_WORKSPACE/);
+  assert.doesNotThrow(() => enforceTenancyWorkspace(current, "shop-1"));
+  assert.doesNotThrow(() => enforceWorkspace(legacy, "shop-1"));
+  assert.throws(() => enforceTenancyWorkspace(current, "shop-2"), /CROSS_WORKSPACE_ACCESS_DENIED/);
+  assert.throws(() => enforceWorkspace(legacy, "shop-2"), /CROSS_WORKSPACE_ACCESS_DENIED/);
 });
 
 test("shared channel contracts keep message identity connection-scoped and errors normalized", async () => {
