@@ -1,6 +1,6 @@
 # Task CI-001 — Run CI on stacked pull requests
 
-**Status:** Implemented on `codex/ci-all-pull-requests-20261016`; PR and hosted verification pending.
+**Status:** Pushed in PR #12 (`codex/ci-all-pull-requests-20261016`); the PR-targeted hosted `typescript-foundation` check passed. Feature-target hosted verification remains pending until the trigger change is on the default branch.
 
 ## Problem
 
