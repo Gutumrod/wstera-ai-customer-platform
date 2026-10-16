@@ -356,7 +356,8 @@ export function archiveKnowledgeSource(source: KnowledgeSource): KnowledgeSource
 
 const tokens = (text: string): ReadonlySet<string> => {
   const normalized = text.normalize("NFKC").toLocaleLowerCase("th-TH");
-  const result = new Set(normalized.match(/[a-z0-9]+(?:[-_./][a-z0-9]+)*|[\u0E00-\u0E7F]+/gu) ?? []);
+  const terms = normalized.match(/[a-z0-9]+(?:[-_./][a-z0-9]+)*|[\u0E00-\u0E7F]+/gu) ?? [];
+  const result = new Set(terms);
   // Character bigrams provide a small deterministic Thai baseline without claiming a tokenizer.
   for (const run of normalized.match(/[\u0E00-\u0E7F]+/gu) ?? []) {
     const chars = Array.from(run);
@@ -365,12 +366,30 @@ const tokens = (text: string): ReadonlySet<string> => {
   return result;
 };
 
-function score(queryTerms: ReadonlySet<string>, text: string): number {
-  const bodyTerms = tokens(text);
+const skuCodePattern = /^(?=.*[a-z])(?=.*\d)[a-z0-9]+(?:[-_./][a-z0-9]+)*$/u;
+
+function analyzeText(text: string): Readonly<{ terms: ReadonlySet<string>; skuCodes: readonly string[] }> {
+  const terms = tokens(text);
+  return Object.freeze({ terms, skuCodes: Object.freeze([...terms].filter((term) => skuCodePattern.test(term))) });
+}
+
+function compactSku(code: string): string {
+  return code.replace(/[-_./]/gu, "");
+}
+
+function score(
+  queryTerms: ReadonlySet<string>,
+  querySkuCodes: readonly string[],
+  bodyTerms: ReadonlySet<string>,
+  bodySkuCodes: readonly string[],
+  unambiguousSkuKeys: ReadonlySet<string>,
+): number {
   const matches = [...queryTerms].filter((term) => bodyTerms.has(term));
-  if (matches.length === 0) return 0;
-  const skuTerms = [...queryTerms].filter((term) => /[a-z0-9]/iu.test(term));
-  const exactSku = skuTerms.length > 0 && skuTerms.some((term) => bodyTerms.has(term));
+  const exactSku = querySkuCodes.some((queryCode) => bodySkuCodes.some((bodyCode) =>
+    queryCode === bodyCode
+      || (compactSku(queryCode) === compactSku(bodyCode) && unambiguousSkuKeys.has(compactSku(queryCode)))
+  ));
+  if (matches.length === 0 && !exactSku) return 0;
   return (exactSku ? 2 : 0) + matches.length / Math.max(queryTerms.size, 1);
 }
 
@@ -400,14 +419,35 @@ export async function retrieveKnowledge(
   if (!validText(query.query, MAX_QUERY_CHARS) || !Number.isInteger(query.limit) || query.limit < 1 || query.limit > MAX_RETRIEVAL_LIMIT) {
     throw new KnowledgeError("INVALID_RETRIEVAL_QUERY");
   }
-  const queryTerms = tokens(query.query);
+  const queryAnalysis = analyzeText(query.query);
   const candidates: KnowledgeRetrievalHit[] = [];
-  for (const item of await repository.listRetrievableChunks(query.workspace)) {
+  const retrievableItems = await repository.listRetrievableChunks(query.workspace);
+  const eligibleItems: Array<Readonly<{
+    item: typeof retrievableItems[number];
+    terms: ReadonlySet<string>;
+    skuCodes: readonly string[];
+  }>> = [];
+  const skuFormsByKey = new Map<string, Set<string>>();
+  for (const item of retrievableItems) {
     assertWorkspace(query.workspace, item.source.workspaceId);
     assertWorkspace(query.workspace, item.version.workspaceId);
     assertWorkspace(query.workspace, item.chunk.workspaceId);
     if (item.source.status !== "active" || item.version.status !== "approved") continue;
-    const rank = score(queryTerms, item.chunk.text);
+    const analysis = analyzeText(item.chunk.text);
+    eligibleItems.push({ item, terms: analysis.terms, skuCodes: analysis.skuCodes });
+    for (const code of analysis.skuCodes) {
+      const key = compactSku(code);
+      const forms = skuFormsByKey.get(key) ?? new Set<string>();
+      forms.add(code);
+      skuFormsByKey.set(key, forms);
+    }
+  }
+  const unambiguousSkuKeys = new Set([...skuFormsByKey]
+    .filter(([, forms]) => forms.size === 1)
+    .map(([key]) => key));
+  for (const eligible of eligibleItems) {
+    const { item } = eligible;
+    const rank = score(queryAnalysis.terms, queryAnalysis.skuCodes, eligible.terms, eligible.skuCodes, unambiguousSkuKeys);
     if (rank <= 0) continue;
     const citation: KnowledgeCitation = Object.freeze({
       workspaceId: item.chunk.workspaceId,
