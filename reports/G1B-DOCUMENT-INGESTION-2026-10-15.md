@@ -31,7 +31,19 @@ Exact tested code candidate: `c828fe550520804b446462d9d967da61c1f47282` on `code
 
 Test-first evidence: before the whitespace handling change, the stream-consumer regression failed with `too_large` for a whitespace-only item and a zero character budget; after the change it returns an empty success result and the worker skips the page. The separator-boundary regression verifies zero remaining budget at the exact cap, one character just below it, acceptance at the exact separator-inclusive boundary, and rejection one character beyond it. Earlier review fixes also had observed RED tests for source-kind mismatch and reversed repository order. The streaming-consumer regression verifies that non-whitespace overflow cancels the input stream before a second pull; the synthetic highly-compressible PDF fails closed as either `OUTPUT_TOO_LARGE` or `PROCESSING_LIMIT`.
 
-The repository has no lint script, so lint was not available to run. The CI workflow currently triggers pull-request checks only when the PR base is `main`; this stacked PR targets PR #7 and therefore currently has no hosted check run. Independent review identified the blank and whitespace-only PDF boundary defects corrected in `bf8b817` and `c828fe5`; follow-up review of the latest fix is pending. Local evidence does not replace hosted CI or independent review.
+The repository has no lint script, so lint was not available to run. The current CI workflow on `main` triggers pull-request checks only when the PR base is `main`; this stacked PR targets PR #7 and therefore currently has no hosted check run. Independent review identified the blank and whitespace-only PDF boundary defects corrected in `bf8b817` and `c828fe5`; a follow-up independent review of the latest branch HEAD found no actionable issues. Local evidence does not replace hosted CI.
+
+## Follow-up verification — 2026-10-16
+
+Exact reviewed branch HEAD: `c62d5ac635dd8ac829d529f04cdc805d5596b077` (`codex/g1b-document-ingestion-20261015`). The reviewed code is unchanged from tested candidate `c828fe5`; HEAD adds only review-evidence documentation.
+
+| Check | Result |
+|---|---|
+| `npm run check` | Exit 0; typecheck/build passed; **35 tests passed, 0 failed** |
+| `npm audit --json` | Exit 0; **0 vulnerabilities**, 17 total dependencies |
+| `git diff --check origin/codex/g1b-document-ingestion-20261015...HEAD` | Exit 0 |
+| Independent read-only review | No actionable findings at `c62d5ac635dd8ac829d529f04cdc805d5596b077` |
+| GitHub PR #8 hosted checks | None reported; PR targets stacked branch `codex/g1a-knowledge-contracts-20261015` |
 
 ## Security, cost, and limitations
 
@@ -43,6 +55,6 @@ The repository has no lint script, so lint was not available to run. The CI work
 
 ## Review and gate status
 
-- A stacked implementation PR targeting PR #7 is the next review gate; no merge has occurred.
-- Follow-up independent review is still required. PR #7 and PR #5 remain open, so this branch is not yet based on `main` and hosted CI is not triggered.
+- PR #8 is open, targets PR #7's branch, and has clean merge state; no merge has occurred. Its code has local verification and independent review, but no hosted CI run.
+- PR #7 and PR #5 remain open, so this branch is not yet based on `main`. Hosted verification requires the stacked base chain and CI trigger to become available; this report does not treat local checks as hosted evidence.
 - Owner approval remains required for merge/deployment or any future production data, credentials, or paid-resource use.
