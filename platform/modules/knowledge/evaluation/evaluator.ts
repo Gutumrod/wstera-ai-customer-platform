@@ -46,6 +46,9 @@ export function summarizeKnowledgeEvaluation(
   k: number,
 ): KnowledgeEvaluationSummary {
   if (!Number.isInteger(k) || k < 1 || k > 20) throw new RangeError("k must be between 1 and 20");
+  if (observations.some((item) => !Number.isFinite(item.latencyMs) || item.latencyMs < 0)) {
+    throw new RangeError("latencyMs observations must be finite and non-negative");
+  }
   const answerable = observations.filter((item) => item.expected === "answer");
   const unanswerable = observations.filter((item) => item.expected === "retrieval_abstain");
   const policyAbstain = observations.filter((item) => item.expected === "policy_abstain");
@@ -67,7 +70,7 @@ export function summarizeKnowledgeEvaluation(
   const abstentionAccuracy = unanswerable.length === 0
     ? null
     : unanswerable.filter((item) => item.returned.length === 0).length / unanswerable.length;
-  const latencies = observations.map((item) => Number.isFinite(item.latencyMs) && item.latencyMs >= 0 ? item.latencyMs : 0);
+  const latencies = observations.map((item) => item.latencyMs);
 
   return Object.freeze({
     k,
