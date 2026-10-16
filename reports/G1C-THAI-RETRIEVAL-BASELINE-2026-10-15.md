@@ -43,3 +43,20 @@ Latency values are from one local in-memory run and are not production or hosted
 This is synthetic in-memory retrieval evidence. PDF/CSV documents enter the corpus as already-extracted segments; parser behavior is verified separately by Task 003. No model is called, so generated-answer grounding, bad-answer rate, model/provider latency, and future AI cost are unmeasured. The hostile-content case measures retrieval only and does not prove prompt-injection resistance. No customer data, production credentials, paid services, deployment, or external provider calls were used.
 
 No pass thresholds or retrieval technology choice are set. Owner review of this baseline is required before either decision. PR review, the G0 security gate, actual persistence/upload, model answerability and policy enforcement, Web Chat, human handoff, and the G1 end-to-end gate remain pending.
+
+## Follow-up verification — 2026-10-16
+
+The evaluator was independently reviewed. The first review found that invalid latency values were silently changed to zero, which could understate P50/P95. The summarizer now rejects negative and non-finite latency samples with `RangeError`; regression coverage includes `-1`, `NaN`, and both infinities. A separate read-only follow-up review found no remaining issue in the fix.
+
+Exact tested code candidate: `a0fdf0545c4a768434ca0dde8ddff5d1b13c24bf`. The later merge commit `ec89799` only incorporates the current G1-B parent branch; this report update is documentation-only.
+
+| Check | Result |
+|---|---|
+| `npm run check` | Exit 0; typecheck/build passed; **42 tests passed, 0 failed** |
+| `npm run evaluate:knowledge` | Exit 0; 30 synthetic cases; Recall@3 0.963, Precision@3 0.333, citation precision 1.000, retrieval abstention accuracy 1.000 |
+| Current-run local latency | P50 0.183 ms / P95 0.605 ms; one in-memory run, not hosted or production performance evidence |
+| External provider calls / estimated provider spend | 0 / USD 0 |
+| `npm audit --json` | Exit 0; 0 vulnerabilities across 17 dependencies |
+| Independent review | Initial Low finding fixed; independent follow-up found no remaining issue |
+
+The `ZX650` punctuation-variant case still misses the expected evidence in this G1-C baseline. The separate G1-C1 branch contains a candidate fix and its own tests; that stacked work has not been merged. This baseline continues to show retrieval behavior only and does not establish answerability, generated-answer grounding, or end-to-end behavior.
