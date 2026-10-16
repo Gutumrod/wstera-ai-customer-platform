@@ -29,4 +29,4 @@ This validates citation provenance only. It does not prove cited text semantical
 
 ## Gate status
 
-Implementation, local checks, and independent review are complete for this scoped foundation. The pull request remains stacked on PR #9 and has no hosted CI evidence. Merge/deploy remains subject to the Owner gate; Web Chat, semantic answerability, model generation, durable knowledge/conversation storage, and the one-shop G1 integration proof remain outstanding.
+Implementation, local checks, and independent review are complete for this scoped foundation. PR #13 is open against PR #9 with clean merge state, but has no hosted CI evidence. Merge/deploy remains subject to the Owner gate; Web Chat, semantic answerability, model generation, durable knowledge/conversation storage, and the one-shop G1 integration proof remain outstanding.
