@@ -3,6 +3,7 @@
 **Recorded:** 2026-10-16 (Asia/Bangkok)
 **Branch:** `codex/g1c1-sku-punctuation-20261016`
 **Base:** `codex/g1d-conversation-handoff-20261015` at `c580d4239c88bbdd56ec31686114a86ee6bd9bbb`
+**Pull request:** [#11](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/11), open and stacked on PR #10.
 
 ## Defect and change
 
