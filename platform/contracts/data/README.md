@@ -13,3 +13,5 @@ Implementations must apply workspace isolation and recovery semantics. Repositor
 No database, object-storage, vector-index, queue, or durable delivery implementation exists here. See `../modules/knowledge/README.md` for the bounded local knowledge implementation and verification status.
 
 The local knowledge contract represents citations with exact content spans and, for extracted documents, source page or logical CSV record locators. The extractor adapter consumes synthetic/local bytes only; it does not provide an upload, storage, or asynchronous processing boundary.
+
+`conversation.ts` defines workspace-scoped conversation snapshots, handoff events, atomic compare-and-append persistence, and staff authorization ports. It is a contract only; the local state machine/test repository do not establish durable storage or production staff authorization.
