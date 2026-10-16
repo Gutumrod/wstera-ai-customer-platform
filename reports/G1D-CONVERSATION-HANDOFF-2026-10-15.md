@@ -37,4 +37,4 @@ The branch was synchronized with the latest G1-C parent after its evaluator inpu
 | `npm audit --json` | Exit 0; 0 vulnerabilities across 17 dependencies |
 | Independent review | No actionable defects in the G1-D state machine at local HEAD `739f796` |
 
-PR #10 was `DIRTY` against the advanced PR #9 base before this branch sync. After pushing the sync, check GitHub's current merge and hosted-check state; no merge/deploy has occurred.
+PR #10 was `DIRTY` against the advanced PR #9 base before this branch sync. After pushing the sync, GitHub reports the PR as mergeable/clean against base `003ed3e`; no hosted checks are reported and no merge/deploy has occurred.
