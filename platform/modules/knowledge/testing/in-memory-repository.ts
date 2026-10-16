@@ -41,6 +41,7 @@ function sameLocator(left: KnowledgeCitationLocator, right: KnowledgeCitationLoc
 }
 
 function canonicalizeImportedVersion(workspace: TrustedWorkspaceContext, version: KnowledgeVersionDraft): KnowledgeVersion {
+  if (version.kind !== "pdf" && version.kind !== "csv") throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
   const segments: KnowledgeExtractedSegment[] = [];
   let current: { locator: KnowledgeExtractedSegment["locator"]; text: string; nextChunkIndex: number } | undefined;
   for (const chunk of version.chunks) {
@@ -73,7 +74,7 @@ function canonicalizeImportedVersion(workspace: TrustedWorkspaceContext, version
     sourceId: version.sourceId,
     versionId: version.versionId,
     title: version.title,
-    kind: firstLocator?.kind === "row" ? "csv" : "pdf",
+    kind: version.kind,
     segments,
     createdAt: version.createdAt,
   });
@@ -117,6 +118,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     const source = this.getSource(workspace, version.sourceId);
     if (!source) throw new KnowledgeError("SOURCE_NOT_FOUND");
     if (source.status !== "active") throw new KnowledgeError("SOURCE_ARCHIVED");
+    if (version.kind !== source.kind) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
     const runtimeVersion = version as KnowledgeVersion;
     if ((runtimeVersion.status !== undefined && runtimeVersion.status !== "uploaded")
       || runtimeVersion.approvedAt !== undefined || runtimeVersion.approvedBy !== undefined
@@ -144,7 +146,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     const draft = Object.freeze({ ...canonical, status: "uploaded" as const }) as KnowledgeVersion;
     const existing = this.versions.get(id);
     if (existing) {
-      if (existing.content !== version.content || existing.title !== version.title
+      if (existing.content !== version.content || existing.title !== version.title || existing.kind !== version.kind
         || existing.chunks.length !== version.chunks.length
         || existing.chunks.some((chunk, index) => {
           const candidate = version.chunks[index];

@@ -1,6 +1,6 @@
 # Codex Cloud Task 002 — Knowledge/RAG Contracts (AFTER 001)
 
-**Status:** PARTIALLY IMPLEMENTED LOCALLY across G1a–G1c branches; PR #7 is stacked on PR #5, PR #8 is stacked on PR #7, and PR #9 adds the diagnostic baseline. Parent PR/security/Owner gates remain open; this does not unlock merge/deploy.
+**Status:** PARTIALLY IMPLEMENTED LOCALLY across stacked G1a–G1d work; PR #9 adds the synthetic retrieval baseline and PR #10 adds local conversation/handoff state and ports. Parent PR/security/Owner gates remain open; this does not certify the full task or unlock merge/deploy.
 **Goal:** Create a safe source/version/chunk/retrieval contract for approved knowledge per workspace, without pretending that embeddings alone guarantee factual answers.
 
 **Design authority:** [Master Brief](../BRIEF.md) (L-02/L-03/L-04/L-08/L-12), [Knowledge module ownership](../architecture/REPOSITORY-STRUCTURE.md) and [Port contracts](../architecture/PORTS-AND-ADAPTERS.md). Implement through provider-neutral contracts; do not import Supabase/pgvector directly into the knowledge domain.
@@ -13,7 +13,7 @@
 - Pure FAQ text validation/chunking, lifecycle transitions, approval/revocation, immutable approved content, deterministic lexical/SKU retrieval, and no-answer behavior in `platform/modules/knowledge/`.
 - Synthetic regression tests for scope, approval/revocation, version conflict, exact citations, Thai/SKU queries, no-match, malformed/oversized content, and instruction-like text.
 
-### Implemented in the stacked G1b local slice
+### Implemented in the stacked G1b slice
 
 - Bounded local Node PDF text and UTF-8 CSV extraction, with page and logical CSV record locators, through `KnowledgeDocumentExtractorPort`.
 - Orchestration from extracted segments into a draft knowledge version and exact row/page citations in retrieval.
