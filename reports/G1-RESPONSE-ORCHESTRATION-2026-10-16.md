@@ -3,18 +3,19 @@
 **Recorded:** 2026-10-16 (Asia/Bangkok)
 **Branch:** `codex/g1-response-orchestration-20261016`
 **Base:** G1-C1 branch `codex/g1c1-sku-punctuation-20261016`, with G1-E citation-integrity code merged locally.
-**Status:** Local core candidate; independent review in progress, PR pending.
+**Status:** PR #14 open for review; final independent review of descriptor-snapshot fixes in progress.
 
 ## Implemented
 
-`SupportOrchestrator` connects a server-resolved workspace context and `KnowledgeRetrievalPort` to conversation-state, answerability, grounded-answer and handoff ports. It snapshots the context, reads conversation state before retrieval and after generation, validates runtime result shapes/evidence identity, routes no-evidence/insufficient/conflicting/uncertain cases to handoff before generation, maps opaque generation references to retrieved hits, bounds model output, and returns an answer only after canonical citation validation. The answer includes the observed conversation version.
+`SupportOrchestrator` connects a server-resolved workspace context and `KnowledgeRetrievalPort` to conversation-state, answerability, grounded-answer and handoff ports. It snapshots the context, conversation fields, retrieval hits, citations, locators and opaque generation references from descriptor values into frozen data-only objects, rejecting accessor-backed adapter data. It reads conversation state before retrieval and after generation, validates runtime result shapes/evidence identity, routes no-evidence/insufficient/conflicting/uncertain cases to handoff before generation, maps opaque generation references to retrieved hits, bounds model output, and returns an answer only after canonical citation validation. The answer includes the observed conversation version.
 
 ## Verification
 
 - `npm ci` — completed; 0 vulnerabilities reported by install audit.
-- `npm run check` — typecheck/build and 81 tests passed, 0 failures.
+- `npm run check` — typecheck/build and 85 tests passed, 0 failures (after independent-review fixes).
 - `npm audit --json` — 0 vulnerabilities across 17 dependency records.
 - `git diff --check` — passed.
+- Independent review identified stateful getter and Proxy descriptor/get inconsistencies in conversation, retrieval, and generated references; paths now validate and use captured descriptor values, with regression tests. Final follow-up review is pending.
 - No provider calls, credentials, customer data, database, or production services used.
 
 ## Limits and remaining gates

@@ -1,6 +1,6 @@
 # Task 006B — Provider-neutral grounded response orchestration
 
-**Status:** Local core implemented and tested on `codex/g1-response-orchestration-20261016`; 81/81 tests pass, 0 audit vulnerabilities; independent follow-up review in progress, PR pending.
+**Status:** PR #14 open on `codex/g1-response-orchestration-20261016`; 85/85 tests pass, 0 audit vulnerabilities; final independent review of descriptor-snapshot fixes in progress.
 
 ## Goal
 
@@ -15,10 +15,11 @@ Connect tenant-scoped retrieval to answerability, grounded generation, canonical
 - Give generation opaque evidence reference IDs rather than workspace IDs or citation objects. Map generated references back to retrieved hits and validate canonical citations before returning any answer.
 - Bound generated answer text to 16,000 characters and citation references to the number of retrieved hits (up to the configured 20-hit maximum).
 - Convert retrieval/generation failures and invalid outputs into low-detail reasons; if the handoff port fails, return `handoff_unavailable` rather than claiming escalation succeeded.
+- Snapshot conversation, retrieval hit, citation, locator, and model-reference values from one descriptor read into frozen data-only objects; reject accessor-backed adapter data to prevent validation/use discrepancies.
 
 ## Acceptance evidence
 
-- Unit tests cover cited answer mapping; active, paused and handoff-during-generation conversation states; no-evidence, insufficient, conflicting and uncertain outcomes; malformed adapter outputs; cross-workspace citations; generation/retrieval/handoff failures; bounded output; and invalid requests.
+- Unit tests cover cited answer mapping; active, paused and handoff-during-generation conversation states; stateful getter rejection and Proxy descriptor/get mismatch; no-evidence, insufficient, conflicting and uncertain outcomes; malformed adapter outputs; cross-workspace citations; generation/retrieval/handoff failures; bounded output; and invalid requests.
 - `npm run check` covers typecheck/build and all task tests. `npm audit` and `git diff --check` are recorded in the report.
 
 ## Scope limits

@@ -67,37 +67,131 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseGeneratedDraft(value: unknown, citationLimit: number): GeneratedDraft | null {
+function hasOnlyDataProperties(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  return Reflect.ownKeys(value).every((key) => typeof key === "string" && allowed.includes(key)
+    && Object.prototype.hasOwnProperty.call(descriptors, key) && "value" in descriptors[key]!);
+}
+
+function snapshotArrayValues(value: unknown, limit: number): unknown[] | null {
   try {
-    if (!isRecord(value) || !Object.keys(value).every((key) => key === "text" || key === "citationRefs")) return null;
-    const text = value.text;
-    const references = value.citationRefs;
-    if (typeof text !== "string" || text.length > 16_000
-      || !Array.isArray(references) || references.length === 0 || references.length > citationLimit
-      || !references.every((reference) => typeof reference === "string" && reference.length <= 64)) return null;
-    return Object.freeze({ text, citationRefs: Object.freeze([...references]) });
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value) as Record<string, PropertyDescriptor>;
+    const ownKeys = Reflect.ownKeys(value);
+    const length = descriptors.length?.value;
+    if (!Number.isSafeInteger(length) || length < 0 || length > limit || ownKeys.length !== length + 1 || !ownKeys.includes("length")) return null;
+    const values: unknown[] = [];
+    for (let index = 0; index < length; index++) {
+      const descriptor = descriptors[String(index)];
+      if (!descriptor || !("value" in descriptor)) return null;
+      values.push(descriptor.value);
+    }
+    return values;
   } catch {
     return null;
   }
 }
 
-function isConversationSnapshot(value: unknown, workspaceId: string, conversationId: string): value is ConversationSnapshot {
-  return isRecord(value)
-    && value.workspaceId === workspaceId
-    && value.conversationId === conversationId
-    && (value.status === "ai_active" || value.status === "handoff_requested" || value.status === "human_active")
-    && Number.isSafeInteger(value.version) && (value.version as number) >= 0;
+function parseGeneratedDraft(value: unknown, citationLimit: number): GeneratedDraft | null {
+  try {
+    if (!isRecord(value) || !hasOnlyDataProperties(value, ["text", "citationRefs"])) return null;
+    const fields = Object.getOwnPropertyDescriptors(value);
+    const text = fields.text?.value;
+    const references = fields.citationRefs?.value;
+    if (typeof text !== "string" || text.length > 16_000) return null;
+    const referenceValues = snapshotArrayValues(references, citationLimit);
+    if (!referenceValues || referenceValues.length === 0) return null;
+    const copiedReferences: string[] = [];
+    for (const reference of referenceValues) {
+      if (typeof reference !== "string" || reference.length > 64) return null;
+      copiedReferences.push(reference);
+    }
+    return Object.freeze({ text, citationRefs: Object.freeze(copiedReferences) });
+  } catch {
+    return null;
+  }
 }
 
-function isRetrievalHit(value: unknown): value is KnowledgeRetrievalHit {
-  return isRecord(value)
-    && Object.keys(value).every((key) => ["sourceId", "versionId", "title", "text", "score", "citation"].includes(key))
-    && typeof value.sourceId === "string" && value.sourceId.trim().length > 0
-    && typeof value.versionId === "string" && value.versionId.trim().length > 0
-    && typeof value.title === "string"
-    && typeof value.text === "string" && value.text.trim().length > 0
-    && typeof value.score === "number" && Number.isFinite(value.score) && value.score > 0
-    && isRecord(value.citation);
+function snapshotConversation(value: unknown, workspaceId: string, conversationId: string): ConversationSnapshot | null {
+  try {
+    if (!isRecord(value) || !hasOnlyDataProperties(value, ["workspaceId", "conversationId", "status", "version", "createdAt", "updatedAt", "handoffReason", "assignedStaffId", "lastStaffDeliveryId"])) return null;
+    const fields = Object.getOwnPropertyDescriptors(value);
+    const observedWorkspaceId = fields.workspaceId?.value;
+    const observedConversationId = fields.conversationId?.value;
+    const status = fields.status?.value;
+    const version = fields.version?.value;
+    const createdAt = fields.createdAt?.value;
+    const updatedAt = fields.updatedAt?.value;
+    if (observedWorkspaceId !== workspaceId || observedConversationId !== conversationId
+      || (status !== "ai_active" && status !== "handoff_requested" && status !== "human_active")
+      || !Number.isSafeInteger(version) || (version as number) < 0
+      || typeof createdAt !== "string" || typeof updatedAt !== "string") return null;
+    return Object.freeze({
+      workspaceId: observedWorkspaceId,
+      conversationId: observedConversationId,
+      status,
+      version: version as number,
+      createdAt,
+      updatedAt,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function snapshotRetrievalHit(value: unknown): KnowledgeRetrievalHit | null {
+  try {
+    if (!isRecord(value) || !hasOnlyDataProperties(value, ["sourceId", "versionId", "title", "text", "score", "citation"])) return null;
+    const hitFields = Object.getOwnPropertyDescriptors(value);
+    const sourceId = hitFields.sourceId?.value;
+    const versionId = hitFields.versionId?.value;
+    const title = hitFields.title?.value;
+    const text = hitFields.text?.value;
+    const score = hitFields.score?.value;
+    const rawCitation = hitFields.citation?.value;
+    if (typeof sourceId !== "string" || sourceId.trim().length === 0
+      || typeof versionId !== "string" || versionId.trim().length === 0
+      || typeof title !== "string" || typeof text !== "string" || text.trim().length === 0
+      || typeof score !== "number" || !Number.isFinite(score) || score <= 0
+      || !isRecord(rawCitation) || !hasOnlyDataProperties(rawCitation, ["workspaceId", "sourceId", "sourceVersionId", "chunkId", "locator"])) return null;
+    const citationFields = Object.getOwnPropertyDescriptors(rawCitation);
+    const workspaceId = citationFields.workspaceId?.value;
+    const citationSourceId = citationFields.sourceId?.value;
+    const sourceVersionId = citationFields.sourceVersionId?.value;
+    const chunkId = citationFields.chunkId?.value;
+    const rawLocator = citationFields.locator?.value;
+    if (!isRecord(rawLocator) || !hasOnlyDataProperties(rawLocator, ["kind", "chunkIndex", "start", "end", "page", "row"])) return null;
+    const locatorFields = Object.getOwnPropertyDescriptors(rawLocator);
+    const locatorKind = locatorFields.kind?.value;
+    let locator: KnowledgeCitation["locator"];
+    if (locatorKind === "span") {
+      const chunkIndex = locatorFields.chunkIndex?.value;
+      const start = locatorFields.start?.value;
+      const end = locatorFields.end?.value;
+      locator = Object.freeze({ kind: "span", chunkIndex: chunkIndex as number, start: start as number, end: end as number });
+    } else if (locatorKind === "page" || locatorKind === "row") {
+      const position = locatorFields[locatorKind]?.value;
+      const chunkIndex = locatorFields.chunkIndex?.value;
+      locator = Object.freeze(chunkIndex === undefined
+        ? { kind: locatorKind, [locatorKind]: position } as KnowledgeCitation["locator"]
+        : { kind: locatorKind, [locatorKind]: position, chunkIndex } as KnowledgeCitation["locator"]);
+    } else if (locatorKind === "chunk") {
+      const chunkIndex = locatorFields.chunkIndex?.value;
+      locator = Object.freeze({ kind: "chunk", chunkIndex: chunkIndex as number });
+    } else return null;
+    const citation: KnowledgeCitation = Object.freeze({
+      workspaceId: workspaceId as string,
+      sourceId: citationSourceId as string,
+      sourceVersionId: sourceVersionId as string,
+      chunkId: chunkId as string,
+      locator,
+    });
+    return Object.freeze({ sourceId, versionId, title, text, score, citation });
+  } catch {
+    return null;
+  }
 }
 
 function snapshotWorkspaceContext(value: unknown): TrustedWorkspaceContext | null {
@@ -114,8 +208,10 @@ function snapshotWorkspaceContext(value: unknown): TrustedWorkspaceContext | nul
 
 function parseAssessmentKind(value: unknown): AnswerabilityAssessment["kind"] | null {
   try {
-    if (!isRecord(value) || Object.keys(value).length !== 1) return null;
-    const kind = value.kind;
+    if (!isRecord(value) || !hasOnlyDataProperties(value, ["kind"])) return null;
+    const fields = Object.getOwnPropertyDescriptors(value);
+    if (Reflect.ownKeys(value).length !== 1) return null;
+    const kind = fields.kind?.value;
     return kind === "answerable"
       || kind === "insufficient_evidence"
       || kind === "conflicting_evidence"
@@ -171,19 +267,23 @@ export class SupportOrchestrator {
     }
     let hits: readonly KnowledgeRetrievalHit[];
     try {
-      if (!isRecord(retrieval)) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
-      if (retrieval.kind === "no_answer") {
-        if (Object.keys(retrieval).length !== 2 || retrieval.reason !== "NO_APPROVED_EVIDENCE") {
+      if (!isRecord(retrieval) || !hasOnlyDataProperties(retrieval, ["kind", "hits", "reason"])) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      const resultFields = Object.getOwnPropertyDescriptors(retrieval);
+      const resultKind = resultFields.kind?.value;
+      if (Reflect.ownKeys(retrieval).length !== 2) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      if (resultKind === "no_answer") {
+        if (resultFields.reason?.value !== "NO_APPROVED_EVIDENCE") {
           return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
         }
         return this.handoff(request, "NO_APPROVED_EVIDENCE");
       }
-      if (retrieval.kind !== "evidence" || Object.keys(retrieval).length !== 2
-        || !Array.isArray(retrieval.hits) || retrieval.hits.length === 0
-        || retrieval.hits.length > this.evidenceLimit || !retrieval.hits.every(isRetrievalHit)) {
+      const retrievedValues = snapshotArrayValues(resultFields.hits?.value, this.evidenceLimit);
+      if (resultKind !== "evidence" || !retrievedValues || retrievedValues.length === 0) {
         return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
       }
-      hits = retrieval.hits;
+      const canonicalHits = retrievedValues.map((hit) => snapshotRetrievalHit(hit));
+      if (canonicalHits.some((hit) => hit === null)) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      hits = Object.freeze(canonicalHits as KnowledgeRetrievalHit[]);
       const retrievedIntegrity = validateAnswerCitations(request.workspace, {
         text: "retrieved evidence validation",
         citations: hits.map((hit) => hit.citation),
@@ -263,10 +363,11 @@ export class SupportOrchestrator {
   ): Promise<Readonly<{ kind: "loaded"; snapshot: ConversationSnapshot }> | Readonly<{ kind: "conversation_unavailable" }>> {
     try {
       const snapshot = await this.ports.conversations.load(input.workspace, input.conversationId);
-      if (!snapshot || !isConversationSnapshot(snapshot, input.workspace.workspaceId, input.conversationId)) {
+      const canonicalSnapshot = snapshotConversation(snapshot, input.workspace.workspaceId, input.conversationId);
+      if (!canonicalSnapshot) {
         return Object.freeze({ kind: "conversation_unavailable" });
       }
-      return Object.freeze({ kind: "loaded", snapshot });
+      return Object.freeze({ kind: "loaded", snapshot: canonicalSnapshot });
     } catch {
       return Object.freeze({ kind: "conversation_unavailable" });
     }

@@ -35,6 +35,8 @@ function harness(options: {
   pauseAfterGeneration?: boolean;
   conversationFails?: boolean;
   mutateWorkspaceDuringRetrieval?: boolean;
+  changingConversationGetter?: boolean;
+  changingEvidenceGetter?: boolean;
 } = {}) {
   const calls = { assessment: 0, generation: 0, handoff: [] as string[] };
   let conversationLoads = 0;
@@ -44,14 +46,20 @@ function harness(options: {
       assert.equal(receivedWorkspace.workspaceId, "shop-1");
       assert.equal(conversationId, "conversation-1");
       if (options.conversationFails) throw new Error("private conversation detail");
-      return {
+      const snapshot = {
         workspaceId: "shop-1",
         conversationId: "conversation-1",
-        status: options.pauseAfterGeneration && conversationLoads > 1 ? "human_active" : options.conversationStatus ?? "ai_active",
         version: options.pauseAfterGeneration && conversationLoads > 1 ? 2 : 1,
         createdAt: "2026-10-16T00:00:00.000Z",
         updatedAt: "2026-10-16T00:00:00.000Z",
-      } as const;
+      } as Record<string, unknown>;
+      if (options.changingConversationGetter) {
+        let reads = 0;
+        Object.defineProperty(snapshot, "status", { get: () => reads++ === 0 ? "ai_active" : "human_active" });
+      } else {
+        snapshot.status = options.pauseAfterGeneration && conversationLoads > 1 ? "human_active" : options.conversationStatus ?? "ai_active";
+      }
+      return snapshot as never;
     },
   };
   const retrieval: KnowledgeRetrievalPort = {
@@ -62,6 +70,12 @@ function harness(options: {
       }
       if (options.throwingRetrievalGetter) return new Proxy({}, { get() { throw new Error("getter trap"); } }) as never;
       if (options.malformedRetrieval) return null as never;
+      if (options.changingEvidenceGetter) {
+        let reads = 0;
+        const changingHit = { ...hit } as Record<string, unknown>;
+        Object.defineProperty(changingHit, "text", { get: () => reads++ === 0 ? hit.text : "ข้อความเปลี่ยนระหว่างอ่าน" });
+        return { kind: "evidence", hits: [changingHit] } as never;
+      }
       return options.result ?? { kind: "evidence", hits: [hit] };
     },
   };
@@ -205,5 +219,38 @@ test("paused conversations stop before retrieval and a handoff during generation
   await t.test("conversation state unavailable", async () => {
     const { engine } = harness({ conversationFails: true });
     assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_unavailable" });
+  });
+  await t.test("stateful conversation getter is rejected before retrieval", async () => {
+    const { engine, calls } = harness({ changingConversationGetter: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_unavailable" });
+    assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
+  });
+  await t.test("stateful evidence getter is rejected before model use", async () => {
+    const { engine, calls } = harness({ changingEvidenceGetter: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+      kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
+    });
+    assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: ["RETRIEVAL_UNAVAILABLE"] });
+  });
+  await t.test("conversation Proxy uses its captured descriptor value", async () => {
+    const { engine } = harness();
+    const ports = (engine as unknown as { ports: { conversations: { load: () => Promise<unknown> } } }).ports;
+    const originalLoad = ports.conversations.load;
+    ports.conversations.load = async () => new Proxy({
+      workspaceId: "shop-1", conversationId: "conversation-1", status: "human_active", version: 1,
+      createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z",
+    }, { get(target, key, receiver) { return key === "status" ? "ai_active" : Reflect.get(target, key, receiver); } });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
+    ports.conversations.load = originalLoad;
+  });
+  await t.test("generated reference Proxy validates and uses the same descriptor value", async () => {
+    const references = new Proxy(["evidence-1"], {
+      get(target, key, receiver) { return key === "0" ? "evidence-2" : Reflect.get(target, key, receiver); },
+    });
+    const generated = { text: "ส่งภายใน 2 วันทำการ", citationRefs: references };
+    const { engine } = harness({ generated });
+    const result = await engine.respond({ workspace, conversationId: "conversation-1", query: "ส่งของกี่วัน" });
+    assert.equal(result.kind, "answer");
+    if (result.kind === "answer") assert.deepEqual(result.citations, [hit.citation]);
   });
 });
