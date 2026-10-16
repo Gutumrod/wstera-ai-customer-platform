@@ -1,4 +1,5 @@
 import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
+import { KnowledgeError } from "../../contracts/data/knowledge.js";
 import type {
   KnowledgeChunk,
   KnowledgeCitation,
@@ -19,30 +20,6 @@ import type {
 } from "../../contracts/data/knowledge.js";
 
 export * from "../../contracts/data/knowledge.js";
-
-export type KnowledgeErrorCode =
-  | "INVALID_KNOWLEDGE_INPUT"
-  | "SOURCE_NOT_FOUND"
-  | "SOURCE_CONFLICT"
-  | "SOURCE_ARCHIVED"
-  | "APPROVED_VERSION_EXISTS"
-  | "VERSION_NOT_FOUND"
-  | "VERSION_CONFLICT"
-  | "INVALID_VERSION_TRANSITION"
-  | "APPROVAL_NOT_ELIGIBLE"
-  | "REVOCATION_NOT_ELIGIBLE"
-  | "CROSS_WORKSPACE_ACCESS_DENIED"
-  | "INVALID_RETRIEVAL_QUERY"
-  | "UNTRUSTED_WORKSPACE_SELECTOR"
-  | "INVALID_EXTRACTION_RESULT"
-  | "DOCUMENT_TOO_LARGE";
-
-export class KnowledgeError extends Error {
-  constructor(readonly code: KnowledgeErrorCode) {
-    super(code);
-    this.name = "KnowledgeError";
-  }
-}
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const MAX_CONTENT_CHARS = 20_000;

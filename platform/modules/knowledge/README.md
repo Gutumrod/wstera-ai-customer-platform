@@ -17,7 +17,7 @@ Citation spans are UTF-16 code-unit offsets into the exact stored `content`; hit
 
 ## Not implemented / remaining G1 work
 
-An authenticated upload path, durable async ingestion state machine, persistent database or object storage, pgvector/hybrid search, production authorization/RLS, model answer generation, Web Chat UI, and staff takeover. The Node parser is not a deployment integration. Untrusted document instructions remain text data; this module has no code path that interprets them as commands.
+An authenticated upload/approval path, durable async ingestion state machine, private object storage for original files, hosted PostgreSQL connection pool and role provisioning, pgvector/hybrid search, production authorization beyond database RLS, Web Chat UI, and staff takeover remain unimplemented. The PostgreSQL repository is exercised locally with PGlite, not a hosted database. The Node parser is not a deployment integration. Untrusted document instructions remain text data; this module has no code path that interprets them as commands.
 
 ## Local evidence
 
@@ -25,4 +25,4 @@ An authenticated upload path, durable async ingestion state machine, persistent 
 
 ## Next executable slice
 
-Add a persisted repository and authenticated upload/approval path with isolation tests. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Web chat and model generation remain later slices. Handoff domain state exists separately, but no production delivery path is integrated.
+Task 007A adds a transaction-scoped PostgreSQL repository and local RLS integration coverage. Next add a server-authenticated upload/approval host that uses a real least-privileged connection pool and private file storage, then compose the shared engine into Web Chat. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Handoff domain state exists separately, but no production delivery path is integrated.

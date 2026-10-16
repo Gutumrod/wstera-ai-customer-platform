@@ -1,5 +1,30 @@
 import type { TrustedWorkspaceContext } from "../tenancy/index.js";
 
+export type KnowledgeErrorCode =
+  | "INVALID_KNOWLEDGE_INPUT"
+  | "SOURCE_NOT_FOUND"
+  | "SOURCE_CONFLICT"
+  | "SOURCE_ARCHIVED"
+  | "APPROVED_VERSION_EXISTS"
+  | "VERSION_NOT_FOUND"
+  | "VERSION_CONFLICT"
+  | "INVALID_VERSION_TRANSITION"
+  | "APPROVAL_NOT_ELIGIBLE"
+  | "REVOCATION_NOT_ELIGIBLE"
+  | "CROSS_WORKSPACE_ACCESS_DENIED"
+  | "INVALID_RETRIEVAL_QUERY"
+  | "UNTRUSTED_WORKSPACE_SELECTOR"
+  | "INVALID_EXTRACTION_RESULT"
+  | "DOCUMENT_TOO_LARGE";
+
+/** Safe domain error shared by the knowledge core and replaceable repositories. */
+export class KnowledgeError extends Error {
+  constructor(readonly code: KnowledgeErrorCode) {
+    super(code);
+    this.name = "KnowledgeError";
+  }
+}
+
 export type KnowledgeSourceKind = "faq" | "pdf" | "csv";
 export type KnowledgeSourceStatus = "active" | "archived";
 export type KnowledgeVersionStatus =
