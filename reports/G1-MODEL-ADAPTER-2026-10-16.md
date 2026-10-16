@@ -3,7 +3,7 @@
 **Recorded:** 2026-10-16 (Asia/Bangkok)
 **Branch:** `codex/g1-model-adapter-20261016`
 **Base:** PR #14 head `76817b8f7002e0402f147d5caafdd9d64734f14e`.
-**Status:** Local candidate; independent read-only security review found no actionable findings.
+**Status:** [PR #15](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/15) open; independent read-only security review found no actionable findings. GitHub currently reports `MERGEABLE` and no hosted checks for this stacked branch.
 
 ## Implemented
 

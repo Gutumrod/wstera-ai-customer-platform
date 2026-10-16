@@ -1,6 +1,6 @@
 # Task 006C — Metered OpenAI-compatible model adapter
 
-**Status:** Implemented and independently reviewed with no actionable findings on `codex/g1-model-adapter-20261016`, stacked on PR #14; PR creation pending.
+**Status:** PR [#15](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/15) is open and independently reviewed with no actionable findings, stacked on PR #14.
 
 ## Goal
 
@@ -20,6 +20,8 @@ Connect the G1 response core to a replaceable OpenAI-compatible Chat Completions
 - Tests assert bounded token/request fields, no provider call on invalid inputs, trusted workspace attribution only in the usage sink, and no workspace/customer data in provider-independent error strings.
 - `npm audit` and `git diff --check` pass; independent read-only security review reports no actionable findings, including bounded fetch/body/usage timeout behavior.
 - Open a scoped PR stacked on PR #14. Do not merge, deploy, call any provider, choose a pricing table, or claim end-to-end G1 proof.
+
+PR #15 is currently `MERGEABLE`; GitHub reports no hosted status checks for this stacked branch yet. Owner review and merge remain pending.
 
 ## Remaining gates
 
