@@ -1,5 +1,7 @@
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import type {
+  KnowledgeCitationLocator,
+  KnowledgeExtractedSegment,
   KnowledgeSource,
   KnowledgeVersion,
   KnowledgeVersionDraft,
@@ -11,6 +13,7 @@ import {
   archiveKnowledgeSource,
   approveKnowledgeVersion,
   createFaqVersion,
+  createImportedKnowledgeVersion,
   revokeKnowledgeVersion,
   transitionKnowledgeVersion,
 } from "../index.js";
@@ -20,6 +23,61 @@ const versionKey = (workspaceId: string, sourceId: string, versionId: string): s
 
 function assertScope(workspace: TrustedWorkspaceContext, value: { workspaceId: string }): void {
   if (workspace.workspaceId !== value.workspaceId) throw new KnowledgeError("CROSS_WORKSPACE_ACCESS_DENIED");
+}
+
+function sameLocator(left: KnowledgeCitationLocator, right: KnowledgeCitationLocator): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "span" && right.kind === "span") {
+    return left.chunkIndex === right.chunkIndex && left.start === right.start && left.end === right.end;
+  }
+  if (left.kind === "page" && right.kind === "page") {
+    return left.page === right.page && left.chunkIndex === right.chunkIndex;
+  }
+  if (left.kind === "row" && right.kind === "row") {
+    return left.row === right.row && left.chunkIndex === right.chunkIndex;
+  }
+  if (left.kind === "chunk" && right.kind === "chunk") return left.chunkIndex === right.chunkIndex;
+  return false;
+}
+
+function canonicalizeImportedVersion(workspace: TrustedWorkspaceContext, version: KnowledgeVersionDraft): KnowledgeVersion {
+  if (version.kind !== "pdf" && version.kind !== "csv") throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+  const segments: KnowledgeExtractedSegment[] = [];
+  let current: { locator: KnowledgeExtractedSegment["locator"]; text: string; nextChunkIndex: number } | undefined;
+  for (const chunk of version.chunks) {
+    const locator = chunk.locator;
+    if (locator.kind !== "page" && locator.kind !== "row") {
+      throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+    }
+    const position = locator.kind === "page" ? locator.page : locator.row;
+    if (!Number.isSafeInteger(position) || position < 1) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+    if (!current || locator.chunkIndex === 0) {
+      if (current) segments.push(current);
+      if (locator.chunkIndex !== 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+      current = {
+        locator: locator.kind === "page" ? { kind: "page", page: locator.page } : { kind: "row", row: locator.row },
+        text: "",
+        nextChunkIndex: 0,
+      };
+    }
+    const currentPosition = current.locator.kind === "page" ? current.locator.page : current.locator.row;
+    if (locator.kind !== current.locator.kind || position !== currentPosition || locator.chunkIndex !== current.nextChunkIndex) {
+      throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+    }
+    current.text += chunk.text;
+    current.nextChunkIndex += 1;
+  }
+  if (current) segments.push(current);
+  const firstLocator = version.chunks[0]?.locator;
+  return createImportedKnowledgeVersion({
+    workspace,
+    sourceId: version.sourceId,
+    versionId: version.versionId,
+    title: version.title,
+    kind: version.kind,
+    segments,
+    createdAt: version.createdAt,
+  });
 }
 
 export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
@@ -60,6 +118,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     const source = this.getSource(workspace, version.sourceId);
     if (!source) throw new KnowledgeError("SOURCE_NOT_FOUND");
     if (source.status !== "active") throw new KnowledgeError("SOURCE_ARCHIVED");
+    if (version.kind !== source.kind) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
     const runtimeVersion = version as KnowledgeVersion;
     if ((runtimeVersion.status !== undefined && runtimeVersion.status !== "uploaded")
       || runtimeVersion.approvedAt !== undefined || runtimeVersion.approvedBy !== undefined
@@ -67,28 +126,33 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
       || runtimeVersion.revocationReason !== undefined) {
       throw new KnowledgeError("INVALID_VERSION_TRANSITION");
     }
-    const canonical = createFaqVersion({
-      workspace, sourceId: version.sourceId, versionId: version.versionId,
-      title: version.title, content: version.content, createdAt: version.createdAt,
-    });
+    const canonical = source.kind === "faq"
+      ? createFaqVersion({
+        workspace, sourceId: version.sourceId, versionId: version.versionId,
+        title: version.title, content: version.content, createdAt: version.createdAt,
+      })
+      : canonicalizeImportedVersion(workspace, version);
     if (version.chunks.length !== canonical.chunks.length
+      || version.content !== canonical.content
       || version.chunks.some((chunk, index) => {
         const expected = canonical.chunks[index]!;
         return chunk.workspaceId !== expected.workspaceId || chunk.sourceId !== expected.sourceId
           || chunk.versionId !== expected.versionId || chunk.chunkId !== expected.chunkId
           || chunk.chunkIndex !== expected.chunkIndex || chunk.text !== expected.text
-          || chunk.start !== expected.start || chunk.end !== expected.end;
+          || chunk.start !== expected.start || chunk.end !== expected.end
+          || !sameLocator(chunk.locator, expected.locator);
       })) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
     const id = versionKey(workspace.workspaceId, version.sourceId, version.versionId);
     const draft = Object.freeze({ ...canonical, status: "uploaded" as const }) as KnowledgeVersion;
     const existing = this.versions.get(id);
     if (existing) {
-      if (existing.content !== version.content || existing.title !== version.title
+      if (existing.content !== version.content || existing.title !== version.title || existing.kind !== version.kind
         || existing.chunks.length !== version.chunks.length
         || existing.chunks.some((chunk, index) => {
           const candidate = version.chunks[index];
           return !candidate || chunk.chunkId !== candidate.chunkId || chunk.text !== candidate.text
-            || chunk.start !== candidate.start || chunk.end !== candidate.end;
+            || chunk.start !== candidate.start || chunk.end !== candidate.end
+            || !sameLocator(chunk.locator, candidate.locator);
         })) {
         throw new KnowledgeError("VERSION_CONFLICT");
       }

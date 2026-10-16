@@ -11,3 +11,5 @@ Workspace repositories, object storage, retrieval, durable delivery claim/retry,
 Implementations must apply workspace isolation and recovery semantics. Repository methods receive a server-resolved `TrustedWorkspaceContext`; adapters must enforce scope at their storage boundary rather than trusting row fields.
 
 No database, object-storage, vector-index, queue, or durable delivery implementation exists here. See `../modules/knowledge/README.md` for the bounded local knowledge implementation and verification status.
+
+The local knowledge contract represents citations with exact content spans and, for extracted documents, source page or logical CSV record locators. The extractor adapter consumes synthetic/local bytes only; it does not provide an upload, storage, or asynchronous processing boundary.

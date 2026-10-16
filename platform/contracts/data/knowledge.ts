@@ -28,6 +28,7 @@ export type KnowledgeChunk = Readonly<{
   chunkId: string;
   chunkIndex: number;
   text: string;
+  locator: KnowledgeCitationLocator;
   /** UTF-16 code-unit offsets into the exact immutable version.content string. */
   start: number;
   end: number;
@@ -37,6 +38,7 @@ export type KnowledgeVersion = Readonly<{
   workspaceId: string;
   sourceId: string;
   versionId: string;
+  kind: KnowledgeSourceKind;
   title: string;
   content: string;
   status: KnowledgeVersionStatus;
@@ -69,6 +71,33 @@ export type KnowledgeCitation = Readonly<{
   chunkId: string;
   locator: KnowledgeCitationLocator;
 }>;
+
+export type KnowledgeExtractedSegment = Readonly<{
+  text: string;
+  locator: Readonly<{ kind: "page"; page: number } | { kind: "row"; row: number }>;
+}>;
+
+export type KnowledgeExtractionFailureCode =
+  | "UNSUPPORTED_FORMAT"
+  | "FILE_TOO_LARGE"
+  | "MALFORMED_FILE"
+  | "INVALID_ENCODING"
+  | "NO_TEXT_CONTENT"
+  | "TOO_MANY_PAGES"
+  | "TOO_MANY_ROWS"
+  | "TOO_MANY_COLUMNS"
+  | "RECORD_TOO_LARGE"
+  | "OUTPUT_TOO_LARGE"
+  | "PROCESSING_LIMIT";
+
+export type KnowledgeDocumentExtractionResult =
+  | Readonly<{ kind: "success"; segments: readonly KnowledgeExtractedSegment[] }>
+  | Readonly<{ kind: "failure"; code: KnowledgeExtractionFailureCode }>;
+
+/** Parsing adapters receive bounded bytes and return source-addressable text, never tenant identity. */
+export interface KnowledgeDocumentExtractorPort {
+  extract(input: Readonly<{ kind: "pdf" | "csv"; bytes: Uint8Array }>): Promise<KnowledgeDocumentExtractionResult>;
+}
 
 export type KnowledgeRetrievalQuery = Readonly<{
   /** Resolved by the authenticated server boundary; never accepted from chat text. */

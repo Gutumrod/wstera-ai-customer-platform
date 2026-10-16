@@ -47,8 +47,8 @@ HMAC fail-closed, event replay dedupe, workspace ownership enforcement, empty ve
 
 1. [Task 001 — Harden foundation](../tasks/TASK-001-FOUNDATION.md)
 2. [Task 002 — Data and RAG contract](../tasks/TASK-002-RAG-CONTRACT.md)
-3. Task 003 (not yet issued): synthetic fixtures + ingestion, Thai hybrid retrieval evaluation.
-4. Task 004 (not yet issued): Web UI, operator handoff.
+3. [Task 003 — bounded PDF/CSV document extraction](../tasks/TASK-003-DOCUMENT-INGESTION.md): local parser and source locators. Authenticated upload, persistence, async processing, and approval workflow remain separate implementation work.
+4. Task 004 (not yet issued): Thai hybrid retrieval evaluation, Web UI, and operator handoff; split into scoped tasks before implementation.
 5. Task 005 (not yet issued): real LINE sandbox pilot.
 
 **Owner is final approval authority.** Do not merge features / deploy without review.

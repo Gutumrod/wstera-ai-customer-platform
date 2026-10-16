@@ -2,6 +2,11 @@ import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
 import type {
   KnowledgeChunk,
   KnowledgeCitation,
+  KnowledgeCitationLocator,
+  KnowledgeDocumentExtractorPort,
+  KnowledgeDocumentExtractionResult,
+  KnowledgeExtractedSegment,
+  KnowledgeExtractionFailureCode,
   KnowledgeRetrievalHit,
   KnowledgeRetrievalPort,
   KnowledgeRetrievalQuery,
@@ -28,7 +33,9 @@ export type KnowledgeErrorCode =
   | "REVOCATION_NOT_ELIGIBLE"
   | "CROSS_WORKSPACE_ACCESS_DENIED"
   | "INVALID_RETRIEVAL_QUERY"
-  | "UNTRUSTED_WORKSPACE_SELECTOR";
+  | "UNTRUSTED_WORKSPACE_SELECTOR"
+  | "INVALID_EXTRACTION_RESULT"
+  | "DOCUMENT_TOO_LARGE";
 
 export class KnowledgeError extends Error {
   constructor(readonly code: KnowledgeErrorCode) {
@@ -39,9 +46,15 @@ export class KnowledgeError extends Error {
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const MAX_CONTENT_CHARS = 20_000;
+const MAX_IMPORTED_CONTENT_CHARS = 100_000;
+const MAX_IMPORTED_SEGMENTS = 5_000;
 const MAX_CHUNK_CHARS = 320;
 const MAX_QUERY_CHARS = 500;
 const MAX_RETRIEVAL_LIMIT = 20;
+const extractionFailureCodes = new Set<KnowledgeExtractionFailureCode>([
+  "UNSUPPORTED_FORMAT", "FILE_TOO_LARGE", "MALFORMED_FILE", "INVALID_ENCODING", "NO_TEXT_CONTENT",
+  "TOO_MANY_PAGES", "TOO_MANY_ROWS", "TOO_MANY_COLUMNS", "RECORD_TOO_LARGE", "OUTPUT_TOO_LARGE", "PROCESSING_LIMIT",
+]);
 
 function assertId(value: string): void {
   if (!idPattern.test(value)) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
@@ -95,12 +108,74 @@ function splitIntoChunks(
       chunkId: `${sourceId}:${versionId}:${index}`,
       chunkIndex: index,
       text: content.slice(start, end),
+      locator: Object.freeze({ kind: "span", chunkIndex: index, start, end }),
       start,
       end,
     }));
     start = end;
   }
   return Object.freeze(chunks);
+}
+
+function splitExtractedSegments(
+  workspaceId: string,
+  sourceId: string,
+  versionId: string,
+  segments: readonly KnowledgeExtractedSegment[],
+): Readonly<{ content: string; chunks: readonly KnowledgeChunk[] }> {
+  const parts: string[] = [];
+  const chunks: KnowledgeChunk[] = [];
+  let contentLength = 0;
+
+  for (const [segmentIndex, segment] of segments.entries()) {
+    if (segmentIndex > 0) {
+      parts.push("\n\n");
+      contentLength += 2;
+    }
+    const locator = segment.locator;
+    if (locator.kind !== "page" && locator.kind !== "row") throw new KnowledgeError("INVALID_EXTRACTION_RESULT");
+    const sourcePosition = locator.kind === "page" ? locator.page : locator.row;
+    if (!Number.isSafeInteger(sourcePosition) || sourcePosition < 1) throw new KnowledgeError("INVALID_EXTRACTION_RESULT");
+    if (!validText(segment.text, MAX_IMPORTED_CONTENT_CHARS)) throw new KnowledgeError("INVALID_EXTRACTION_RESULT");
+    if (contentLength + segment.text.length > MAX_IMPORTED_CONTENT_CHARS) throw new KnowledgeError("DOCUMENT_TOO_LARGE");
+
+    parts.push(segment.text);
+    const segmentContentStart = contentLength;
+    let localStart = 0;
+    let segmentChunkIndex = 0;
+    while (localStart < segment.text.length) {
+      let localEnd = Math.min(localStart + MAX_CHUNK_CHARS, segment.text.length);
+      if (localEnd < segment.text.length) {
+        const floor = localStart + Math.floor(MAX_CHUNK_CHARS * 0.65);
+        const boundary = segment.text.lastIndexOf(" ", localEnd - 1);
+        const newline = segment.text.lastIndexOf("\n", localEnd - 1);
+        const preferred = Math.max(boundary, newline);
+        if (preferred >= floor) localEnd = preferred + 1;
+        const high = segment.text.charCodeAt(localEnd - 1);
+        const low = segment.text.charCodeAt(localEnd);
+        if (high >= 0xD800 && high <= 0xDBFF && low >= 0xDC00 && low <= 0xDFFF) localEnd -= 1;
+      }
+      const index = chunks.length;
+      const start = segmentContentStart + localStart;
+      const end = segmentContentStart + localEnd;
+      const sourceLocator: KnowledgeCitationLocator = Object.freeze({ ...locator, chunkIndex: segmentChunkIndex });
+      chunks.push(Object.freeze({
+        workspaceId,
+        sourceId,
+        versionId,
+        chunkId: `${sourceId}:${versionId}:${index}`,
+        chunkIndex: index,
+        text: segment.text.slice(localStart, localEnd),
+        locator: sourceLocator,
+        start,
+        end,
+      }));
+      localStart = localEnd;
+      segmentChunkIndex += 1;
+    }
+    contentLength += segment.text.length;
+  }
+  return Object.freeze({ content: parts.join(""), chunks: Object.freeze(chunks) });
 }
 
 export function createFaqVersion(input: Readonly<{
@@ -122,12 +197,115 @@ export function createFaqVersion(input: Readonly<{
     workspaceId: input.workspace.workspaceId,
     sourceId: input.sourceId,
     versionId: input.versionId,
+    kind: "faq",
     title: input.title.trim(),
     content: input.content,
     status: "uploaded",
     chunks: splitIntoChunks(input.workspace.workspaceId, input.sourceId, input.versionId, input.content),
     createdAt,
   });
+}
+
+export function createImportedKnowledgeVersion(input: Readonly<{
+  workspace: TrustedWorkspaceContext;
+  sourceId: string;
+  versionId: string;
+  title: string;
+  kind: "pdf" | "csv";
+  segments: readonly KnowledgeExtractedSegment[];
+  createdAt?: string;
+}>): KnowledgeVersion {
+  assertId(input.sourceId);
+  assertId(input.versionId);
+  if ((input.kind !== "pdf" && input.kind !== "csv")
+    || !validText(input.title, 200) || !Array.isArray(input.segments) || input.segments.length === 0) {
+    throw new KnowledgeError("INVALID_EXTRACTION_RESULT");
+  }
+  if (input.segments.length > MAX_IMPORTED_SEGMENTS) throw new KnowledgeError("DOCUMENT_TOO_LARGE");
+  for (const segment of input.segments) {
+    if (typeof segment !== "object" || segment === null
+      || typeof segment.locator !== "object" || segment.locator === null
+      || (input.kind === "pdf" && segment.locator.kind !== "page")
+      || (input.kind === "csv" && segment.locator.kind !== "row")) {
+      throw new KnowledgeError("INVALID_EXTRACTION_RESULT");
+    }
+  }
+  const { content, chunks } = splitExtractedSegments(
+    input.workspace.workspaceId,
+    input.sourceId,
+    input.versionId,
+    input.segments,
+  );
+  const createdAt = input.createdAt ?? new Date().toISOString();
+  if (!Number.isFinite(Date.parse(createdAt))) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+  return Object.freeze({
+    workspaceId: input.workspace.workspaceId,
+    sourceId: input.sourceId,
+    versionId: input.versionId,
+    kind: input.kind,
+    title: input.title.trim(),
+    content,
+    status: "uploaded",
+    chunks,
+    createdAt,
+  });
+}
+
+export type PreparedKnowledgeDocumentVersion =
+  | Readonly<{ kind: "success"; version: KnowledgeVersion }>
+  | Readonly<{ kind: "failure"; code: KnowledgeExtractionFailureCode }>;
+
+export async function prepareKnowledgeDocumentVersion(
+  extractor: KnowledgeDocumentExtractorPort,
+  input: Readonly<{
+    workspace: TrustedWorkspaceContext;
+    sourceId: string;
+    versionId: string;
+    title: string;
+    kind: "pdf" | "csv";
+    bytes: Uint8Array;
+    createdAt?: string;
+  }>,
+): Promise<PreparedKnowledgeDocumentVersion> {
+  let extraction: KnowledgeDocumentExtractionResult;
+  try {
+    extraction = await extractor.extract({ kind: input.kind, bytes: input.bytes });
+  } catch {
+    return Object.freeze({ kind: "failure", code: "MALFORMED_FILE" });
+  }
+  if (typeof extraction !== "object" || extraction === null) {
+    return Object.freeze({ kind: "failure", code: "MALFORMED_FILE" });
+  }
+  if (extraction.kind === "failure") {
+    return extractionFailureCodes.has(extraction.code)
+      ? Object.freeze({ kind: "failure", code: extraction.code })
+      : Object.freeze({ kind: "failure", code: "MALFORMED_FILE" });
+  }
+  if (extraction.kind !== "success" || !Array.isArray(extraction.segments)) {
+    return Object.freeze({ kind: "failure", code: "MALFORMED_FILE" });
+  }
+  try {
+    return Object.freeze({
+      kind: "success",
+      version: createImportedKnowledgeVersion({
+        workspace: input.workspace,
+        sourceId: input.sourceId,
+        versionId: input.versionId,
+        title: input.title,
+        kind: input.kind,
+        segments: extraction.segments,
+        createdAt: input.createdAt,
+      }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof KnowledgeError && error.code === "DOCUMENT_TOO_LARGE") {
+      return Object.freeze({ kind: "failure", code: "OUTPUT_TOO_LARGE" });
+    }
+    if (error instanceof KnowledgeError && error.code === "INVALID_EXTRACTION_RESULT") {
+      return Object.freeze({ kind: "failure", code: "MALFORMED_FILE" });
+    }
+    throw error;
+  }
 }
 
 export type VersionTransition = KnowledgeVersionTransition;
@@ -196,6 +374,21 @@ function score(queryTerms: ReadonlySet<string>, text: string): number {
   return (exactSku ? 2 : 0) + matches.length / Math.max(queryTerms.size, 1);
 }
 
+function compareLocator(a: KnowledgeCitationLocator, b: KnowledgeCitationLocator): number {
+  if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+  if (a.kind === "span" && b.kind === "span") {
+    return a.chunkIndex - b.chunkIndex || a.start - b.start || a.end - b.end;
+  }
+  if (a.kind === "page" && b.kind === "page") {
+    return a.page - b.page || (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0);
+  }
+  if (a.kind === "row" && b.kind === "row") {
+    return a.row - b.row || (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0);
+  }
+  if (a.kind === "chunk" && b.kind === "chunk") return a.chunkIndex - b.chunkIndex;
+  return 0;
+}
+
 export async function retrieveKnowledge(
   repository: KnowledgeRepositoryPort,
   query: KnowledgeRetrievalQuery,
@@ -221,7 +414,7 @@ export async function retrieveKnowledge(
       sourceId: item.source.sourceId,
       sourceVersionId: item.version.versionId,
       chunkId: item.chunk.chunkId,
-      locator: Object.freeze({ kind: "span", chunkIndex: item.chunk.chunkIndex, start: item.chunk.start, end: item.chunk.end }),
+      locator: Object.freeze({ ...item.chunk.locator }),
     });
     candidates.push(Object.freeze({
       sourceId: item.source.sourceId,
@@ -235,8 +428,8 @@ export async function retrieveKnowledge(
   candidates.sort((a, b) => b.score - a.score
     || a.sourceId.localeCompare(b.sourceId)
     || a.versionId.localeCompare(b.versionId)
-    || (a.citation.locator.kind === "span" ? a.citation.locator.chunkIndex : 0)
-      - (b.citation.locator.kind === "span" ? b.citation.locator.chunkIndex : 0));
+    || compareLocator(a.citation.locator, b.citation.locator)
+    || a.citation.chunkId.localeCompare(b.citation.chunkId));
   const hits = Object.freeze(candidates.slice(0, query.limit));
   return hits.length > 0 ? Object.freeze({ kind: "evidence", hits }) : Object.freeze({ kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
 }
