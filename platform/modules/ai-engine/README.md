@@ -1,6 +1,6 @@
 # Shared AI Engine
 
-**Status:** Citation identity validation is implemented in `citation-integrity.ts`; answer orchestration, evidence sufficiency, provider selection, safety policy and usage accounting remain unimplemented. **Phase:** G1 foundation.
+**Status:** Provider-neutral response orchestration and citation identity validation are implemented as local core code. Answerability and generation adapters, persistent handoff, provider selection and usage accounting remain unimplemented. **Phase:** G1 1D foundation.
 
 ## Responsibility
 
@@ -8,8 +8,8 @@ Answer orchestration, evidence sufficiency, model provider selection, safety pol
 
 ## Dependency and security rule
 
-No vendor SDK imports here. Never claim unsupported answer or fabricated citation.
+No vendor SDK imports here. The orchestrator requires an active conversation state and an answerability decision, hands off insufficient, conflicting or uncertain evidence, and validates generated citation references against retrieved evidence before returning an answer. It checks conversation state before retrieval and after generation; the returned conversation version must still be enforced at the actual delivery boundary. Never claim unsupported answer or fabricated citation.
 
 Do not add vendor SDK calls to core modules. Follow [the master brief](../../../BRIEF.md), [repository structure](../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
 
-This module currently implements citation identity validation only. No answer generation, sufficiency policy, provider integration, or usage accounting is implemented.
+`SupportOrchestrator` is an application core only. Its ports are not production integrations; tests use local test doubles. A real answer requires a reviewed answerability implementation and model adapter. Handoff is only requested through a port and is not durable unless its adapter proves durability. Citation validation proves provenance, not semantic support of each claim. The conversation read before/after generation does not close the race with a later channel send; a durable dispatch guard must atomically enforce the returned conversation version. Provider costs and production latency are unmeasured.
