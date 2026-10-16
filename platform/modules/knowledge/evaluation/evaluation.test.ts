@@ -54,6 +54,19 @@ test("empty evaluation returns null rates and zero latency instead of NaN", () =
   });
 });
 
+test("evaluation rejects invalid latency observations instead of recording zero", () => {
+  const invalidLatencies = [-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  for (const latencyMs of invalidLatencies) {
+    assert.throws(() => summarizeKnowledgeEvaluation([{
+      category: "answerable",
+      expected: "answer",
+      relevantKeys: ["a@v1"],
+      returned: [{ key: "a@v1", citationValid: true }],
+      latencyMs,
+    }], 3), /latencyMs observations must be finite and non-negative/);
+  }
+});
+
 test("Precision@k divides relevant returned evidence by k, including when fewer than k hits return", () => {
   type Summarizer = (observations: Parameters<typeof summarizeKnowledgeEvaluation>[0], k: number) => ReturnType<typeof summarizeKnowledgeEvaluation>;
   const summarizeAtK = summarizeKnowledgeEvaluation as unknown as Summarizer;

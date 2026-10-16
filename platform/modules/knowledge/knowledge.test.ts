@@ -510,6 +510,20 @@ test("PDF text consumer cancels the stream as soon as the extraction cap is cros
   assert.equal(pulls, 1);
 });
 
+test("PDF text consumer ignores trailing whitespace when no output budget remains", async () => {
+  const loaded = await import("../../adapters/knowledge/pdf-text-worker.js");
+  const consume = (loaded as { consumePdfTextStream?: (stream: ReadableStream<unknown>, maxChars: number) => Promise<unknown> }).consumePdfTextStream;
+  assert.equal(typeof consume, "function");
+  if (typeof consume !== "function") return;
+  const stream = new ReadableStream<unknown>({
+    start(controller) {
+      controller.enqueue({ items: [{ str: " " }] });
+      controller.close();
+    },
+  });
+  assert.deepEqual(await consume(stream, 0), { kind: "success", text: "" });
+});
+
 test("PDF page budgets do not reject an empty trailing page at the extraction ceiling", async () => {
   type RemainingBudget = (outputChars: number, maxOutputChars: number) => number;
   type CanAppendPage = (outputChars: number, pageChars: number, maxOutputChars: number, hasPrevious: boolean) => boolean;

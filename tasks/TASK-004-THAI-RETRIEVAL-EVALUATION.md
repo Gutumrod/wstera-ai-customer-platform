@@ -1,6 +1,6 @@
 # Task 004 — Thai Retrieval Evaluation Baseline (G1-C)
 
-**Status:** Implemented locally on `codex/g1c-retrieval-evaluation-20261015`, stacked on Task 003 / PR #8. Review and parent gates remain pending.
+**Status:** Implemented and independently reviewed on `codex/g1c-retrieval-evaluation-20261015`, stacked on Task 003 / PR #8. Local verification passed at tested code commit `a0fdf05`; PR #9 is still open and hosted/parent gates remain pending.
 
 ## Goal
 
