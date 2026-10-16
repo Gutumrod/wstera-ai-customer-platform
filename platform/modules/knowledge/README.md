@@ -5,7 +5,7 @@
 ## Implemented
 
 - `platform/contracts/data/knowledge.ts`: workspace-scoped source, version, chunk, lifecycle, citation locator (span/page/row/chunk), retrieval query/result and replaceable repository/retrieval ports. The contract requires atomic approval with at most one approved/current version per source.
-- `platform/modules/knowledge/index.ts`: FAQ input validation and deterministic chunk spans; source archive and version transition/approval/revocation rules; immutable approved content; deterministic Thai-bigram and literal SKU lexical retrieval; fail-closed no-answer result.
+- `platform/modules/knowledge/index.ts`: FAQ input validation and deterministic chunk spans; source archive and version transition/approval/revocation rules; immutable approved content; deterministic Thai-bigram and literal SKU lexical retrieval, including punctuation-insensitive compact matching only when the workspace's approved corpus has no colliding SKU form; fail-closed no-answer result.
 - `platform/modules/knowledge/testing/in-memory-repository.ts`: test-only in-memory repository enforcing scope and version conflicts. It is not a production adapter.
 - `platform/adapters/knowledge/document-extractor.ts`: local Node adapter for bounded PDF text and UTF-8 CSV extraction; yields exact PDF page and logical CSV record locators. CSV headers are required and unique, and malformed rows fail closed. Image-only PDFs fail with no text; OCR is not performed.
 - `platform/modules/knowledge/index.ts`: `prepareKnowledgeDocumentVersion` joins the extractor port to draft-version creation and maps malformed extractor output to a safe failure. The caller must still persist and approve through a repository.

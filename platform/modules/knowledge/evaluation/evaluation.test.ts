@@ -84,7 +84,9 @@ test("synthetic baseline covers 30 FAQ, PDF, CSV and negative cases with verifia
   assert.equal(baseline.cases.length, 30);
   assert.equal(baseline.summary.queryCount, 30);
   assert.equal(baseline.summary.citationPrecision, 1);
-  assert.ok(Math.abs((baseline.summary.precisionAtK ?? 0) - 1 / 3) < 1e-12);
+  assert.ok(Math.abs((baseline.summary.precisionAtK ?? 0) - 28 / 81) < 1e-12);
+  assert.equal(baseline.summary.recallAtK, 1);
+  assert.equal(baseline.categorySummaries["sku-punctuation-variant"]?.recallAtK, 1);
   const brake = baseline.cases.find((item) => item.id === "pdf-01");
   assert.equal(brake?.expectedKeys.some((value) => value.includes("#page:4:")), true);
   assert.equal(brake?.expectedKeys.some((value) => value.includes("#page:5:")), false);
@@ -92,6 +94,9 @@ test("synthetic baseline covers 30 FAQ, PDF, CSV and negative cases with verifia
   const zx650 = baseline.cases.find((item) => item.id === "csv-01");
   assert.equal(zx650?.expectedKeys.some((value) => value.includes("#row:2:")), true);
   assert.equal(zx650?.returnedKeys.some((value) => value.includes("#row:3:")), true);
+  const punctuationVariant = baseline.cases.find((item) => item.id === "csv-08");
+  assert.equal(punctuationVariant?.expectedKeys.some((value) => value.includes("#row:2:")), true);
+  assert.equal(punctuationVariant?.returnedKeys.some((value) => value.includes("#row:2:")), true);
   assert.equal(baseline.cases.find((item) => item.id === "revoked-01")?.returnedKeys.length, 0);
   const conflict = baseline.cases.find((item) => item.id === "conflict-01");
   assert.deepEqual(

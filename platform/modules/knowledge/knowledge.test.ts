@@ -61,16 +61,49 @@ test("approved FAQ retrieval returns exact version and deterministic span citati
   assert.equal(hit.citation.locator.end, version.chunks[hit.citation.locator.chunkIndex]?.end);
 });
 
-test("Thai lexical query and exact mixed-language SKU both retrieve synthetic approved knowledge", async () => {
+test("Thai lexical query and punctuation variants of mixed-language SKUs retrieve approved knowledge", async () => {
   const repository = new InMemoryKnowledgeRepository();
   addApprovedFaq(repository);
 
   const thai = await retrieveKnowledge(repository, { workspace: shopA, query: "จัดส่งกี่วัน", limit: 2 });
   const sku = await retrieveKnowledge(repository, { workspace: shopA, query: "ZX-650", limit: 2 });
+  const skuWithoutPunctuation = await retrieveKnowledge(repository, { workspace: shopA, query: "ZX650", limit: 2 });
+  const skuWithAlternatePunctuation = await retrieveKnowledge(repository, { workspace: shopA, query: "ZX_650", limit: 2 });
+  const skuPrefix = await retrieveKnowledge(repository, { workspace: shopA, query: "ZX65", limit: 2 });
   assert.equal(thai.kind, "evidence");
   assert.match(thai.kind === "evidence" ? thai.hits[0]?.text ?? "" : "", /2-3 วัน/);
   assert.equal(sku.kind, "evidence");
   assert.match(sku.kind === "evidence" ? sku.hits[0]?.text ?? "" : "", /ZX-650/);
+  assert.equal(skuWithoutPunctuation.kind, "evidence");
+  assert.equal(skuWithAlternatePunctuation.kind, "evidence");
+  assert.deepEqual(skuPrefix, { kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
+});
+
+test("SKU punctuation normalization abstains when distinct identifiers collide", async () => {
+  const repository = new InMemoryKnowledgeRepository();
+  addApprovedFaq(repository, shopA, { sourceId: "faq-ab-12", content: "SKU AB-12 ราคา 100 บาท" });
+  addApprovedFaq(repository, shopA, { sourceId: "faq-a-b12", content: "SKU A-B12 ราคา 900 บาท" });
+
+  const ambiguous = await retrieveKnowledge(repository, { workspace: shopA, query: "AB12", limit: 3 });
+  const exactAb12 = await retrieveKnowledge(repository, { workspace: shopA, query: "AB-12", limit: 3 });
+  const exactAB12 = await retrieveKnowledge(repository, { workspace: shopA, query: "A-B12", limit: 3 });
+
+  assert.deepEqual(ambiguous, { kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
+  assert.equal(exactAb12.kind, "evidence");
+  assert.deepEqual(exactAb12.kind === "evidence" ? exactAb12.hits.map((hit) => hit.sourceId) : [], ["faq-ab-12"]);
+  assert.equal(exactAB12.kind, "evidence");
+  assert.deepEqual(exactAB12.kind === "evidence" ? exactAB12.hits.map((hit) => hit.sourceId) : [], ["faq-a-b12"]);
+});
+
+test("inactive SKU variants do not make active punctuation matches ambiguous", async () => {
+  const repository = new InMemoryKnowledgeRepository();
+  addApprovedFaq(repository, shopA, { sourceId: "faq-zx-650" });
+  addApprovedFaq(repository, shopA, { sourceId: "faq-retired-z-x650", content: "SKU Z-X650 ราคาเก่า" });
+  repository.revokeVersion(shopA, "faq-retired-z-x650", "v1", { revokedBy: "staff-1", reason: "เลิกใช้ SKU นี้" });
+
+  const result = await retrieveKnowledge(repository, { workspace: shopA, query: "ZX650", limit: 3 });
+  assert.equal(result.kind, "evidence");
+  assert.deepEqual(result.kind === "evidence" ? result.hits.map((hit) => hit.sourceId) : [], ["faq-zx-650"]);
 });
 
 test("unapproved and revoked versions never appear in retrieval", async () => {
