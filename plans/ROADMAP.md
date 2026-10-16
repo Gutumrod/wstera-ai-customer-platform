@@ -50,7 +50,7 @@ HMAC fail-closed, event replay dedupe, workspace ownership enforcement, empty ve
 3. [Task 003 — bounded PDF/CSV document extraction](../tasks/TASK-003-DOCUMENT-INGESTION.md): local parser and source locators. Authenticated upload, persistence, async processing, and approval workflow remain separate implementation work.
 4. [Task 004 — Thai retrieval evaluation baseline](../tasks/TASK-004-THAI-RETRIEVAL-EVALUATION.md): establish synthetic retrieval/citation/abstention metrics before choosing a retrieval stack; no pass threshold until Owner review.
 5. [Task 005 — shared conversation/handoff core](../tasks/TASK-005-CONVERSATION-HANDOFF.md): local state machine and ports; durable persistence and channel delivery remain separate gates.
-6. Task 006A — citation identity validator; Task 006B — provider-neutral response orchestration core. Semantic answerability/model adapters, persistent handoff, and Web Chat integration remain pending and require their own scoped tasks and provider/cost decisions.
+6. Task 006A — citation identity validator; Task 006B — provider-neutral response orchestration core; Task 006C — metered OpenAI-compatible model adapter without provider selection or live calls. Persistent usage/cost controls, durable knowledge/handoff adapters, and Web Chat integration remain separate.
 7. Task 007 (not yet issued): real LINE sandbox pilot.
 
 **Owner is final approval authority.** Do not merge features / deploy without review.

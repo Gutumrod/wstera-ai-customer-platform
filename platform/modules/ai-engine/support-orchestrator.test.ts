@@ -80,14 +80,16 @@ function harness(options: {
     },
   };
   const answerability: AnswerabilityPort = {
-    async assess() {
+    async assess(input) {
+      assert.equal(input.workspaceId, "shop-1");
       calls.assessment++;
       if (options.assessmentFails) throw new Error("private assessment detail");
       return options.assessment ?? { kind: "answerable" };
     },
   };
   const answer: GroundedAnswerPort = {
-    async generate() {
+    async generate(input) {
+      assert.equal(input.workspaceId, "shop-1");
       calls.generation++;
       if (options.generationFails) throw new Error("private model detail");
       return options.generated ?? { text: "ส่งภายใน 2 วันทำการ", citationRefs: ["evidence-1"] };

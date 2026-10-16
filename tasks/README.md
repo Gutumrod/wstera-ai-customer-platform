@@ -10,6 +10,7 @@ Read [AGENTS.md](../AGENTS.md) and [Master Brief](../BRIEF.md) before editing.
 - [TASK-005-CONVERSATION-HANDOFF.md](TASK-005-CONVERSATION-HANDOFF.md) — local shared handoff state machine; durable adapter and channel integration remain pending.
 - [TASK-006A-CITATION-INTEGRITY.md](TASK-006A-CITATION-INTEGRITY.md) — provider-neutral citation identity validation, locally tested and independently reviewed; no answerability or model generation claim.
 - [TASK-006B-RESPONSE-ORCHESTRATION.md](TASK-006B-RESPONSE-ORCHESTRATION.md) — provider-neutral retrieval-to-answer/handoff orchestration core; no model adapter, persistent handoff, or Web Chat integration.
+- [TASK-006C-MODEL-ADAPTER.md](TASK-006C-MODEL-ADAPTER.md) — PR #15 open; independently reviewed metered OpenAI-compatible model/answerability adapter with mocked transport; no live provider, pricing, or aggregate spend limit.
 - [TASK-ARCH-001-MODULAR-BOUNDARIES.md](TASK-ARCH-001-MODULAR-BOUNDARIES.md) — planned incremental module migration, **blocked** until Task 001 review and owner approval.
 
 Each change: task branch -> scoped PR -> fresh test logs -> security review -> owner merge decision. No automatic deploy or self-merge.

@@ -17,12 +17,12 @@ export type AnswerabilityAssessment =
 
 /** Provider-neutral port. Implementations must treat evidence text as untrusted data. */
 export interface AnswerabilityPort {
-  assess(input: Readonly<{ query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
+  assess(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
 }
 
 /** Returns only opaque evidence references; the engine maps them to canonical citations. */
 export interface GroundedAnswerPort {
-  generate(input: Readonly<{ query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
+  generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
 }
 
 export type SupportHandoffReason =
@@ -306,7 +306,7 @@ export class SupportOrchestrator {
 
     let assessment: unknown;
     try {
-      assessment = await this.ports.answerability.assess({ query: request.query, evidence });
+      assessment = await this.ports.answerability.assess({ workspaceId: request.workspace.workspaceId, query: request.query, evidence });
     } catch {
       return this.handoff(request, "ANSWERABILITY_UNAVAILABLE");
     }
@@ -318,7 +318,7 @@ export class SupportOrchestrator {
 
     let generated: unknown;
     try {
-      generated = await this.ports.answer.generate({ query: request.query, evidence });
+      generated = await this.ports.answer.generate({ workspaceId: request.workspace.workspaceId, query: request.query, evidence });
     } catch {
       return this.handoff(request, "GENERATION_UNAVAILABLE");
     }
