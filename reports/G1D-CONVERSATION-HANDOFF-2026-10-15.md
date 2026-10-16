@@ -24,3 +24,17 @@
 The conversation identity is workspace-scoped. Release requires `StaffAuthorizationPort.assertCanRelease`; production wiring must resolve that identity server-side. The in-memory repository does not prove durable or cross-process atomicity. No HTTP endpoint, persistent adapter, RBAC implementation, operator UI, message body storage, actual staff channel send, or atomic suppression of an already-queued AI send exists yet. The channel dispatch boundary must enforce the same paused state before G1 handoff can be considered end-to-end.
 
 This is a shared core slice only; it does not claim that staff replies or AI responses are currently deliverable to a customer. PR review and Owner merge gates remain pending.
+
+## Follow-up verification — 2026-10-16
+
+The branch was synchronized with the latest G1-C parent after its evaluator input validation fix. Merge resolution kept the current Task 002 status and G1-C evidence updates. The handoff code itself was unchanged by this sync.
+
+| Check | Result |
+|---|---|
+| `npm run check` | Exit 0; typecheck/build passed; **49 tests passed, 0 failed** |
+| `npm run evaluate:knowledge` | Exit 0; 30 synthetic cases; Recall@3 0.963, Precision@3 0.333, citation precision 1.000, retrieval abstention accuracy 1.000 |
+| Current-run local retrieval latency | P50 0.176 ms / P95 0.587 ms; one in-memory run, not production performance evidence |
+| `npm audit --json` | Exit 0; 0 vulnerabilities across 17 dependencies |
+| Independent review | No actionable defects in the G1-D state machine at local HEAD `739f796` |
+
+PR #10 was `DIRTY` against the advanced PR #9 base before this branch sync. After pushing the sync, check GitHub's current merge and hosted-check state; no merge/deploy has occurred.

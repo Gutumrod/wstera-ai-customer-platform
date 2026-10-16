@@ -1,6 +1,6 @@
 # Task 005 — Shared Conversation and Handoff Core (G1-D foundation)
 
-**Status:** Local core implemented on `codex/g1d-conversation-handoff-20261015`; stacked on PR #9. No production adapter or merge has occurred.
+**Status:** Local core implemented and independently reviewed on `codex/g1d-conversation-handoff-20261015`; branch synchronized with the latest PR #9 base. Local `npm run check` passes 49 tests. PR #10 remains open; no production adapter or merge has occurred.
 
 ## Goal
 
