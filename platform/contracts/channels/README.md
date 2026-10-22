@@ -14,4 +14,4 @@ External user identity scoped to trusted connection; no tenant auth derived from
 
 Do not add vendor SDK calls to core modules. Follow [the master brief](../../../BRIEF.md), [repository structure](../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
 
-No runtime code exists in this folder until a separately reviewed implementation task.
+No channel-specific transport adapter or ingress runtime is implemented in this contract folder; those belong under `adapters/channels/` and `apps/` after separate scoped tasks.

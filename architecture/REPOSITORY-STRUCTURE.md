@@ -1,6 +1,6 @@
 # Repository Structure — Modular Extension Map
 
-**Status:** Approved direction for folder organization; runtime/package boundaries PROPOSED pending validation. The folders created here contain responsibility READMEs, **not implementations**.
+**Status:** Folder organization is the approved direction; runtime/package boundaries remain PROPOSED pending validation. Most feature folders are responsibility markers; Phase 0C implements the channel contracts and trusted workspace boundary in `platform/contracts/channels/` and `platform/modules/tenancy/`.
 
 ## Root
 
@@ -65,7 +65,7 @@ adapters (model/channel/database/vendor) ----> contract ports <--- modules (depe
 
 ## Evolving from the existing scaffold
 
-Existing code in `platform/src/core|line|policy` is a live source baseline used by Task 001 / PR #2. **No mass move or duplicate fork of that code in this documentation-only PR.** A later *separate refactor PR* must move files incrementally, preserve tests, adjust exports/imports, and produce compatibility evidence. Until then, the target folders are responsibility markers only.
+Existing code in `platform/src/core|line|policy` remains a live source baseline. Phase 0C moved the trusted workspace context implementation to `platform/modules/tenancy/` and preserved its old import path as a compatibility export. This was a scoped boundary migration, not a mass move. Later refactor PRs must move files incrementally, preserve tests, adjust exports/imports, and produce compatibility evidence; other target folders remain responsibility markers until implemented.
 
 ## Architecture evolution safety
 
