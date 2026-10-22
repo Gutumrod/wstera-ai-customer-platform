@@ -22,12 +22,12 @@ Excluded: live LINE integration, self-service multi-shop onboarding, billing, pr
 
 ## Proposed work order
 
-1. Clear G0 review/merge and stale-document gates; accept the Phase 0C tenancy contract base.
-2. Approve and execute Task 002 knowledge/retrieval contracts.
-3. Build ingestion with synthetic FAQ first; add bounded PDF and CSV extraction only with explicit limits and failure handling.
-4. Establish a Thai/SKU synthetic baseline before setting retrieval and citation thresholds. Include conflicts, revoked sources, no-answer and prompt-injection cases.
-5. Implement one bounded shared response path through explicit model/retrieval ports. Record provider usage, latency, failures and estimated cost. No hidden mock success.
-6. Add Web Chat and the smallest usable operator takeover path on the same conversation/engine contracts.
+1. Clear G0 review/merge and stale-document gates; accept the Phase 0C tenancy contract base. **Completed:** PR #16 merged and post-merge CI passed.
+2. Approve and execute Task 002 knowledge/retrieval contracts. **Implemented locally and merged as a slice; full task remains partial.**
+3. Build bounded ingestion and establish the Thai/SKU synthetic baseline. **Local extraction/evaluation slices are merged; authenticated upload/private storage are not implemented.**
+4. Implement [Task G1 authenticated knowledge host](../tasks/TASK-G1-HOST-001.md): resolve authenticated staff to trusted workspace identity, upload and approve source versions through the existing ports.
+5. Add Web Chat and the smallest usable operator takeover path on the same conversation/engine contracts, with durable state and send-time enforcement.
+6. Approve a live provider and budget, then record usage, latency, failures and estimated cost. No hidden mock success.
 7. Run the end-to-end acceptance pass and independent security review; present evidence for Owner demo/approval.
 
 ## Acceptance criteria for G1
