@@ -156,6 +156,34 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       await assert.rejects(repository.createVersion(shopA, foreign), { code: "CROSS_WORKSPACE_ACCESS_DENIED" });
       assert.equal(await repository.getVersion(shopA, "foreign", "v1"), null);
     });
+
+    await t.test("rejects noncanonical chunk segmentation for FAQ and imported sources", async () => {
+      const content = `${"a".repeat(195)} ${"b".repeat(200)}`;
+      const faq = createFaqVersion({ workspace: shopA, sourceId: "noncanonical-faq", versionId: "v1", title: "FAQ", content });
+      const faqChunks = [
+        { ...faq.chunks[0]!, chunkId: "noncanonical-faq:v1:0", chunkIndex: 0, text: content.slice(0, 250), start: 0, end: 250,
+          locator: { kind: "span" as const, chunkIndex: 0, start: 0, end: 250 } },
+        { ...faq.chunks[1]!, chunkId: "noncanonical-faq:v1:1", chunkIndex: 1, text: content.slice(250), start: 250, end: content.length,
+          locator: { kind: "span" as const, chunkIndex: 1, start: 250, end: content.length } },
+      ];
+      await repository.createSource(shopA, { sourceId: faq.sourceId, title: faq.title, kind: "faq" });
+      await assert.rejects(repository.createVersion(shopA, { ...faq, chunks: faqChunks }), { code: "INVALID_KNOWLEDGE_INPUT" });
+
+      const pdf = createImportedKnowledgeVersion({
+        workspace: shopA, sourceId: "noncanonical-pdf", versionId: "v1", title: "PDF", kind: "pdf",
+        segments: [{ text: content, locator: { kind: "page", page: 4 } }],
+      });
+      const pdfChunks = [
+        { ...pdf.chunks[0]!, chunkId: "noncanonical-pdf:v1:0", chunkIndex: 0, text: content.slice(0, 250), start: 0, end: 250,
+          locator: { kind: "page" as const, page: 4, chunkIndex: 0 } },
+        { ...pdf.chunks[1]!, chunkId: "noncanonical-pdf:v1:1", chunkIndex: 1, text: content.slice(250), start: 250, end: content.length,
+          locator: { kind: "page" as const, page: 4, chunkIndex: 1 } },
+      ];
+      await repository.createSource(shopA, { sourceId: pdf.sourceId, title: pdf.title, kind: "pdf" });
+      await assert.rejects(repository.createVersion(shopA, { ...pdf, chunks: pdfChunks }), { code: "INVALID_KNOWLEDGE_INPUT" });
+      assert.equal(await repository.getVersion(shopA, faq.sourceId, faq.versionId), null);
+      assert.equal(await repository.getVersion(shopA, pdf.sourceId, pdf.versionId), null);
+    });
   } finally {
     await database.close();
   }

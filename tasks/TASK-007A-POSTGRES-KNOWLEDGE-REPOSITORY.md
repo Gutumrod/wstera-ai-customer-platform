@@ -1,6 +1,6 @@
 # Task 007A — Durable PostgreSQL knowledge repository
 
-**Status:** Checkpoint in progress on `codex/g1-knowledge-postgres-20261016`, based on PR #15 head `f8d8aae0fffcb09e058bc66195ce555cb865a17c`. Local checks pass after a review-driven lock fix; independent re-review and real two-session race evidence remain pending.
+**Status:** Implementation checkpoint in progress on `codex/g1-knowledge-postgres-final-20261016`, based on commit `fc3d52517cbf93727e74510c24d89d3630e5e2d0` (PR #15 base `f8d8aae0fffcb09e058bc66195ce555cb865a17c`). Canonical draft validation is now shared by the PostgreSQL adapter and in-memory repository. Independent review and true PostgreSQL two-session race evidence remain pending; do not claim concurrency verified.
 
 ## Current state
 
@@ -40,5 +40,13 @@ An authenticated upload/approval HTTP path, real host connection pool and role p
 - Database evidence is local PGlite only, using a non-owner, non-superuser role; no hosted database or provider was contacted.
 - First independent review found that an unlocked RLS `EXISTS` could race chunk insertion against approval. A `BEFORE INSERT` trigger now locks the parent version and rejects chunks unless the version is still mutable; a regression test rejects sequential insertion after approval. `listRetrievableChunks` also returns each version with its full chunk set, and the adapter README now states the custom-GUC RLS threat boundary.
 - Independent re-review is pending. PGlite direct mode is single-connection, so the current test does not prove the true two-session interleaving; use a supported PostgreSQL multi-session test substrate before claiming the race is fully verified.
-- Remaining review note: PostgreSQL draft validation should be compared against the canonical in-memory builder; ensure noncanonical chunk segmentation or locators cannot be persisted, or document and enforce the trusted precondition.
-- Next: finish security review and race evidence → close any actionable canonicalization gap → rerun full checks → commit scoped Task 007A files → push this branch → open a scoped PR stacked on PR #15. Do not merge or apply the migration to a hosted database.
+- Next: finish independent security review and resolve the true two-session race verification gate. Do not claim Task 007A complete while either required acceptance item remains open. PR/commit/push steps are outside the current user's authorization.
+
+## Working-tree follow-up — 2026-10-16
+
+- `canonicalizeKnowledgeVersionDraft` now owns canonical rebuild/validation in the pure knowledge module. Both `InMemoryKnowledgeRepository` and `PostgresKnowledgeRepository` use it, so FAQ spans and imported page/row chunks must match the shared builder's exact segmentation, identities, offsets and locators before persistence.
+- Added PostgreSQL adapter regressions that submit noncanonical FAQ and PDF chunk boundaries; both are rejected before a version row is stored.
+- Fresh `npm run check`: PASS — 111 tests, 0 skipped, including the two new canonicalization cases. `npm audit --json`: PASS — 0 vulnerabilities across 18 dependency records. Runtime-only audit and final independent review remain pending.
+- Concurrency status remains **not verified**: PGlite direct mode uses one connection. The migration's chunk-insert trigger locks the parent version row, which is the static serialization design, but no supported true two-session PostgreSQL interleaving test has run. The existing `Promise.all` approval test on direct PGlite is not two-session proof.
+- Current worktree has four modified implementation/test files plus this task brief, all uncommitted. Do not claim the task complete until the remaining review and explicitly scoped concurrency acceptance decision are resolved.
+- User continuation instruction for this session: do not commit, push, open a PR, merge, or apply a hosted migration.

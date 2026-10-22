@@ -9,6 +9,7 @@ import type {
   KnowledgeVersionDraft,
   KnowledgeVersionTransition,
 } from "../../../contracts/data/knowledge.js";
+import { canonicalizeKnowledgeVersionDraft } from "../../../modules/knowledge/index.js";
 
 export type PostgresRow = Readonly<Record<string, unknown>>;
 export type PostgresQueryResult<Row extends PostgresRow = PostgresRow> = Readonly<{ rows: readonly Row[] }>;
@@ -319,7 +320,7 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
     previousLocator = locator.kind === "page" ? `page:${locator.page}`
       : locator.kind === "row" ? `row:${locator.row}` : locatorIdentity(locator);
   }
-  return Object.freeze({ ...draftBase, chunks: Object.freeze(chunks) });
+  return canonicalizeKnowledgeVersionDraft(workspace, Object.freeze({ ...draftBase, chunks: Object.freeze(chunks) }));
 }
 
 function isPostgresError(error: unknown): error is { code: string; constraint?: string } {
