@@ -9,7 +9,8 @@ export type TrustedWorkspace = TrustedWorkspaceContext;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 export function createTrustedWorkspace(input: TrustedWorkspaceContext): TrustedWorkspaceContext {
-  if (!idPattern.test(input.workspaceId) || !idPattern.test(input.connectionId)) {
+  if (typeof input.workspaceId !== "string" || typeof input.connectionId !== "string"
+    || !idPattern.test(input.workspaceId) || !idPattern.test(input.connectionId)) {
     throw new Error("INVALID_TRUSTED_WORKSPACE");
   }
   if (input.channel !== "line" && input.channel !== "web") {

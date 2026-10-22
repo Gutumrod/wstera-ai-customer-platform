@@ -21,6 +21,7 @@ test("trusted workspace enforces a strict, immutable context", () => {
   const ctx = createTrustedWorkspace({ workspaceId: "shop-1", connectionId: "conn-1", channel: "line" });
   assert.equal(Object.isFrozen(ctx), true);
   assert.throws(() => createTrustedWorkspace({ workspaceId: "", connectionId: "x", channel: "line" }));
+  assert.throws(() => createTrustedWorkspace({ workspaceId: 123, connectionId: "x", channel: "line" } as unknown as TrustedWorkspaceContext));
   assert.throws(() => enforceWorkspace(ctx, "shop-2"), /CROSS_WORKSPACE/);
 });
 
@@ -35,6 +36,7 @@ test("tenancy contract and legacy workspace APIs preserve constructor and enforc
   assert.equal(legacyContract.workspaceId, "shop-1");
   assert.throws(() => createTenancyWorkspace({ ...input, workspaceId: "" }), /INVALID_TRUSTED_WORKSPACE/);
   assert.throws(() => createTrustedWorkspace({ ...input, workspaceId: "" }), /INVALID_TRUSTED_WORKSPACE/);
+  assert.throws(() => createTenancyWorkspace({ ...input, connectionId: 123 } as unknown as TrustedWorkspaceContext), /INVALID_TRUSTED_WORKSPACE/);
   assert.doesNotThrow(() => enforceTenancyWorkspace(current, "shop-1"));
   assert.doesNotThrow(() => enforceWorkspace(legacy, "shop-1"));
   assert.throws(() => enforceTenancyWorkspace(current, "shop-2"), /CROSS_WORKSPACE_ACCESS_DENIED/);

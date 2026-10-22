@@ -297,11 +297,12 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
       const position = locator.kind === "page" ? locator.page : locator.row;
       const identity = locator.kind === "page" ? `page:${locator.page}` : `row:${locator.row}`;
       const previousChunkIndex = index === 0 ? -1 : ((chunks[index - 1]!.locator as { chunkIndex?: number }).chunkIndex ?? 0);
+      const startsNewSegment = identity === previousLocator && locator.chunkIndex === 0;
       const locatorChunkIndex = locator.chunkIndex ?? (identity === previousLocator ? previousChunkIndex + 1 : 0);
       if (!Number.isSafeInteger(position) || position < 1 || !Number.isSafeInteger(locatorChunkIndex) || locatorChunkIndex < 0) {
         throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
       }
-      if (identity === previousLocator && locatorChunkIndex !== previousChunkIndex + 1) {
+      if (identity === previousLocator && !startsNewSegment && locatorChunkIndex !== previousChunkIndex + 1) {
         throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
       }
       if (identity !== previousLocator && locatorChunkIndex !== 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
@@ -313,7 +314,8 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
     }
     if (index > 0 && fieldsChunk.start !== previousEnd) {
       if (fieldsChunk.start !== previousEnd + 2 || draftBase.content.slice(previousEnd, fieldsChunk.start as number) !== "\n\n"
-        || locatorIdentity(chunks[index - 1]!.locator) === locatorIdentity(locator)) {
+        || (locatorIdentity(chunks[index - 1]!.locator) === locatorIdentity(locator)
+          && !(locator.kind !== "span" && locator.chunkIndex === 0))) {
         throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
       }
     }

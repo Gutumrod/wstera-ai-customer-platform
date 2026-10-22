@@ -173,6 +173,10 @@ test("canonicalizes page and row version drafts when optional chunkIndex is omit
     chunks: longPageDraft.chunks.map((chunk) => ({ ...chunk, locator: { kind: "page" as const, page: 8 } })),
   };
   assert.deepEqual(canonicalizeKnowledgeVersionDraft(shopA, allPageIndexesOmitted).chunks, longPageDraft.chunks);
+  const repository = new InMemoryKnowledgeRepository();
+  repository.createSource(shopA, { sourceId: "optional-page-multi", title: "Manual", kind: "pdf" });
+  assert.deepEqual(repository.createVersion(shopA, allPageIndexesOmitted).chunks, longPageDraft.chunks);
+  assert.deepEqual(repository.createVersion(shopA, allPageIndexesOmitted).chunks, longPageDraft.chunks);
 });
 
 test("archived source cannot approve an indexed version", () => {

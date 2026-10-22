@@ -88,7 +88,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
       if (existing.content !== version.content || existing.title !== version.title || existing.kind !== version.kind
         || existing.chunks.length !== version.chunks.length
         || existing.chunks.some((chunk, index) => {
-          const candidate = version.chunks[index];
+          const candidate = canonical.chunks[index];
           return !candidate || chunk.chunkId !== candidate.chunkId || chunk.text !== candidate.text
             || chunk.start !== candidate.start || chunk.end !== candidate.end
             || !sameLocator(chunk.locator, candidate.locator);

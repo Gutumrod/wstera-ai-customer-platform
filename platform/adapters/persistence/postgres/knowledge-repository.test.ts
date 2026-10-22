@@ -258,6 +258,23 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       }
     });
 
+    await t.test("PostgreSQL accepts explicit repeated page segments like the canonicalizer", async () => {
+      const version = createImportedKnowledgeVersion({
+        workspace: shopA, sourceId: "repeated-page", versionId: "v1", title: "Repeated page", kind: "pdf",
+        segments: [
+          { text: "First extract", locator: { kind: "page", page: 8 } },
+          { text: "Second extract", locator: { kind: "page", page: 8 } },
+        ],
+      });
+      await repository.createSource(shopA, { sourceId: "repeated-page", title: "Repeated page", kind: "pdf" });
+      const persisted = await repository.createVersion(shopA, version);
+      assert.deepEqual(persisted.chunks.map((chunk) => chunk.locator), [
+        { kind: "page", page: 8, chunkIndex: 0 },
+        { kind: "page", page: 8, chunkIndex: 0 },
+      ]);
+      assert.deepEqual((await repository.getVersion(shopA, "repeated-page", "v1"))?.chunks, persisted.chunks);
+    });
+
     await t.test("failed chunk persistence rolls back its version row", async () => {
       await repository.createSource(shopA, { sourceId: "rollback", title: "Rollback", kind: "faq" });
       const draft = createFaqVersion({ workspace: shopA, sourceId: "rollback", versionId: "v1", title: "Rollback", content: "A short answer" });
