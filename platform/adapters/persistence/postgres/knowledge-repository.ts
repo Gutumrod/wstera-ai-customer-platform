@@ -295,15 +295,19 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
       }
     } else if (locator.kind === "page" || locator.kind === "row") {
       const position = locator.kind === "page" ? locator.page : locator.row;
-      const locatorChunkIndex = locator.chunkIndex ?? 0;
+      const identity = locator.kind === "page" ? `page:${locator.page}` : `row:${locator.row}`;
+      const previousChunkIndex = index === 0 ? -1 : ((chunks[index - 1]!.locator as { chunkIndex?: number }).chunkIndex ?? 0);
+      const locatorChunkIndex = locator.chunkIndex ?? (identity === previousLocator ? previousChunkIndex + 1 : 0);
       if (!Number.isSafeInteger(position) || position < 1 || !Number.isSafeInteger(locatorChunkIndex) || locatorChunkIndex < 0) {
         throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
       }
-      const identity = locator.kind === "page" ? `page:${locator.page}` : `row:${locator.row}`;
-      if (identity === previousLocator && locatorChunkIndex !== (index === 0 ? 0 : ((chunks[index - 1]!.locator as { chunkIndex?: number }).chunkIndex ?? 0) + 1)) {
+      if (identity === previousLocator && locatorChunkIndex !== previousChunkIndex + 1) {
         throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
       }
       if (identity !== previousLocator && locatorChunkIndex !== 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+      locator = Object.freeze(locator.kind === "page"
+        ? { kind: "page", page: locator.page, chunkIndex: locatorChunkIndex }
+        : { kind: "row", row: locator.row, chunkIndex: locatorChunkIndex });
     } else {
       throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
     }

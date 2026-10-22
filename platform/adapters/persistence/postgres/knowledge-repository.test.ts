@@ -237,6 +237,27 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await repository.areCurrentCitations(shopA, [csvCitation]), true);
     });
 
+    await t.test("PostgreSQL infers omitted continuation indexes for page and row locators", async () => {
+      for (const item of [
+        { sourceId: "optional-page", kind: "pdf" as const, locator: { kind: "page" as const, page: 8 } },
+        { sourceId: "optional-row", kind: "csv" as const, locator: { kind: "row" as const, row: 12 } },
+      ]) {
+        const canonical = createImportedKnowledgeVersion({
+          workspace: shopA, sourceId: item.sourceId, versionId: "v1", title: "Long segment", kind: item.kind,
+          segments: [{ text: "x".repeat(321), locator: item.locator }],
+        });
+        const draft = { ...canonical, chunks: canonical.chunks.map((chunk) => ({ ...chunk, locator: item.locator })) };
+        await repository.createSource(shopA, { sourceId: item.sourceId, title: "Long segment", kind: item.kind });
+        const persisted = await repository.createVersion(shopA, draft);
+        assert.equal(persisted.chunks.length, 2);
+        assert.deepEqual(persisted.chunks.map((chunk) => chunk.locator), [
+          { ...item.locator, chunkIndex: 0 },
+          { ...item.locator, chunkIndex: 1 },
+        ]);
+        assert.deepEqual((await repository.getVersion(shopA, item.sourceId, "v1"))?.chunks, persisted.chunks);
+      }
+    });
+
     await t.test("failed chunk persistence rolls back its version row", async () => {
       await repository.createSource(shopA, { sourceId: "rollback", title: "Rollback", kind: "faq" });
       const draft = createFaqVersion({ workspace: shopA, sourceId: "rollback", versionId: "v1", title: "Rollback", content: "A short answer" });
