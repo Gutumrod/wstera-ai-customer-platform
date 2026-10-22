@@ -14,7 +14,7 @@ function objectPath(workspace: TrustedWorkspaceContext, identity: KnowledgeObjec
   return `${workspace.workspaceId}/${identity.sourceId}/${identity.versionId}/${identity.filename}`;
 }
 
-/** Request-scoped, user-authenticated Supabase client; private Storage RLS remains active. */
+/** Server-only Supabase admin client; callers must authorize workspace identity before storage access. */
 export class SupabasePrivateKnowledgeStorage implements KnowledgeObjectStoragePort {
   constructor(private readonly client: SupabaseClient) {}
 
