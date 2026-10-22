@@ -4,7 +4,7 @@ Updated: 2026-10-23. This describes the consolidated candidate, not merged `main
 
 ## Current milestone
 
-Task 001 / PR #2 and the original architecture PR #3 are merged. Remote `main` remains at `edcf503236e917121c2e31b6bbff646dc78d0d61`. Phase 0C and G1 foundation work previously spread across PRs #4–#15 is preserved in `codex/pr-consolidation-20261023`, together with the local Task 007A follow-up and synthetic evidence. The older PRs are superseded by the consolidated candidate after ancestry verification.
+Task 001 / PR #2 and the original architecture PR #3 are merged. Remote `main` remains at `edcf503236e917121c2e31b6bbff646dc78d0d61`. Phase 0C and G1 foundation work previously spread across PRs #4–#15 is preserved in `codex/pr-consolidation-20261023`, together with the local Task 007A follow-up and synthetic evidence. The older PRs #4–#15 are closed as superseded after ancestry verification; [PR #16](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/16) is the single open candidate.
 
 | Area | Candidate evidence | Remaining gate |
 |---|---|---|
@@ -13,7 +13,7 @@ Task 001 / PR #2 and the original architecture PR #3 are merged. Remote `main` r
 | Handoff | Local state machine and authorization/repository ports | Durable staff state and atomic channel dispatch |
 | AI | Citation provenance validator, orchestration, metered mocked-transport model adapter | Live provider selection, semantic evaluation, durable usage and spend control |
 | PostgreSQL | PGlite RLS/lifecycle tests; preserved historical 2026-10-18 two-session SQL/output | Host pool/role provisioning; historical concurrency proof was not rerun during consolidation |
-| Fresh checks | 112 tests pass; synthetic evaluation 30 queries; full/runtime npm audits report zero vulnerabilities | GitHub CI on the consolidated PR and independent review |
+| Fresh checks | 112 tests pass; synthetic evaluation 30 queries; full/runtime npm audits report zero vulnerabilities | GitHub CI passed at `2877b24`; latest-head verification, independent review and Owner approval remain required |
 
 ## Why there were 12 PRs
 
