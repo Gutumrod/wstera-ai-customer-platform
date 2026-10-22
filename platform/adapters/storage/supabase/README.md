@@ -1,6 +1,6 @@
 # Supabase Private Storage Adapter
 
-**Status:** FOLDER CONTRACT ONLY - not implemented. **Planned phase:** Phase 1.
+**Status:** Private original-file Storage adapter implemented for the local synthetic G1-HOST-001 slice.
 
 ## Responsibility
 
@@ -12,4 +12,4 @@ No public buckets for customer files and no secret URLs in logs.
 
 Do not add vendor SDK calls to core modules. Follow [the master brief](../../../../BRIEF.md), [repository structure](../../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
 
-No runtime code exists in this folder until a separately reviewed implementation task.
+See `private-knowledge-storage.ts`. The server-only adapter uses the local service key, immutable paths, byte-verified idempotent retries and server-resolved workspace identifiers. It must not be wired to hosted credentials without separate approval and security review.
