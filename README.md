@@ -53,7 +53,7 @@ Requires Node.js 22+, npm, Docker Desktop or another working Docker daemon, and 
 1. Run `npm ci`, then start local Supabase with `supabase start`.
 2. Apply local migrations with `supabase db reset --local`.
 3. Copy the local API URL, anon/publishable key, service-role key, and database URL from `supabase status` into the corresponding entries in ignored `.env.local`. Use the direct local database URL on port 54322 for both admin and runtime connections; the seed script checks the host and port.
-4. Generate a local runtime password with `openssl rand -hex 32`; set it as `KNOWLEDGE_RUNTIME_PASSWORD` and in the `DATABASE_URL` password. Set a synthetic owner email and a unique local-only password of at least 20 characters. Keep `APP_ENV=local`.
+4. Set `NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000` and `NEXT_PUBLIC_APP_ENV=local`; the origin must match the URL you use in the browser. Generate a local runtime password with `openssl rand -hex 32`; set it as `KNOWLEDGE_RUNTIME_PASSWORD` and in the `DATABASE_URL` password. Set a synthetic owner email and a unique local-only password of at least 20 characters. Keep `APP_ENV=local`.
 5. Run `npm run seed:local`, then `npm run dev:console`. Sign in at `http://127.0.0.1:3000/login` using the synthetic owner credentials.
 6. Upload a synthetic FAQ/PDF/CSV, review the extracted source, approve it, and test citation search. No visitor chat or generated model answer is included in this slice.
 7. To discard local data, stop the app and run `supabase stop --no-backup`.
