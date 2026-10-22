@@ -14,4 +14,4 @@ Resolve identity from trusted server auth or verified channel only. API + DB/RLS
 
 Do not add vendor SDK calls to core modules. Follow [the master brief](../../../BRIEF.md), [repository structure](../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
 
-No runtime code exists in this folder until a separately reviewed implementation task.
+This module currently provides only the immutable trusted workspace context constructor and assertion. Membership storage, connection ownership lookup, authentication resolution, and durable lifecycle operations remain unimplemented.
