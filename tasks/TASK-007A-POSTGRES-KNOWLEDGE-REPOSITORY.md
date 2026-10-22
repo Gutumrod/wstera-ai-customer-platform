@@ -1,6 +1,8 @@
 # Task 007A — Durable PostgreSQL knowledge repository
 
-**Status:** Local implementation, checks and PostgreSQL two-session evidence complete on `codex/g1-knowledge-postgres-continuation-20261016` at `fc3d52517cbf93727e74510c24d89d3630e5e2d0` (PR #15 base `f8d8aae0fffcb09e058bc66195ce555cb865a17c`). Independent security re-review: **PASS WITH NOTES**, with no behavior blockers. Evidence files are untracked and must be included in any later Owner-authorized PR. No commit, push or PR was authorized in this continuation.
+**Status (2026-10-23):** Existing local follow-up and 2026-10-18 synthetic PostgreSQL evidence are preserved in `codex/pr-consolidation-20261023`. Fresh local checks are recorded in the reconciliation report. Historical no-commit/no-push restrictions below describe the earlier continuation; the Owner has since requested repository/PR cleanup. The consolidated candidate still requires independent review and Owner merge approval; no deployment or hosted migration is authorized.
+
+**History:** The sections below retain their original checkpoint dates. Historical two-session/reviewer claims are not a new verification performed during PR consolidation.
 
 ## Current state
 

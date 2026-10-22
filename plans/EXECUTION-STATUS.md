@@ -1,25 +1,24 @@
 # Execution Status
 
-Updated: 2026-10-15. Evidence baseline from GitHub and local repository; this file is a status snapshot, not release approval.
+Updated: 2026-10-23. This describes the consolidated candidate, not merged `main` or release approval.
 
 ## Current milestone
 
-**G0 — Foundation: INCOMPLETE / closeout pending.** Task 001 is merged to `main` at `edcf503236e917121c2e31b6bbff646dc78d0d61`; its CI check `typescript-foundation` passed. PR #4 and PR #5 remain open. PR #5 has an Owner-authored `PASS WITH NOTES` comment, but the GitHub review author is also the PR author, so the required independent reviewer gate is not evidenced. Neither PR is merged.
+Task 001 / PR #2 and the original architecture PR #3 are merged. Remote `main` remains at `edcf503236e917121c2e31b6bbff646dc78d0d61`. Phase 0C and G1 foundation work previously spread across PRs #4–#15 is preserved in `codex/pr-consolidation-20261023`, together with the local Task 007A follow-up and synthetic evidence. The older PRs are superseded by the consolidated candidate after ancestry verification.
 
-| Item | Verified state | Gate |
+| Area | Candidate evidence | Remaining gate |
 |---|---|---|
-| `main` | `edcf503236e917121c2e31b6bbff646dc78d0d61` | Latest fetched commit, Task 001 |
-| PR #2 / Task 001 | MERGED; `typescript-foundation` SUCCESS | Foundation contract task closed; no production integration implied |
-| PR #4 / concise brief | OPEN; head `579399b330f860bac265a71e3669f91ff1d1a042`; CI SUCCESS; no reviews; base `80b05f932855f301b52634cd970ea265c99b1e30` is behind current main | Owner review/merge; reconcile stale base and claims that Task 001 is still open |
-| PR #5 / Phase 0C | OPEN; head `346089013a5456b096f29d2341be7033198c20a7`; base is current main; CI SUCCESS; Owner comment says PASS WITH NOTES | Independent review by a reviewer other than PR author, then Owner merge decision |
-| Task 002 / RAG contracts | PLANNED in current `main` | Do not implement until a scoped task is approved and PR #5 contract dependency is accepted |
-| G1 | NOT STARTED | Product-wide G1 gate evidence absent |
-| Execution-plan change | PR #6 OPEN on `codex/g1-execution-plan-20261015` | Documentation review pending; CI runs on the latest PR head |
+| Phase 0C | Shared tenancy/channel contracts and compatibility exports | Consolidated independent review and Owner merge decision |
+| Knowledge | FAQ lifecycle, bounded PDF/CSV extraction, deterministic Thai/SKU retrieval, source citations | Authenticated upload, hosted/private storage, actual retrieval/answer quality |
+| Handoff | Local state machine and authorization/repository ports | Durable staff state and atomic channel dispatch |
+| AI | Citation provenance validator, orchestration, metered mocked-transport model adapter | Live provider selection, semantic evaluation, durable usage and spend control |
+| PostgreSQL | PGlite RLS/lifecycle tests; preserved historical 2026-10-18 two-session SQL/output | Host pool/role provisioning; historical concurrency proof was not rerun during consolidation |
+| Fresh checks | 112 tests pass; synthetic evaluation 30 queries; full/runtime npm audits report zero vulnerabilities | GitHub CI on the consolidated PR and independent review |
 
-## G1 completion target
+## Why there were 12 PRs
 
-One controlled shop can upload and approve synthetic FAQ/PDF/CSV knowledge, receive Thai answers grounded in approved current sources with verifiable citations, hand uncertain requests to a human who can pause/resume AI, and pass negative workspace-isolation tests. The complete path must be observed end to end with usage, errors, latency and cost evidence. No mock-only result counts as G1 completion.
+Eight implementation PRs (#7–#11, #13–#15) form an overlapping dependency graph; the latest model/knowledge branches already contain their commits. Four PRs (#4, #5, #6, #12) add separate brief, boundary documentation, execution planning and CI changes. Nothing had been merged past Task 001. The original CI filter only ran on PRs targeting `main`, leaving feature-targeted PR heads without hosted checks.
 
 ## Resume point
 
-Close the G0 review/merge gates and approve a scoped Task 002 brief. Until then, only planning and other explicitly approved, dependency-free work may proceed. No code implementation, paid provider use, production access, migration or deployment is authorized by this status snapshot.
+Review the consolidated candidate and its [reconciliation report](../reports/REPOSITORY-RECONCILIATION-2026-10-23.md). Owner merge approval remains required. G1 end-to-end is incomplete: no authenticated upload → real model answer → Web Chat → durable human takeover path is demonstrated. G2–G4 remain gated. No deployment, hosted migration, customer data or paid provider call is included.

@@ -127,4 +127,3 @@ export function validateAnswerCitations(
     answer: Object.freeze({ text: draft.text, citations: Object.freeze(accepted) }),
   });
 }
-

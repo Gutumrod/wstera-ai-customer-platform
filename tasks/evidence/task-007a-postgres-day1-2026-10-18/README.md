@@ -51,3 +51,7 @@ RLS negative checks ran as `knowledge_runtime` with `app.workspace_id=ws_a`: cro
 All SQL setup, session scripts, wait observations, and captured outputs are kept beside this report. This evidence is local-only and does not authorize commit, push, PR, merge, hosted migration, or deployment.
 
 Independent security re-review returned **PASS WITH NOTES**, with no behavior blockers. This entire evidence directory is currently untracked; include it when assembling any later Owner-authorized candidate or PR.
+
+## Preservation — 2026-10-23
+
+The Owner requested local/GitHub reconciliation and PR cleanup. These 24 historical evidence files are now preserved in the consolidated candidate. Captured `.out` files are retained byte-for-byte, including psql table padding; the scoped `.gitattributes` whitespace setting preserves that format. The concurrency results above are historical evidence from 2026-10-18, not a fresh two-session run during consolidation. Independent review and Owner merge approval remain required.

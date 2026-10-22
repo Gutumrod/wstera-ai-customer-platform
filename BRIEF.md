@@ -24,6 +24,6 @@
 
 **G0 Foundation → G1 Web + RAG MVP → G2 LINE Pilot → G3 Multi-tenant Self-service → G4 ลูกค้าจ่ายเงินจริง**
 
-**ตอนนี้:** ปิดข้อท้วงติง Security ของ [Task 001 / PR #2](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/2) ก่อนเริ่ม Feature ใหม่; อย่า Merge/Deploy เอง
+**ตอนนี้ (2026-10-23):** Task 001 / PR #2 merge แล้ว; งาน Phase 0C และ G1 ที่เคยแยกหลาย PR ถูกรวมเป็น candidate เดียวเพื่อ review และ Owner approval โดย G1 แบบครบเส้นทางยังไม่ผ่าน ดู [สถานะล่าสุด](plans/EXECUTION-STATUS.md); อย่า Merge/Deploy เอง
 
 **รายละเอียดล็อกทั้งหมด:** [Product Requirements](architecture/PRODUCT-REQUIREMENTS-DETAIL.md) · [Folder Map](architecture/REPOSITORY-STRUCTURE.md) · [Adapter Rules](architecture/PORTS-AND-ADAPTERS.md) · [Roadmap](plans/PHASE-BREAKDOWN.md) · [Agent Rules](AGENTS.md)
