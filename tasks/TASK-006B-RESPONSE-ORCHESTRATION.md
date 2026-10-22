@@ -1,6 +1,6 @@
 # Task 006B — Provider-neutral grounded response orchestration
 
-**Status:** PR #14 open on `codex/g1-response-orchestration-20261016`; 85/85 tests pass, 0 audit vulnerabilities; final independent review of descriptor-snapshot fixes in progress.
+**Status (2026-10-23):** The provider-neutral response orchestration slice was included in PR #16 and is merged on `main` (`857b2e5`). It still has no durable conversation/dispatch adapter or live host integration.
 
 ## Goal
 

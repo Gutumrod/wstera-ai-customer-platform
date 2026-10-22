@@ -1,24 +1,24 @@
 # Execution Status
 
-Updated: 2026-10-23. This describes the consolidated candidate, not merged `main` or release approval.
+Updated: 2026-10-23. This records merged repository state, not product release approval.
 
 ## Current milestone
 
-Task 001 / PR #2 and the original architecture PR #3 are merged. Remote `main` remains at `edcf503236e917121c2e31b6bbff646dc78d0d61`. Phase 0C and G1 foundation work previously spread across PRs #4–#15 is preserved in `codex/pr-consolidation-20261023`, together with the local Task 007A follow-up and synthetic evidence. The older PRs #4–#15 are closed as superseded after ancestry verification; [PR #16](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/16) is the single open candidate.
+PR #16 merged the consolidated Phase 0C and G1 foundation work into `main` at merge commit `857b2e5d7521824d416a0932a288c7cb964b39b3`. Its reviewed source head was `19288ecb6b9969c774536ccb42e5589faf9a62a5`; hosted CI passed on that head (run `39840363749`) and on the merge commit (run `39840675679`). The full local suite passed 129/129 on the reviewed source head. PRs #4–#15 were closed as superseded after ancestry verification. This merge does not mean G1 product acceptance or release readiness.
 
-| Area | Candidate evidence | Remaining gate |
+| Area | Merged evidence | Still required for G1 / release |
 |---|---|---|
-| Phase 0C | Shared tenancy/channel contracts and compatibility exports | Consolidated independent review and Owner merge decision |
-| Knowledge | FAQ lifecycle, bounded PDF/CSV extraction, deterministic Thai/SKU retrieval, source citations | Authenticated upload, hosted/private storage, actual retrieval/answer quality |
-| Handoff | Local state machine and authorization/repository ports | Durable staff state and atomic channel dispatch |
-| AI | Citation provenance validator, orchestration, metered mocked-transport model adapter | Live provider selection, semantic evaluation, durable usage and spend control |
-| PostgreSQL | PGlite RLS/lifecycle tests; preserved historical 2026-10-18 two-session SQL/output | Host pool/role provisioning; historical concurrency proof was not rerun during consolidation |
-| Fresh checks | 129 tests pass; synthetic evaluation 30 queries; full/runtime npm audits report zero vulnerabilities | Final hosted CI and independent review against the current PR head; Owner merge decision remains required |
+| Phase 0C | Shared tenancy/channel contracts, compatibility exports, and CI trigger update | Remaining modular increments only when separately scoped |
+| Knowledge | FAQ lifecycle, bounded local PDF/CSV extraction, deterministic Thai/SKU retrieval, citations, PostgreSQL adapter and PGlite tests | Authenticated upload/approval host, private original-file storage, production connection/role wiring, answer quality evidence |
+| Handoff | Local state machine, authorization/repository ports, response orchestration | Durable staff state and atomic channel dispatch/compare-and-send |
+| AI | Citation provenance validator and metered OpenAI-compatible adapter with mocked transport | Approved live provider/model, semantic answer evaluation, durable usage and spend control |
+| PostgreSQL | PGlite RLS/lifecycle tests; historical two-session PostgreSQL evidence from 2026-10-18 | Hosted connection pool/runtime role, host threat review for custom-GUC RLS |
+| Verification | 129 tests pass; synthetic retrieval evaluation covers 30 queries; audits recorded with zero findings on reviewed candidate | Real one-shop upload → cited answer → durable human handoff trace and independent security acceptance |
 
-## Why there were 12 PRs
+## Remaining G1 work
 
-Eight implementation PRs (#7–#11, #13–#15) form an overlapping dependency graph; the latest model/knowledge branches already contain their commits. Four PRs (#4, #5, #6, #12) add separate brief, boundary documentation, execution planning and CI changes. Nothing had been merged past Task 001. The original CI filter only ran on PRs targeting `main`, leaving feature-targeted PR heads without hosted checks.
+The next planned product slice is a controlled one-shop host integration: authenticated staff/workspace resolution, private knowledge upload and approval, shared-engine Web Chat composition, and durable operator handoff. No authenticated host or Web Chat app exists yet; the `platform/apps/` and `platform/composition/` folders are responsibility markers.
 
-## Resume point
+The current local PDF extractor uses Node `worker_threads`; Cloudflare Workers expose that API as a non-functional stub. A Node runtime is the compatibility recommendation for the first host slice, but the host/auth/storage architecture remains proposed until Owner approval. No provider spend, hosted migration, customer data or deployment has been authorized.
 
-Review the consolidated candidate and its [reconciliation report](../reports/REPOSITORY-RECONCILIATION-2026-10-23.md). Owner merge approval remains required. G1 end-to-end is incomplete: no authenticated upload → real model answer → Web Chat → durable human takeover path is demonstrated. G2–G4 remain gated. No deployment, hosted migration, customer data or paid provider call is included.
+G2 LINE pilot, G3 self-service multi-tenant onboarding, and G4 commercial validation remain gated behind G1 evidence.

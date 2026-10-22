@@ -1,6 +1,6 @@
 # Task 006A — Retrieved Citation Integrity (G1-E foundation)
 
-**Status:** Implemented on `codex/g1e-citation-integrity-20261016` at code commit `779999a`; 49 tests pass and independent review found no actionable issue. PR #13 is open against PR #9; no hosted check has run. Provider-neutral core slice, no provider or host integration.
+**Status (2026-10-23):** The provider-neutral citation validator was included in PR #16 and is merged on `main` (`857b2e5`). It verifies citation provenance, not semantic answer support; host integration and production security acceptance remain open.
 
 ## Goal
 

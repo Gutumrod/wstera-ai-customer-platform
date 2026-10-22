@@ -1,6 +1,6 @@
 # Proposed Execution Plan — G1 One-Shop Web/RAG MVP
 
-**Status: PROPOSED; requires Owner approval before task implementation.** Product goals remain those locked in `BRIEF.md`; this plan does not lock the proposed stack or invent evaluation thresholds.
+**Status: PROPOSED; implementation scope and host/auth/storage choices still require Owner approval.** PR #16 has cleared the consolidation gate. Product goals remain those locked in `BRIEF.md`; this plan does not lock the proposed stack or invent evaluation thresholds.
 
 ## Problem and user
 
@@ -22,12 +22,12 @@ Excluded: live LINE integration, self-service multi-shop onboarding, billing, pr
 
 ## Proposed work order
 
-1. Clear G0 review/merge and stale-document gates; accept the Phase 0C tenancy contract base.
-2. Approve and execute Task 002 knowledge/retrieval contracts.
-3. Build ingestion with synthetic FAQ first; add bounded PDF and CSV extraction only with explicit limits and failure handling.
-4. Establish a Thai/SKU synthetic baseline before setting retrieval and citation thresholds. Include conflicts, revoked sources, no-answer and prompt-injection cases.
-5. Implement one bounded shared response path through explicit model/retrieval ports. Record provider usage, latency, failures and estimated cost. No hidden mock success.
-6. Add Web Chat and the smallest usable operator takeover path on the same conversation/engine contracts.
+1. Clear G0 review/merge and stale-document gates; accept the Phase 0C tenancy contract base. **Completed:** PR #16 merged and post-merge CI passed.
+2. Approve and execute Task 002 knowledge/retrieval contracts. **Implemented locally and merged as a slice; full task remains partial.**
+3. Build bounded ingestion and establish the Thai/SKU synthetic baseline. **Local extraction/evaluation slices are merged; authenticated upload/private storage are not implemented.**
+4. Implement [Task G1 authenticated knowledge host](../tasks/TASK-G1-HOST-001.md): resolve authenticated staff to trusted workspace identity, upload and approve source versions through the existing ports.
+5. Add Web Chat and the smallest usable operator takeover path on the same conversation/engine contracts, with durable state and send-time enforcement.
+6. Approve a live provider and budget, then record usage, latency, failures and estimated cost. No hidden mock success.
 7. Run the end-to-end acceptance pass and independent security review; present evidence for Owner demo/approval.
 
 ## Acceptance criteria for G1
@@ -48,5 +48,11 @@ Excluded: live LINE integration, self-service multi-shop onboarding, billing, pr
 - Model/embedding/rerank provider, local-vs-hosted dev path, budget ceilings and data-processing region.
 - Thai corpus construction, baseline metrics, and pass thresholds (set after measurement, not guessed).
 - Web widget origin/session model and durable handoff operator workflow.
+
+## Runtime compatibility evidence (2026-10-23)
+
+- The existing `LocalKnowledgeDocumentExtractor` imports `node:worker_threads`; its PDF worker also resolves PDF.js font/CMap assets from the Node package filesystem. [Cloudflare Workers documents `node:worker_threads` as a non-functional stub](https://developers.cloudflare.com/workers/runtime-apis/nodejs/), so the existing PDF path cannot run in a Worker as-is. The current recommendation is a Node.js runtime for the first upload/extraction host; this is not locked until Owner approval. Alternatively, the extractor would need a separate compatible execution service or a verified runtime-neutral implementation.
+- [Supabase's current database guidance](https://supabase.com/docs/guides/database/connecting-to-postgres) recommends transaction-mode pooling for serverless Postgres clients and disabling prepared statements; the repository's host adapter must keep `SET LOCAL app.workspace_id` inside its transaction and use a non-superuser, non-`BYPASSRLS` runtime role.
+- [Supabase SSR auth helpers](https://supabase.com/docs/guides/auth/server-side) are currently documented as beta. Pin package versions only after the chosen framework/auth flow is approved and checked against current official docs; do not use [deprecated `@supabase/server` framework adapters](https://supabase.com/changelog/supabase-server-adapters-deprecated).
 
 The G1 implementation remains blocked until these decisions are resolved at the task boundaries and each scoped task is approved. Avoid locking every later-stage decision up front; approve only what the next vertical slice needs.
