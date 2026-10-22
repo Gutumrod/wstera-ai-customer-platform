@@ -258,21 +258,26 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       }
     });
 
-    await t.test("PostgreSQL accepts explicit repeated page segments like the canonicalizer", async () => {
-      const version = createImportedKnowledgeVersion({
-        workspace: shopA, sourceId: "repeated-page", versionId: "v1", title: "Repeated page", kind: "pdf",
-        segments: [
-          { text: "First extract", locator: { kind: "page", page: 8 } },
-          { text: "Second extract", locator: { kind: "page", page: 8 } },
-        ],
-      });
-      await repository.createSource(shopA, { sourceId: "repeated-page", title: "Repeated page", kind: "pdf" });
-      const persisted = await repository.createVersion(shopA, version);
-      assert.deepEqual(persisted.chunks.map((chunk) => chunk.locator), [
-        { kind: "page", page: 8, chunkIndex: 0 },
-        { kind: "page", page: 8, chunkIndex: 0 },
-      ]);
-      assert.deepEqual((await repository.getVersion(shopA, "repeated-page", "v1"))?.chunks, persisted.chunks);
+    await t.test("PostgreSQL accepts explicit repeated page and row segments like the canonicalizer", async () => {
+      for (const item of [
+        { sourceId: "repeated-page", title: "Repeated page", kind: "pdf" as const, locator: { kind: "page" as const, page: 8 } },
+        { sourceId: "repeated-row", title: "Repeated row", kind: "csv" as const, locator: { kind: "row" as const, row: 12 } },
+      ]) {
+        const version = createImportedKnowledgeVersion({
+          workspace: shopA, sourceId: item.sourceId, versionId: "v1", title: item.title, kind: item.kind,
+          segments: [
+            { text: "First extract", locator: item.locator },
+            { text: "Second extract", locator: item.locator },
+          ],
+        });
+        await repository.createSource(shopA, { sourceId: item.sourceId, title: item.title, kind: item.kind });
+        const persisted = await repository.createVersion(shopA, version);
+        assert.deepEqual(persisted.chunks.map((chunk) => chunk.locator), [
+          { ...item.locator, chunkIndex: 0 },
+          { ...item.locator, chunkIndex: 0 },
+        ]);
+        assert.deepEqual((await repository.getVersion(shopA, item.sourceId, "v1"))?.chunks, persisted.chunks);
+      }
     });
 
     await t.test("failed chunk persistence rolls back its version row", async () => {

@@ -85,7 +85,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     const draft = Object.freeze({ ...canonical, status: "uploaded" as const }) as KnowledgeVersion;
     const existing = this.versions.get(id);
     if (existing) {
-      if (existing.content !== version.content || existing.title !== version.title || existing.kind !== version.kind
+      if (existing.content !== canonical.content || existing.title !== canonical.title || existing.kind !== canonical.kind
         || existing.chunks.length !== version.chunks.length
         || existing.chunks.some((chunk, index) => {
           const candidate = canonical.chunks[index];

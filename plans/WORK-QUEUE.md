@@ -19,7 +19,7 @@ Updated: 2026-10-23. Candidate implementation is distinct from acceptance or rel
 | Task 004 / G1-C and SKU follow-up | 30-query lexical baseline and unique SKU normalization included | Owner quality thresholds; generated answers remain unmeasured |
 | Task 005 / G1-D | Local handoff state machine included | Durable repository and atomic delivery enforcement |
 | Task 006A/B/C | Citation validator, orchestration and mocked model adapter included | Live-provider/semantic evaluation and durable usage |
-| Task 007A | PostgreSQL adapter and local follow-up included; 112 full-suite tests pass | Independent candidate review, host role/pool wiring |
+| Task 007A | PostgreSQL adapter and local follow-up included; consolidated candidate currently passes 129 full-suite tests (initial Task 007A evidence remains 112) | Independent candidate review, host role/pool wiring |
 
 ## Not implemented / not unlocked
 
