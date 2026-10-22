@@ -252,10 +252,11 @@ export function canonicalizeKnowledgeVersionDraft(
         const locator = chunk.locator;
         if (locator.kind !== "page" && locator.kind !== "row") throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
         const position = locator.kind === "page" ? locator.page : locator.row;
+      const chunkIndex = locator.chunkIndex ?? 0;
         if (!Number.isSafeInteger(position) || position < 1) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
-        if (!current || locator.chunkIndex === 0) {
+      if (!current || chunkIndex === 0) {
           if (current) segments.push(current);
-          if (locator.chunkIndex !== 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+        if (chunkIndex !== 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
           current = {
             locator: locator.kind === "page" ? { kind: "page", page: locator.page } : { kind: "row", row: locator.row },
             text: "",
@@ -263,7 +264,7 @@ export function canonicalizeKnowledgeVersionDraft(
           };
         }
         const currentPosition = current.locator.kind === "page" ? current.locator.page : current.locator.row;
-        if (locator.kind !== current.locator.kind || position !== currentPosition || locator.chunkIndex !== current.nextChunkIndex) {
+        if (locator.kind !== current.locator.kind || position !== currentPosition || chunkIndex !== current.nextChunkIndex) {
           throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
         }
         current.text += chunk.text;

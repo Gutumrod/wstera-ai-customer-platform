@@ -12,13 +12,14 @@ const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
 const migrationPath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
 
-function databasePort(database: PGlite, failOnChunkInsert = false): PostgresDatabasePort {
+function databasePort(database: PGlite, failOnChunkInsert = false, statements?: string[]): PostgresDatabasePort {
   return {
     async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
       return database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
         const queryPort: PostgresQueryPort = {
           async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
+            statements?.push(sql);
             if (failOnChunkInsert && sql.startsWith("INSERT INTO knowledge_chunks")) {
               throw Object.assign(new Error("test injection"), { code: "XX000" });
             }
@@ -136,6 +137,13 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, locator: { kind: "chunk", chunkIndex: 99 } }), false);
       assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, currentCitation]), true);
       assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, { ...currentCitation, chunkId: "missing" }]), false);
+      const isolationStatements: string[] = [];
+      const isolationRepository = new PostgresKnowledgeRepository(databasePort(database, false, isolationStatements));
+      assert.equal(await isolationRepository.isCurrentCitation(shopA, currentCitation), true);
+      assert.equal(isolationStatements.some((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)), false);
+      isolationStatements.length = 0;
+      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation]), true);
+      assert.equal(isolationStatements.filter((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)).length, 1);
       const approved = eligible[0]!.version;
       assert.equal(approved.chunks.length, 1);
       const multiChunkDraft = createFaqVersion({
@@ -195,7 +203,16 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       });
       await repository.createSource(shopA, { sourceId: "manual", title: "Manual", kind: "pdf" });
       await repository.createVersion(shopA, pdf);
+      await repository.transitionVersion(shopA, "manual", "pdf-v1", "validating");
+      await repository.transitionVersion(shopA, "manual", "pdf-v1", "extracting");
+      await repository.transitionVersion(shopA, "manual", "pdf-v1", "indexed");
+      await repository.approveVersion(shopA, "manual", "pdf-v1", { approvedBy: "staff-1" });
       assert.deepEqual((await repository.getVersion(shopA, "manual", "pdf-v1"))?.chunks, pdf.chunks);
+      const pdfChunk = pdf.chunks[0]!;
+      const pdfCitation = { workspaceId: shopA.workspaceId, sourceId: "manual", sourceVersionId: "pdf-v1", chunkId: pdfChunk.chunkId,
+        locator: { kind: "page" as const, page: 1 } };
+      assert.equal(await repository.isCurrentCitation(shopA, pdfCitation), true);
+      assert.equal(await repository.areCurrentCitations(shopA, [pdfCitation]), true);
 
       const csv = createImportedKnowledgeVersion({
         workspace: shopA, sourceId: "catalog", versionId: "csv-v1", title: "Catalog", kind: "csv",
@@ -204,7 +221,16 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       });
       await repository.createSource(shopA, { sourceId: "catalog", title: "Catalog", kind: "csv" });
       await repository.createVersion(shopA, csv);
+      await repository.transitionVersion(shopA, "catalog", "csv-v1", "validating");
+      await repository.transitionVersion(shopA, "catalog", "csv-v1", "extracting");
+      await repository.transitionVersion(shopA, "catalog", "csv-v1", "indexed");
+      await repository.approveVersion(shopA, "catalog", "csv-v1", { approvedBy: "staff-1" });
       assert.deepEqual((await repository.getVersion(shopA, "catalog", "csv-v1"))?.chunks, csv.chunks);
+      const csvChunk = csv.chunks[0]!;
+      const csvCitation = { workspaceId: shopA.workspaceId, sourceId: "catalog", sourceVersionId: "csv-v1", chunkId: csvChunk.chunkId,
+        locator: { kind: "row" as const, row: 2 } };
+      assert.equal(await repository.isCurrentCitation(shopA, csvCitation), true);
+      assert.equal(await repository.areCurrentCitations(shopA, [csvCitation]), true);
     });
 
     await t.test("failed chunk persistence rolls back its version row", async () => {

@@ -50,6 +50,7 @@ test("handoff request pauses AI before operator claim and staff reply keeps it p
   assert.equal(repeated.version, replied.version);
   assert.equal(repeated.lastStaffDeliveryId, "delivery-1");
   const second = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-2");
+  // Test-only adapter has no durable historical delivery ledger; an older ID is accepted again.
   const oldRetry = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-1");
   assert.equal(oldRetry.version, second.version + 1);
   const concurrent = await Promise.all([

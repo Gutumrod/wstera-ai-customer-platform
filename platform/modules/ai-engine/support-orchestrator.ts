@@ -25,7 +25,7 @@ export interface GroundedAnswerPort {
   generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
 }
 
-/** Rechecks source/version approval after model generation to reject stale evidence. */
+/** Rechecks every model-visible source/version after generation in one consistent snapshot. */
 export interface EvidenceFreshnessPort {
   areCurrentAndApproved(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Promise<boolean>;
 }

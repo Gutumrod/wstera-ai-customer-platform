@@ -287,6 +287,11 @@ test("paused conversations stop before retrieval and a handoff during generation
     assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
     assert.deepEqual(calls.handoff, []);
   });
+  await t.test("conversation version change before failure handoff returns changed without requesting handoff", async () => {
+    const { engine, calls } = harness({ staleEvidence: true, takeoverAndReleaseAfterGeneration: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_changed" });
+    assert.deepEqual(calls.handoff, []);
+  });
   await t.test("malformed freshness result fails closed", async () => {
     const { engine } = harness({ malformedFreshness: true });
     assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {

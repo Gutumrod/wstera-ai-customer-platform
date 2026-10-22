@@ -6,6 +6,7 @@ import {
   KnowledgeError,
   createFaqVersion,
   createImportedKnowledgeVersion,
+  canonicalizeKnowledgeVersionDraft,
   areKnowledgeCitationsCurrent,
   retrieveKnowledge,
   type KnowledgeSource,
@@ -146,6 +147,23 @@ test("citation freshness becomes false after source archive or version revocatio
   const archivedCitation = archivedResult.hits.find((candidate) => candidate.sourceId === "archived-freshness")!.citation;
   repository.archiveSource(shopA, "archived-freshness");
   assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [archivedCitation]), false);
+});
+
+test("canonicalizes page and row version drafts when optional chunkIndex is omitted", () => {
+  for (const [sourceId, kind, locator] of [
+    ["optional-page", "pdf", { kind: "page", page: 4 }],
+    ["optional-row", "csv", { kind: "row", row: 3 }],
+  ] as const) {
+    const draft = createImportedKnowledgeVersion({
+      workspace: shopA, sourceId, versionId: "v1", title: "Imported", kind,
+      segments: [{ text: "source content", locator }],
+    });
+    const withoutChunkIndex = {
+      ...draft,
+      chunks: draft.chunks.map((chunk) => ({ ...chunk, locator })),
+    };
+    assert.deepEqual(canonicalizeKnowledgeVersionDraft(shopA, withoutChunkIndex).chunks, draft.chunks);
+  }
 });
 
 test("archived source cannot approve an indexed version", () => {

@@ -13,7 +13,7 @@ Task 001 / PR #2 and the original architecture PR #3 are merged. Remote `main` r
 | Handoff | Local state machine and authorization/repository ports | Durable staff state and atomic channel dispatch |
 | AI | Citation provenance validator, orchestration, metered mocked-transport model adapter | Live provider selection, semantic evaluation, durable usage and spend control |
 | PostgreSQL | PGlite RLS/lifecycle tests; preserved historical 2026-10-18 two-session SQL/output | Host pool/role provisioning; historical concurrency proof was not rerun during consolidation |
-| Fresh checks | 112 tests pass; synthetic evaluation 30 queries; full/runtime npm audits report zero vulnerabilities | GitHub CI passed at `2877b24`; latest-head verification, independent review and Owner approval remain required |
+| Fresh checks | 127 tests pass; synthetic evaluation 30 queries; full/runtime npm audits report zero vulnerabilities | Latest PR head has passed hosted CI and independent DeepSeek review; Owner merge decision remains required |
 
 ## Why there were 12 PRs
 

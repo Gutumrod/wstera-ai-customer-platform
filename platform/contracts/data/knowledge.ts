@@ -169,6 +169,7 @@ export interface KnowledgeRepositoryPort {
   revokeVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: Readonly<{ revokedBy: string; reason: string; revokedAt?: string }>): Awaitable<KnowledgeVersion>;
   /** Targeted active/approved check for one cited chunk; adapters must scope every key by workspace. */
   isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Awaitable<boolean>;
+  /** Check every citation within one consistent repository snapshot. */
   areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Awaitable<boolean>;
   listRetrievableChunks(workspace: TrustedWorkspaceContext): Awaitable<readonly Readonly<{
     source: KnowledgeSource;
