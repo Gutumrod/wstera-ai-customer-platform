@@ -110,6 +110,7 @@ test("invalid input and oversized request do not call the transport", async () =
   const { adapter } = harness(fetcher, { maxRequestBytes: 100 });
   await assert.rejects(adapter.assess({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { code: "REQUEST_TOO_LARGE" });
   await assert.rejects(adapter.assess({ workspaceId: "shop-1", query: " ", evidence }), { code: "INVALID_INPUT" });
+  await assert.rejects(adapter.assess({ workspaceId: "shop-1", query: "x".repeat(5_001), evidence }), { code: "INVALID_INPUT" });
   const accessorInput = Object.defineProperty({ workspaceId: "shop-1", evidence }, "query", { get: () => "ส่งของกี่วัน" });
   await assert.rejects(adapter.assess(accessorInput as never), { code: "INVALID_INPUT" });
   assert.equal(calls, 0);

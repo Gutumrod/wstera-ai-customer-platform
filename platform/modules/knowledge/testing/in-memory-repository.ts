@@ -1,5 +1,6 @@
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import type {
+  KnowledgeCitation,
   KnowledgeCitationLocator,
   KnowledgeSource,
   KnowledgeVersion,
@@ -28,8 +29,8 @@ function sameLocator(left: KnowledgeCitationLocator, right: KnowledgeCitationLoc
   if (left.kind === "span" && right.kind === "span") {
     return left.chunkIndex === right.chunkIndex && left.start === right.start && left.end === right.end;
   }
-  if (left.kind === "page" && right.kind === "page") return left.page === right.page && left.chunkIndex === right.chunkIndex;
-  if (left.kind === "row" && right.kind === "row") return left.row === right.row && left.chunkIndex === right.chunkIndex;
+  if (left.kind === "page" && right.kind === "page") return left.page === right.page && (left.chunkIndex ?? 0) === (right.chunkIndex ?? 0);
+  if (left.kind === "row" && right.kind === "row") return left.row === right.row && (left.chunkIndex ?? 0) === (right.chunkIndex ?? 0);
   return left.kind === "chunk" && right.kind === "chunk" && left.chunkIndex === right.chunkIndex;
 }
 
@@ -118,6 +119,9 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
   }
 
   approveVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: { approvedBy: string; approvedAt?: string }): KnowledgeVersion {
+    const source = this.sources.get(key(workspace.workspaceId, sourceId));
+    if (!source) throw new KnowledgeError("SOURCE_NOT_FOUND");
+    if (source.status !== "active") throw new KnowledgeError("APPROVAL_NOT_ELIGIBLE");
     for (const candidate of this.versions.values()) {
       if (candidate.workspaceId === workspace.workspaceId && candidate.sourceId === sourceId
         && candidate.versionId !== versionId && candidate.status === "approved") {
@@ -129,6 +133,20 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
 
   revokeVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: { revokedBy: string; reason: string; revokedAt?: string }): KnowledgeVersion {
     return this.replaceVersion(workspace, sourceId, versionId, (version) => revokeKnowledgeVersion(version, input));
+  }
+
+  isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): boolean {
+    if (citation.workspaceId !== workspace.workspaceId) return false;
+    const source = this.getSource(workspace, citation.sourceId);
+    const version = this.getVersion(workspace, citation.sourceId, citation.sourceVersionId);
+    return source?.status === "active" && version?.status === "approved"
+      && version.chunks.some((chunk) => chunk.workspaceId === workspace.workspaceId
+        && chunk.sourceId === citation.sourceId && chunk.versionId === citation.sourceVersionId
+        && chunk.chunkId === citation.chunkId && sameLocator(chunk.locator, citation.locator));
+  }
+
+  areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): boolean {
+    return citations.length > 0 && citations.every((citation) => this.isCurrentCitation(workspace, citation));
   }
 
   replaceVersionContent(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, content: string): never {

@@ -66,6 +66,7 @@ function withEvent(snapshot: ConversationSnapshot, event: ConversationEvent): Co
   if (event.kind === "staff_reply_delivered" && snapshot.status === "human_active") {
     assertId(event.staffId);
     assertId(event.deliveryId);
+    if (snapshot.lastStaffDeliveryId === event.deliveryId) return snapshot;
     return Object.freeze({
       ...snapshot,
       lastStaffDeliveryId: event.deliveryId,

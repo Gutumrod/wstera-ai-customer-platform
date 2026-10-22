@@ -1,5 +1,5 @@
 import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
-import { KnowledgeError } from "../../contracts/data/knowledge.js";
+import { KnowledgeError, MAX_KNOWLEDGE_QUERY_CHARS } from "../../contracts/data/knowledge.js";
 import type {
   KnowledgeChunk,
   KnowledgeCitation,
@@ -27,7 +27,7 @@ const MAX_CONTENT_CHARS = 20_000;
 const MAX_IMPORTED_CONTENT_CHARS = 100_000;
 const MAX_IMPORTED_SEGMENTS = 5_000;
 const MAX_CHUNK_CHARS = 320;
-const MAX_QUERY_CHARS = 500;
+const MAX_QUERY_CHARS = MAX_KNOWLEDGE_QUERY_CHARS;
 const MAX_RETRIEVAL_LIMIT = 20;
 const extractionFailureCodes = new Set<KnowledgeExtractionFailureCode>([
   "UNSUPPORTED_FORMAT", "FILE_TOO_LARGE", "MALFORMED_FILE", "INVALID_ENCODING", "NO_TEXT_CONTENT",
@@ -286,8 +286,8 @@ export function canonicalizeKnowledgeVersionDraft(
     if (left.kind === "span" && right.kind === "span") {
       return left.chunkIndex === right.chunkIndex && left.start === right.start && left.end === right.end;
     }
-    if (left.kind === "page" && right.kind === "page") return left.page === right.page && left.chunkIndex === right.chunkIndex;
-    if (left.kind === "row" && right.kind === "row") return left.row === right.row && left.chunkIndex === right.chunkIndex;
+    if (left.kind === "page" && right.kind === "page") return left.page === right.page && (left.chunkIndex ?? 0) === (right.chunkIndex ?? 0);
+    if (left.kind === "row" && right.kind === "row") return left.row === right.row && (left.chunkIndex ?? 0) === (right.chunkIndex ?? 0);
     return left.kind === "chunk" && right.kind === "chunk" && left.chunkIndex === right.chunkIndex;
   };
   if (version.content !== canonical.content || version.chunks.length !== canonical.chunks.length
@@ -522,6 +522,20 @@ export async function retrieveKnowledge(
     || a.citation.chunkId.localeCompare(b.citation.chunkId));
   const hits = Object.freeze(candidates.slice(0, query.limit));
   return hits.length > 0 ? Object.freeze({ kind: "evidence", hits }) : Object.freeze({ kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
+}
+
+/** Revalidate cited identities against the current active and approved repository snapshot. */
+export async function areKnowledgeCitationsCurrent(
+  repository: KnowledgeRepositoryPort,
+  workspace: TrustedWorkspaceContext,
+  citations: readonly KnowledgeCitation[],
+): Promise<boolean> {
+  try {
+    if (citations.length === 0) return false;
+    return await repository.areCurrentCitations(workspace, citations) === true;
+  } catch {
+    return false;
+  }
 }
 
 export class KnowledgeRetriever implements KnowledgeRetrievalPort {

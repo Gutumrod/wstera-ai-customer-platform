@@ -6,6 +6,7 @@ import {
   KnowledgeError,
   createFaqVersion,
   createImportedKnowledgeVersion,
+  areKnowledgeCitationsCurrent,
   retrieveKnowledge,
   type KnowledgeSource,
 } from "./index.js";
@@ -122,6 +123,42 @@ test("unapproved and revoked versions never appear in retrieval", async () => {
   repository.approveVersion(shopA, "faq", "v1", { approvedBy: "staff-1" });
   repository.revokeVersion(shopA, "faq", "v1", { revokedBy: "staff-1", reason: "ข้อมูลหมดอายุ" });
   assert.deepEqual(await retrieveKnowledge(repository, { workspace: shopA, query: "เปิดทุกวัน", limit: 3 }), { kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
+});
+
+test("citation freshness becomes false after source archive or version revocation", async () => {
+  const repository = new InMemoryKnowledgeRepository();
+  addApprovedFaq(repository, shopA, { sourceId: "freshness", content: "ข้อมูลจัดส่ง" });
+  const result = await retrieveKnowledge(repository, { workspace: shopA, query: "จัดส่ง", limit: 3 });
+  assert.equal(result.kind, "evidence");
+  if (result.kind !== "evidence") return;
+  const citation = result.hits[0]!.citation;
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [citation]), true);
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [{ ...citation, workspaceId: shopB.workspaceId }]), false);
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [{ ...citation, chunkId: "missing-chunk" }]), false);
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [{ ...citation, locator: { kind: "chunk", chunkIndex: 99 } }]), false);
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, []), false);
+  repository.revokeVersion(shopA, "freshness", "v1", { revokedBy: "staff-1", reason: "ข้อมูลหมดอายุ" });
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [result.hits[0]!.citation]), false);
+  addApprovedFaq(repository, shopA, { sourceId: "archived-freshness", content: "ข้อมูลจัดส่ง" });
+  const archivedResult = await retrieveKnowledge(repository, { workspace: shopA, query: "จัดส่ง", limit: 3 });
+  assert.equal(archivedResult.kind, "evidence");
+  if (archivedResult.kind !== "evidence") return;
+  const archivedCitation = archivedResult.hits.find((candidate) => candidate.sourceId === "archived-freshness")!.citation;
+  repository.archiveSource(shopA, "archived-freshness");
+  assert.equal(await areKnowledgeCitationsCurrent(repository, shopA, [archivedCitation]), false);
+});
+
+test("archived source cannot approve an indexed version", () => {
+  const repository = new InMemoryKnowledgeRepository();
+  const version = createFaqVersion({ workspace: shopA, sourceId: "archived-faq", versionId: "v1", title: "FAQ", content: "ข้อมูล" });
+  repository.createSource(shopA, { sourceId: "archived-faq", title: "FAQ", kind: "faq" });
+  repository.createVersion(shopA, version);
+  repository.transitionVersion(shopA, "archived-faq", "v1", "validating");
+  repository.transitionVersion(shopA, "archived-faq", "v1", "extracting");
+  repository.transitionVersion(shopA, "archived-faq", "v1", "indexed");
+  repository.archiveSource(shopA, "archived-faq");
+  assert.throws(() => repository.approveVersion(shopA, "archived-faq", "v1", { approvedBy: "staff-1" }),
+    (error: unknown) => error instanceof KnowledgeError && error.code === "APPROVAL_NOT_ELIGIBLE");
 });
 
 test("repository refuses a caller-supplied approved status at version creation", () => {

@@ -1,5 +1,6 @@
 import type { ModelOperation, ModelUsagePort } from "../../../contracts/models/index.js";
 import type { AnswerabilityPort, GroundedAnswerPort, SupportEvidence } from "../../../modules/ai-engine/support-orchestrator.js";
+import { MAX_SUPPORT_QUERY_CHARS } from "../../../contracts/data/knowledge.js";
 
 export type ModelAdapterErrorCode =
   | "INVALID_CONFIGURATION"
@@ -156,7 +157,7 @@ function snapshotInput(value: unknown): Readonly<{ workspaceId: string; query: s
   const evidenceValues = snapshotArray(input?.evidence, MAX_EVIDENCE_ITEMS);
   if (!input || Object.keys(input).length !== 3 || typeof workspaceId !== "string"
     || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(workspaceId)
-    || typeof query !== "string" || query.trim().length === 0 || query.length > 8_000
+    || typeof query !== "string" || query.trim().length === 0 || query.length > MAX_SUPPORT_QUERY_CHARS
     || !evidenceValues || evidenceValues.length === 0) throw new ModelAdapterError("INVALID_INPUT");
   const evidence: SupportEvidence[] = [];
   const seenReferences = new Set<string>();

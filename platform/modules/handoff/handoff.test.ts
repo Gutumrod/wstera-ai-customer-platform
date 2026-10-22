@@ -46,6 +46,39 @@ test("handoff request pauses AI before operator claim and staff reply keeps it p
   const replied = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-1");
   assert.equal(replied.status, "human_active");
   assert.equal(canSendAiReply(replied), false);
+  const repeated = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-1");
+  assert.equal(repeated.version, replied.version);
+  assert.equal(repeated.lastStaffDeliveryId, "delivery-1");
+  const second = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-2");
+  const oldRetry = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-1");
+  assert.equal(oldRetry.version, second.version + 1);
+  const concurrent = await Promise.all([
+    recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-3"),
+    recordStaffReplyDelivery(repository, authorization(), workspace, "thread-2", "staff-1", "delivery-3"),
+  ]);
+  assert.equal(concurrent[0].version, concurrent[1].version);
+  assert.equal(concurrent[0].version, oldRetry.version + 1);
+});
+
+test("replaying the latest delivery returns the post-transition repository snapshot", async () => {
+  const repository = new InMemoryConversationRepository();
+  await createConversation(repository, workspace, "thread-replay-race");
+  await requestHandoff(repository, workspace, "thread-replay-race", "no_answer");
+  await claimHandoff(repository, authorization(), workspace, "thread-replay-race", "staff-1");
+  const delivered = await recordStaffReplyDelivery(repository, authorization(), workspace, "thread-replay-race", "staff-1", "delivery-latest");
+  const releaseDuringAuthorization = authorization({ assertCanReply: async () => {
+    const latest = await repository.load(workspace, "thread-replay-race");
+    assert.ok(latest);
+    await repository.append(workspace, "thread-replay-race", latest.version, {
+      kind: "handoff_released", staffId: "staff-1", occurredAt: new Date().toISOString(),
+    });
+  } });
+  const replay = await recordStaffReplyDelivery(repository, releaseDuringAuthorization, workspace, "thread-replay-race", "staff-1", "delivery-latest");
+  const latest = await repository.load(workspace, "thread-replay-race");
+  assert.ok(latest);
+  assert.ok(replay.version > delivered.version);
+  assert.equal(replay.status, "ai_active");
+  assert.equal(replay.version, latest.version);
 });
 
 test("customer-facing calls cannot release handoff and unauthorized staff cannot release it", async () => {

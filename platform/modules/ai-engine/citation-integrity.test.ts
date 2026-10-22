@@ -52,6 +52,15 @@ test("deduplicates repeated citations and returns the canonical evidence referen
   }
 });
 
+test("normalizes omitted page and row chunk indexes to zero", () => {
+  for (const locator of [{ kind: "page", page: 4 }, { kind: "row", row: 3 }] satisfies KnowledgeCitation["locator"][]) {
+    const canonicalLocator = { ...locator, chunkIndex: 0 } as KnowledgeCitation["locator"];
+    const item = hit(canonicalLocator);
+    const draft = { ...item.citation, locator };
+    assert.equal(validateAnswerCitations(workspace, { text: "คำตอบ", citations: [draft] }, [item]).kind, "accepted");
+  }
+});
+
 test("hands off when evidence or citations are absent", () => {
   const item = hit({ kind: "row", row: 3 });
   assert.deepEqual(validateAnswerCitations(workspace, { text: "คำตอบ", citations: [citation(item)] }, []), {
@@ -83,11 +92,15 @@ test("fails closed on foreign evidence and cross-workspace citations", () => {
 });
 
 test("fails closed when retrieval hit metadata does not match its citation identity", () => {
-  const inconsistent = { ...hit({ kind: "page", page: 4 }), versionId: "v2" };
-  assert.deepEqual(validateAnswerCitations(workspace, {
-    text: "คำตอบ",
-    citations: [citation(inconsistent)],
-  }, [inconsistent]), { kind: "handoff", reason: "INVALID_EVIDENCE_CONTEXT" });
+  for (const inconsistent of [
+    { ...hit({ kind: "page", page: 4 }), versionId: "v2" },
+    { ...hit({ kind: "page", page: 4 }), sourceId: "other-source" },
+  ]) {
+    assert.deepEqual(validateAnswerCitations(workspace, {
+      text: "คำตอบ",
+      citations: [citation(inconsistent)],
+    }, [inconsistent]), { kind: "handoff", reason: "INVALID_EVIDENCE_CONTEXT" });
+  }
 });
 
 test("rejects fabricated evidence identities and malformed locators", () => {

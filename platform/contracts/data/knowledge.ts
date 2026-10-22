@@ -1,5 +1,8 @@
 import type { TrustedWorkspaceContext } from "../tenancy/index.js";
 
+export const MAX_KNOWLEDGE_QUERY_CHARS = 500;
+export const MAX_SUPPORT_QUERY_CHARS = 5_000;
+
 export type KnowledgeErrorCode =
   | "INVALID_KNOWLEDGE_INPUT"
   | "SOURCE_NOT_FOUND"
@@ -164,6 +167,9 @@ export interface KnowledgeRepositoryPort {
   /** Approval must be atomic and preserve at most one approved/current version per source. */
   approveVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: Readonly<{ approvedBy: string; approvedAt?: string }>): Awaitable<KnowledgeVersion>;
   revokeVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: Readonly<{ revokedBy: string; reason: string; revokedAt?: string }>): Awaitable<KnowledgeVersion>;
+  /** Targeted active/approved check for one cited chunk; adapters must scope every key by workspace. */
+  isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Awaitable<boolean>;
+  areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Awaitable<boolean>;
   listRetrievableChunks(workspace: TrustedWorkspaceContext): Awaitable<readonly Readonly<{
     source: KnowledgeSource;
     version: KnowledgeVersion;

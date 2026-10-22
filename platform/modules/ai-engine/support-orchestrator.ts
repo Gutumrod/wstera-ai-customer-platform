@@ -1,4 +1,4 @@
-import type { KnowledgeCitation, KnowledgeRetrievalHit, KnowledgeRetrievalPort } from "../../contracts/data/knowledge.js";
+import { MAX_KNOWLEDGE_QUERY_CHARS, MAX_SUPPORT_QUERY_CHARS, type KnowledgeCitation, type KnowledgeRetrievalHit, type KnowledgeRetrievalPort } from "../../contracts/data/knowledge.js";
 import type { ConversationRepositoryPort, ConversationSnapshot } from "../../contracts/data/conversation.js";
 import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
 import { validateAnswerCitations, type CitationIntegrityReason } from "./citation-integrity.js";
@@ -25,6 +25,11 @@ export interface GroundedAnswerPort {
   generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
 }
 
+/** Rechecks source/version approval after model generation to reject stale evidence. */
+export interface EvidenceFreshnessPort {
+  areCurrentAndApproved(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Promise<boolean>;
+}
+
 export type SupportHandoffReason =
   | "NO_APPROVED_EVIDENCE"
   | "INSUFFICIENT_EVIDENCE"
@@ -35,7 +40,9 @@ export type SupportHandoffReason =
   | "INVALID_GENERATED_ANSWER"
   | "RETRIEVAL_UNAVAILABLE"
   | "RESPONSE_PIPELINE_UNAVAILABLE"
-  | "UNSUPPORTED_CITATION";
+  | "UNSUPPORTED_CITATION"
+  | "KNOWLEDGE_CHANGED"
+  | "QUERY_TOO_LONG";
 
 export interface SupportHandoffPort {
   request(input: Readonly<{
@@ -50,12 +57,14 @@ export type SupportReply =
   | Readonly<{ kind: "handoff_requested"; reason: SupportHandoffReason }>
   | Readonly<{ kind: "handoff_unavailable"; reason: SupportHandoffReason }>
   | Readonly<{ kind: "ai_paused" }>
+  | Readonly<{ kind: "conversation_changed" }>
   | Readonly<{ kind: "conversation_unavailable" }>
   | Readonly<{ kind: "invalid_request" }>;
 
 export type SupportOrchestratorPorts = Readonly<{
   conversations: Pick<ConversationRepositoryPort, "load">;
   retrieval: KnowledgeRetrievalPort;
+  evidenceFreshness: EvidenceFreshnessPort;
   answerability: AnswerabilityPort;
   answer: GroundedAnswerPort;
   handoff: SupportHandoffPort;
@@ -239,7 +248,7 @@ export class SupportOrchestrator {
     if (!isRecord(input)
       || typeof input.conversationId !== "string"
       || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(input.conversationId)
-      || typeof input.query !== "string" || input.query.trim().length === 0 || input.query.length > 8_000) {
+      || typeof input.query !== "string" || input.query.trim().length === 0 || input.query.length > MAX_SUPPORT_QUERY_CHARS) {
       return Object.freeze({ kind: "invalid_request" });
     }
     let workspace: TrustedWorkspaceContext | null;
@@ -258,39 +267,41 @@ export class SupportOrchestrator {
     const initialConversation = await this.loadConversation(request);
     if (initialConversation.kind !== "loaded") return initialConversation;
     if (initialConversation.snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });
+    const guardedRequest = Object.freeze({ ...request, expectedConversationVersion: initialConversation.snapshot.version });
+    if (request.query.length > MAX_KNOWLEDGE_QUERY_CHARS) return this.handoff(guardedRequest, "QUERY_TOO_LONG");
 
     let retrieval: unknown;
     try {
       retrieval = await this.ports.retrieval.search({ workspace: request.workspace, query: request.query, limit: this.evidenceLimit });
     } catch {
-      return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
     }
     let hits: readonly KnowledgeRetrievalHit[];
     try {
-      if (!isRecord(retrieval) || !hasOnlyDataProperties(retrieval, ["kind", "hits", "reason"])) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      if (!isRecord(retrieval) || !hasOnlyDataProperties(retrieval, ["kind", "hits", "reason"])) return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
       const resultFields = Object.getOwnPropertyDescriptors(retrieval);
       const resultKind = resultFields.kind?.value;
-      if (Reflect.ownKeys(retrieval).length !== 2) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      if (Reflect.ownKeys(retrieval).length !== 2) return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
       if (resultKind === "no_answer") {
         if (resultFields.reason?.value !== "NO_APPROVED_EVIDENCE") {
-          return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+          return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
         }
-        return this.handoff(request, "NO_APPROVED_EVIDENCE");
+        return this.handoff(guardedRequest, "NO_APPROVED_EVIDENCE");
       }
       const retrievedValues = snapshotArrayValues(resultFields.hits?.value, this.evidenceLimit);
       if (resultKind !== "evidence" || !retrievedValues || retrievedValues.length === 0) {
-        return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+        return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
       }
       const canonicalHits = retrievedValues.map((hit) => snapshotRetrievalHit(hit));
-      if (canonicalHits.some((hit) => hit === null)) return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      if (canonicalHits.some((hit) => hit === null)) return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
       hits = Object.freeze(canonicalHits as KnowledgeRetrievalHit[]);
       const retrievedIntegrity = validateAnswerCitations(request.workspace, {
         text: "retrieved evidence validation",
         citations: hits.map((hit) => hit.citation),
       }, hits);
-      if (retrievedIntegrity.kind !== "accepted") return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      if (retrievedIntegrity.kind !== "accepted") return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
     } catch {
-      return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
     }
 
     let evidence: readonly SupportEvidence[];
@@ -301,29 +312,29 @@ export class SupportOrchestrator {
         text: hit.text,
       })));
     } catch {
-      return this.handoff(request, "RETRIEVAL_UNAVAILABLE");
+      return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
     }
 
     let assessment: unknown;
     try {
       assessment = await this.ports.answerability.assess({ workspaceId: request.workspace.workspaceId, query: request.query, evidence });
     } catch {
-      return this.handoff(request, "ANSWERABILITY_UNAVAILABLE");
+      return this.handoff(guardedRequest, "ANSWERABILITY_UNAVAILABLE");
     }
     const assessmentKind = parseAssessmentKind(assessment);
-    if (!assessmentKind) return this.handoff(request, "ANSWERABILITY_UNAVAILABLE");
-    if (assessmentKind === "insufficient_evidence") return this.handoff(request, "INSUFFICIENT_EVIDENCE");
-    if (assessmentKind === "conflicting_evidence") return this.handoff(request, "CONFLICTING_EVIDENCE");
-    if (assessmentKind === "uncertain") return this.handoff(request, "UNCERTAIN_ANSWERABILITY");
+    if (!assessmentKind) return this.handoff(guardedRequest, "ANSWERABILITY_UNAVAILABLE");
+    if (assessmentKind === "insufficient_evidence") return this.handoff(guardedRequest, "INSUFFICIENT_EVIDENCE");
+    if (assessmentKind === "conflicting_evidence") return this.handoff(guardedRequest, "CONFLICTING_EVIDENCE");
+    if (assessmentKind === "uncertain") return this.handoff(guardedRequest, "UNCERTAIN_ANSWERABILITY");
 
     let generated: unknown;
     try {
       generated = await this.ports.answer.generate({ workspaceId: request.workspace.workspaceId, query: request.query, evidence });
     } catch {
-      return this.handoff(request, "GENERATION_UNAVAILABLE");
+      return this.handoff(guardedRequest, "GENERATION_UNAVAILABLE");
     }
     const draft = parseGeneratedDraft(generated, hits.length);
-    if (!draft) return this.handoff(request, "INVALID_GENERATED_ANSWER");
+    if (!draft) return this.handoff(guardedRequest, "INVALID_GENERATED_ANSWER");
 
     let integrity;
     try {
@@ -331,13 +342,13 @@ export class SupportOrchestrator {
       const citedHits: KnowledgeRetrievalHit[] = [];
       for (const reference of draft.citationRefs) {
         const hit = hitsByReference.get(reference);
-        if (!hit) return this.handoff(request, "UNSUPPORTED_CITATION");
+        if (!hit) return this.handoff(guardedRequest, "UNSUPPORTED_CITATION");
         citedHits.push(hit);
       }
       const citations = citedHits.map((hit) => hit.citation);
       integrity = validateAnswerCitations(request.workspace, { text: draft.text, citations }, citedHits);
     } catch {
-      return this.handoff(request, "RESPONSE_PIPELINE_UNAVAILABLE");
+      return this.handoff(guardedRequest, "RESPONSE_PIPELINE_UNAVAILABLE");
     }
     if (integrity.kind !== "accepted") {
       const reason: SupportHandoffReason = integrity.reason === "UNSUPPORTED_CITATION"
@@ -345,11 +356,19 @@ export class SupportOrchestrator {
         || integrity.reason === "MALFORMED_CITATION"
         ? "UNSUPPORTED_CITATION"
         : "INVALID_GENERATED_ANSWER";
-      return this.handoff(request, reason);
+      return this.handoff(guardedRequest, reason);
+    }
+    try {
+      if (await this.ports.evidenceFreshness.areCurrentAndApproved(request.workspace, hits.map((hit) => hit.citation)) !== true) {
+        return this.handoff(guardedRequest, "KNOWLEDGE_CHANGED");
+      }
+    } catch {
+      return this.handoff(guardedRequest, "KNOWLEDGE_CHANGED");
     }
     const currentConversation = await this.loadConversation(request);
     if (currentConversation.kind !== "loaded") return currentConversation;
     if (currentConversation.snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });
+    if (currentConversation.snapshot.version !== initialConversation.snapshot.version) return Object.freeze({ kind: "conversation_changed" });
     return Object.freeze({
       kind: "answer",
       text: integrity.answer.text,
@@ -374,7 +393,7 @@ export class SupportOrchestrator {
   }
 
   private async handoff(
-    input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string }>,
+    input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; expectedConversationVersion?: number }>,
     reason: SupportHandoffReason | CitationIntegrityReason,
   ): Promise<SupportReply> {
     const normalizedReason: SupportHandoffReason = reason === "NO_APPROVED_EVIDENCE"
@@ -386,9 +405,17 @@ export class SupportOrchestrator {
       || reason === "RETRIEVAL_UNAVAILABLE"
       || reason === "RESPONSE_PIPELINE_UNAVAILABLE"
       || reason === "UNSUPPORTED_CITATION"
+      || reason === "KNOWLEDGE_CHANGED"
+      || reason === "QUERY_TOO_LONG"
       || reason === "INVALID_GENERATED_ANSWER"
       ? reason
       : "INVALID_GENERATED_ANSWER";
+    if (input.expectedConversationVersion !== undefined) {
+      const current = await this.loadConversation(input);
+      if (current.kind !== "loaded") return current;
+      if (current.snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });
+      if (current.snapshot.version !== input.expectedConversationVersion) return Object.freeze({ kind: "conversation_changed" });
+    }
     try {
       await this.ports.handoff.request({ workspace: input.workspace, conversationId: input.conversationId, reason: normalizedReason });
       return Object.freeze({ kind: "handoff_requested", reason: normalizedReason });

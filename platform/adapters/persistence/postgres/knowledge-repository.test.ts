@@ -122,8 +122,35 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(rejected.reason.code, "APPROVED_VERSION_EXISTS");
       const eligible = await repository.listRetrievableChunks(shopA);
       assert.equal(eligible.length, 1);
+      const approvedRow = eligible[0]!;
+      const currentCitation = {
+        workspaceId: shopA.workspaceId,
+        sourceId: approvedRow.source.sourceId,
+        sourceVersionId: approvedRow.version.versionId,
+        chunkId: approvedRow.chunk.chunkId,
+        locator: approvedRow.chunk.locator,
+      } as const;
+      assert.equal(await repository.isCurrentCitation(shopA, currentCitation), true);
+      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, chunkId: "missing" }), false);
+      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, workspaceId: shopB.workspaceId }), false);
+      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, locator: { kind: "chunk", chunkIndex: 99 } }), false);
+      assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, currentCitation]), true);
+      assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, { ...currentCitation, chunkId: "missing" }]), false);
       const approved = eligible[0]!.version;
       assert.equal(approved.chunks.length, 1);
+      const multiChunkDraft = createFaqVersion({
+        workspace: shopA, sourceId: "multi-chunk", versionId: "v1", title: "Large FAQ",
+        content: `${"ข้อมูล ".repeat(60)}${"รายละเอียด ".repeat(50)}`,
+      });
+      await repository.createSource(shopA, { sourceId: "multi-chunk", title: "Large FAQ", kind: "faq" });
+      await repository.createVersion(shopA, multiChunkDraft);
+      await repository.transitionVersion(shopA, "multi-chunk", "v1", "validating");
+      await repository.transitionVersion(shopA, "multi-chunk", "v1", "extracting");
+      await repository.transitionVersion(shopA, "multi-chunk", "v1", "indexed");
+      await repository.approveVersion(shopA, "multi-chunk", "v1", { approvedBy: "staff-1" });
+      const multiChunkRows = (await repository.listRetrievableChunks(shopA)).filter((entry) => entry.source.sourceId === "multi-chunk");
+      assert.ok(multiChunkRows.length > 1);
+      assert.ok(multiChunkRows.every((entry) => entry.version === multiChunkRows[0]!.version));
       await assert.rejects(database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
         await transaction.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
@@ -138,7 +165,22 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       await repository.revokeVersion(shopA, approved.sourceId, approved.versionId, {
         revokedBy: "staff-1", reason: "superseded", revokedAt: "2026-10-16T02:00:00.000Z",
       });
+      assert.equal(await repository.isCurrentCitation(shopA, {
+        workspaceId: shopA.workspaceId, sourceId: approved.sourceId, sourceVersionId: approved.versionId,
+        chunkId: approvedRow.chunk.chunkId, locator: approvedRow.chunk.locator,
+      }), false);
+      await repository.revokeVersion(shopA, "multi-chunk", "v1", {
+        revokedBy: "staff-1", reason: "superseded", revokedAt: "2026-10-16T02:00:00.000Z",
+      });
       assert.deepEqual(await repository.listRetrievableChunks(shopA), []);
+    });
+
+    await t.test("archived source cannot approve an indexed version", async () => {
+      await addIndexedFaq(repository, shopA, "archived-approval", "v1");
+      await repository.archiveSource(shopA, "archived-approval");
+      await assert.rejects(repository.approveVersion(shopA, "archived-approval", "v1", { approvedBy: "staff-1" }),
+        (error: unknown) => error instanceof KnowledgeError && error.code === "APPROVAL_NOT_ELIGIBLE");
+      assert.deepEqual((await repository.listRetrievableChunks(shopA)).filter((row) => row.source.sourceId === "archived-approval"), []);
     });
 
     await t.test("FAQ, PDF page and CSV row citations round-trip exactly", async () => {

@@ -38,6 +38,13 @@ export class InMemoryConversationRepository implements ConversationRepositoryPor
     const id = key(workspace.workspaceId, conversationId);
     const current = this.conversations.get(id);
     if (!current) throw new ConversationError("CONVERSATION_NOT_FOUND");
+    if (event.kind === "staff_reply_delivered") {
+      if (current.lastStaffDeliveryId === event.deliveryId) return current;
+      if (current.version !== expectedVersion) throw new ConversationError("VERSION_CONFLICT");
+      const next = applyConversationEvent(current, event);
+      this.conversations.set(id, next);
+      return next;
+    }
     if (current.version !== expectedVersion) throw new ConversationError("VERSION_CONFLICT");
     const next = applyConversationEvent(current, event);
     this.conversations.set(id, next);

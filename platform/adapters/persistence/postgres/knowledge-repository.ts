@@ -2,6 +2,7 @@ import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.j
 import { KnowledgeError } from "../../../contracts/data/knowledge.js";
 import type {
   KnowledgeChunk,
+  KnowledgeCitation,
   KnowledgeCitationLocator,
   KnowledgeRepositoryPort,
   KnowledgeSource,
@@ -347,12 +348,13 @@ function mapDatabaseError(error: unknown): never {
 export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
   constructor(private readonly database: PostgresDatabasePort) {}
 
-  private async scoped<T>(workspace: TrustedWorkspaceContext, operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
+  private async scoped<T>(workspace: TrustedWorkspaceContext, operation: (query: PostgresQueryPort) => Promise<T>, isolation: "read committed" | "repeatable read" = "read committed"): Promise<T> {
     if (!isRecord(workspace) || typeof workspace.workspaceId !== "string" || !identifierPattern.test(workspace.workspaceId)) {
       throw new KnowledgeError("UNTRUSTED_WORKSPACE_SELECTOR");
     }
     try {
       return await this.database.transaction(async (query) => {
+        if (isolation === "repeatable read") await query.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
         await query.query("SELECT set_config('app.workspace_id', $1, true)", [workspace.workspaceId]);
         return operation(query);
       });
@@ -415,7 +417,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     return this.scoped(workspace, async (query) => {
       const sourceResult = await query.query<SourceRow>(
         `SELECT workspace_id, source_id, kind, title, status, created_at FROM knowledge_sources
-         WHERE workspace_id = $1 AND source_id = $2`,
+         WHERE workspace_id = $1 AND source_id = $2 FOR UPDATE`,
         [workspace.workspaceId, safeVersion.sourceId],
       );
       const source = sourceResult.rows[0];
@@ -511,6 +513,14 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     }
     return this.scoped(workspace, async (query) => {
       const approvedAt = input.approvedAt ?? new Date().toISOString();
+      const sourceResult = await query.query<SourceRow>(
+        `SELECT workspace_id, source_id, kind, title, status, created_at FROM knowledge_sources
+         WHERE workspace_id = $1 AND source_id = $2 FOR UPDATE`,
+        [workspace.workspaceId, sourceId],
+      );
+      const source = sourceResult.rows[0];
+      if (!source) throw new KnowledgeError("SOURCE_NOT_FOUND");
+      if (source.status !== "active") throw new KnowledgeError("APPROVAL_NOT_ELIGIBLE");
       const updated = await query.query<VersionRow>(
         `UPDATE knowledge_versions AS version SET status = 'approved', approved_at = $4, approved_by = $5
          WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 AND status = 'indexed'
@@ -557,6 +567,48 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     });
   }
 
+  async isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Promise<boolean> {
+    if (citation.workspaceId !== workspace.workspaceId) return false;
+    return this.scoped(workspace, (query) => this.isCurrentCitationIn(query, workspace, citation));
+  }
+
+  async areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Promise<boolean> {
+    if (citations.length === 0 || citations.some((citation) => citation.workspaceId !== workspace.workspaceId)) return false;
+    return this.scoped(workspace, async (query) => {
+      for (const citation of citations) {
+        if (!await this.isCurrentCitationIn(query, workspace, citation)) return false;
+      }
+      return true;
+    }, "repeatable read");
+  }
+
+  private async isCurrentCitationIn(query: PostgresQueryPort, workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Promise<boolean> {
+    const locator = citation.locator;
+    let position: number | null = null;
+    if (locator.kind === "page") position = locator.page;
+    else if (locator.kind === "row") position = locator.row;
+    const chunkIndex = locator.kind === "span" || locator.kind === "chunk"
+      ? locator.chunkIndex
+      : locator.chunkIndex ?? 0;
+    const start = locator.kind === "span" ? locator.start : null;
+    const end = locator.kind === "span" ? locator.end : null;
+    const result = await query.query<PostgresRow>(
+        `SELECT 1 AS current
+         FROM knowledge_sources AS source
+         JOIN knowledge_versions AS version ON version.workspace_id = source.workspace_id AND version.source_id = source.source_id
+         JOIN knowledge_chunks AS chunk ON chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
+           AND chunk.version_id = version.version_id
+         WHERE source.workspace_id = $1 AND source.source_id = $2 AND source.status = 'active'
+           AND version.version_id = $3 AND version.status = 'approved' AND chunk.chunk_id = $4
+           AND chunk.locator_kind = $5 AND chunk.locator_chunk_index = $6
+           AND ($5 <> 'span' OR (chunk.start_offset = $7 AND chunk.end_offset = $8))
+           AND chunk.locator_position IS NOT DISTINCT FROM $9`,
+        [workspace.workspaceId, citation.sourceId, citation.sourceVersionId, citation.chunkId,
+          locator.kind, chunkIndex, start, end, position],
+    );
+    return result.rows.length === 1;
+  }
+
   async listRetrievableChunks(workspace: TrustedWorkspaceContext): Promise<readonly Readonly<{
     source: KnowledgeSource;
     version: KnowledgeVersion;
@@ -581,8 +633,10 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       );
       const chunksByVersion = new Map<string, readonly KnowledgeChunk[]>();
       const rowsByVersion = new Map<string, RetrievableRow[]>();
+      const sourcesByVersion = new Map<string, KnowledgeSource>();
+      const versionsById = new Map<string, KnowledgeVersion>();
       for (const row of result.rows) {
-        const key = `${row.workspace_id}\u0000${row.source_id}\u0000${row.version_id}`;
+        const key = `${row.workspace_id}|${row.source_id}|${row.version_id}`;
         const rows = rowsByVersion.get(key) ?? [];
         rows.push(row);
         rowsByVersion.set(key, rows);
@@ -596,17 +650,22 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
         } as ChunkRow))));
       }
       return Object.freeze(result.rows.map((row) => {
-        const source = mapSource({
-          workspace_id: row.workspace_id, source_id: row.source_id, kind: row.source_kind,
-          title: row.source_title, status: row.source_status, created_at: row.source_created_at,
-        } as SourceRow);
-        const version = mapVersion({
-          workspace_id: row.workspace_id, source_id: row.source_id, version_id: row.version_id,
-          kind: row.version_kind, title: row.version_title, content: row.content,
-          status: row.version_status, created_at: row.version_created_at, approved_at: row.approved_at,
-          approved_by: row.approved_by, revoked_at: row.revoked_at, revoked_by: row.revoked_by,
-          revocation_reason: row.revocation_reason,
-        } as VersionRow, chunksByVersion.get(`${row.workspace_id}\u0000${row.source_id}\u0000${row.version_id}`) ?? []);
+        const key = `${row.workspace_id}|${row.source_id}|${row.version_id}`;
+        let source = sourcesByVersion.get(key);
+        if (!source) {
+          source = mapSource({ workspace_id: row.workspace_id, source_id: row.source_id, kind: row.source_kind,
+            title: row.source_title, status: row.source_status, created_at: row.source_created_at } as SourceRow);
+          sourcesByVersion.set(key, source);
+        }
+        let version = versionsById.get(key);
+        if (!version) {
+          version = mapVersion({ workspace_id: row.workspace_id, source_id: row.source_id, version_id: row.version_id,
+            kind: row.version_kind, title: row.version_title, content: row.content, status: row.version_status,
+            created_at: row.version_created_at, approved_at: row.approved_at, approved_by: row.approved_by,
+            revoked_at: row.revoked_at, revoked_by: row.revoked_by, revocation_reason: row.revocation_reason
+          } as VersionRow, chunksByVersion.get(key) ?? []);
+          versionsById.set(key, version);
+        }
         const chunk = mapChunk({
           workspace_id: row.workspace_id, source_id: row.source_id, version_id: row.version_id,
           chunk_id: row.chunk_id, chunk_index: row.chunk_index, text: row.text, locator_kind: row.locator_kind,

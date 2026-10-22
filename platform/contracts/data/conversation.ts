@@ -21,7 +21,7 @@ export type ConversationEvent =
   | Readonly<{ kind: "staff_reply_delivered"; staffId: string; deliveryId: string; occurredAt: string }>
   | Readonly<{ kind: "handoff_released"; staffId: string; occurredAt: string }>;
 
-/** append must atomically compare expectedVersion and persist the state transition. */
+/** append atomically compares expectedVersion and persists the state transition. Adapters may deduplicate a repeated most-recent staff delivery ID; durable replay protection requires an adapter-owned unique delivery ledger. */
 export interface ConversationRepositoryPort {
   create(workspace: TrustedWorkspaceContext, conversationId: string, now?: string): Promise<ConversationSnapshot>;
   load(workspace: TrustedWorkspaceContext, conversationId: string): Promise<ConversationSnapshot | null>;

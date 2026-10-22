@@ -37,8 +37,13 @@ function harness(options: {
   mutateWorkspaceDuringRetrieval?: boolean;
   changingConversationGetter?: boolean;
   changingEvidenceGetter?: boolean;
+  freshnessFails?: boolean;
+  malformedFreshness?: boolean;
+  staleEvidence?: boolean;
+  takeoverAndReleaseAfterGeneration?: boolean;
 } = {}) {
   const calls = { assessment: 0, generation: 0, handoff: [] as string[] };
+  const freshnessCalls: Array<{ workspace: TrustedWorkspaceContext; citations: readonly KnowledgeRetrievalHit["citation"][] }> = [];
   let conversationLoads = 0;
   const conversations = {
     async load(receivedWorkspace: TrustedWorkspaceContext, conversationId: string) {
@@ -49,7 +54,7 @@ function harness(options: {
       const snapshot = {
         workspaceId: "shop-1",
         conversationId: "conversation-1",
-        version: options.pauseAfterGeneration && conversationLoads > 1 ? 2 : 1,
+        version: options.pauseAfterGeneration && conversationLoads > 1 ? 2 : options.takeoverAndReleaseAfterGeneration && conversationLoads > 1 ? 3 : 1,
         createdAt: "2026-10-16T00:00:00.000Z",
         updatedAt: "2026-10-16T00:00:00.000Z",
       } as Record<string, unknown>;
@@ -79,6 +84,14 @@ function harness(options: {
       return options.result ?? { kind: "evidence", hits: [hit] };
     },
   };
+  const evidenceFreshness = {
+    async areCurrentAndApproved(receivedWorkspace: TrustedWorkspaceContext, citations: readonly KnowledgeRetrievalHit["citation"][]) {
+      freshnessCalls.push({ workspace: receivedWorkspace, citations });
+      if (options.freshnessFails) throw new Error("private freshness error");
+      if (options.malformedFreshness) return { ok: false } as never;
+      return !options.staleEvidence;
+    },
+  };
   const answerability: AnswerabilityPort = {
     async assess(input) {
       assert.equal(input.workspaceId, "shop-1");
@@ -103,11 +116,11 @@ function harness(options: {
       if (options.handoffFails) throw new Error("private handoff detail");
     },
   };
-  return { engine: new SupportOrchestrator({ conversations, retrieval, answerability, answer, handoff }), calls };
+  return { engine: new SupportOrchestrator({ conversations, retrieval, evidenceFreshness, answerability, answer, handoff }), calls, freshnessCalls };
 }
 
 test("returns only a cited answer mapped from opaque evidence references", async () => {
-  const { engine, calls } = harness();
+  const { engine, calls, freshnessCalls } = harness();
   const result = await engine.respond({ workspace, conversationId: "conversation-1", query: "ส่งของกี่วัน" });
   assert.equal(result.kind, "answer");
   if (result.kind !== "answer") return;
@@ -115,6 +128,9 @@ test("returns only a cited answer mapped from opaque evidence references", async
   assert.deepEqual(result.citations, [hit.citation]);
   assert.equal(result.conversationVersion, 1);
   assert.deepEqual(calls, { assessment: 1, generation: 1, handoff: [] });
+  assert.equal(freshnessCalls.length, 1);
+  assert.deepEqual(freshnessCalls[0]!.workspace, workspace);
+  assert.deepEqual(freshnessCalls[0]!.citations, [hit.citation]);
 });
 
 test("no approved evidence requests handoff without invoking assessment or model", async () => {
@@ -202,10 +218,45 @@ test("retrieval and handoff failures are surfaced without leaking adapter errors
 
 test("invalid request is rejected before any port is called", async () => {
   const { engine, calls } = harness();
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(5_001) }), { kind: "invalid_request" });
   assert.deepEqual(await engine.respond({ workspace, conversationId: "bad id", query: "ถาม" }), { kind: "invalid_request" });
   assert.deepEqual(await engine.respond(null as never), { kind: "invalid_request" });
   assert.deepEqual(await engine.respond({ workspace: { workspaceId: 1 } as never, conversationId: "conversation-1", query: "ถาม" }), { kind: "invalid_request" });
   assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
+});
+
+test("over-retrieval-limit customer messages hand off instead of being silently rejected", async () => {
+  const { engine, calls } = harness();
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(501) }), {
+    kind: "handoff_requested", reason: "QUERY_TOO_LONG",
+  });
+  assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: ["QUERY_TOO_LONG"] });
+});
+
+test("support query accepts the 500-character retrieval boundary and routes the 5000-character ceiling", async () => {
+  const accepted = harness();
+  assert.equal((await accepted.engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(500) })).kind, "answer");
+  const maximum = harness();
+  assert.deepEqual(await maximum.engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(5_000) }), {
+    kind: "handoff_requested", reason: "QUERY_TOO_LONG",
+  });
+});
+
+test("freshness revalidates every chunk shown to the model, including uncited evidence", async () => {
+  const secondHit: KnowledgeRetrievalHit = Object.freeze({
+    ...hit,
+    sourceId: "faq-returns",
+    versionId: "v2",
+    citation: Object.freeze({ ...hit.citation, sourceId: "faq-returns", sourceVersionId: "v2", chunkId: "chunk-1" }),
+  });
+  const { engine, freshnessCalls } = harness({
+    result: { kind: "evidence", hits: [hit, secondHit] },
+    staleEvidence: true,
+  });
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+    kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
+  });
+  assert.deepEqual(freshnessCalls[0]!.citations, [hit.citation, secondHit.citation]);
 });
 
 test("paused conversations stop before retrieval and a handoff during generation suppresses the answer", async (t) => {
@@ -213,6 +264,34 @@ test("paused conversations stop before retrieval and a handoff during generation
     const { engine, calls } = harness({ conversationStatus: "human_active" });
     assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
     assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
+  });
+  await t.test("handoff starts and is released while generating", async () => {
+    const { engine } = harness({ takeoverAndReleaseAfterGeneration: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_changed" });
+  });
+  await t.test("knowledge is revoked during generation", async () => {
+    const { engine, calls } = harness({ staleEvidence: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+      kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
+    });
+    assert.deepEqual(calls.handoff, ["KNOWLEDGE_CHANGED"]);
+  });
+  await t.test("freshness check failure fails closed", async () => {
+    const { engine } = harness({ freshnessFails: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+      kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
+    });
+  });
+  await t.test("conversation takeover before a failure handoff returns paused without alerting an already-owned conversation", async () => {
+    const { engine, calls } = harness({ freshnessFails: true, pauseAfterGeneration: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
+    assert.deepEqual(calls.handoff, []);
+  });
+  await t.test("malformed freshness result fails closed", async () => {
+    const { engine } = harness({ malformedFreshness: true });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+      kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
+    });
   });
   await t.test("handoff starts while generating", async () => {
     const { engine } = harness({ pauseAfterGeneration: true });
