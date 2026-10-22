@@ -1,0 +1,684 @@
+
+> wstera-ai-customer-platform@0.1.0 evaluate:knowledge
+> npm run build && node dist/modules/knowledge/evaluation/run-baseline.js
+
+
+> wstera-ai-customer-platform@0.1.0 build
+> tsc
+
+{
+  "k": 3,
+  "providerCalls": 0,
+  "estimatedProviderCostUsd": 0,
+  "summary": {
+    "k": 3,
+    "queryCount": 30,
+    "answerableQueryCount": 27,
+    "unanswerableQueryCount": 2,
+    "policyAbstainQueryCount": 1,
+    "recallAtK": 1,
+    "precisionAtK": 0.3456790123456789,
+    "citationPrecision": 1,
+    "abstentionAccuracy": 1,
+    "latencyP50Ms": 0.15218699999999963,
+    "latencyP95Ms": 0.39687499999999787
+  },
+  "categorySummaries": {
+    "faq": {
+      "k": 3,
+      "queryCount": 8,
+      "answerableQueryCount": 8,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.3333333333333333,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.20977099999999993,
+      "latencyP95Ms": 4.1857500000000005
+    },
+    "thai-typo": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 1,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.3333333333333333,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.14054199999999994,
+      "latencyP95Ms": 0.14054199999999994
+    },
+    "pdf": {
+      "k": 3,
+      "queryCount": 8,
+      "answerableQueryCount": 8,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.3333333333333333,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.1468120000000006,
+      "latencyP95Ms": 0.20545800000000014
+    },
+    "csv-sku": {
+      "k": 3,
+      "queryCount": 7,
+      "answerableQueryCount": 7,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.3333333333333333,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.1525829999999999,
+      "latencyP95Ms": 0.28229100000000074
+    },
+    "sku-punctuation-variant": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 1,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.3333333333333333,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.14412499999999895,
+      "latencyP95Ms": 0.14412499999999895
+    },
+    "contradiction": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 1,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.6666666666666666,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.10549999999999926,
+      "latencyP95Ms": 0.10549999999999926
+    },
+    "revoked": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 0,
+      "unanswerableQueryCount": 1,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": null,
+      "precisionAtK": null,
+      "citationPrecision": null,
+      "abstentionAccuracy": 1,
+      "latencyP50Ms": 0.10012499999999847,
+      "latencyP95Ms": 0.10012499999999847
+    },
+    "no-answer": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 0,
+      "unanswerableQueryCount": 1,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": null,
+      "precisionAtK": null,
+      "citationPrecision": null,
+      "abstentionAccuracy": 1,
+      "latencyP50Ms": 0.17624999999999957,
+      "latencyP95Ms": 0.17624999999999957
+    },
+    "forbidden": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 0,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 1,
+      "recallAtK": null,
+      "precisionAtK": null,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.12191699999999983,
+      "latencyP95Ms": 0.12191699999999983
+    },
+    "prompt-injection-fixture": {
+      "k": 3,
+      "queryCount": 1,
+      "answerableQueryCount": 1,
+      "unanswerableQueryCount": 0,
+      "policyAbstainQueryCount": 0,
+      "recallAtK": 1,
+      "precisionAtK": 0.3333333333333333,
+      "citationPrecision": 1,
+      "abstentionAccuracy": null,
+      "latencyP50Ms": 0.10687499999999872,
+      "latencyP95Ms": 0.10687499999999872
+    }
+  },
+  "cases": [
+    {
+      "id": "faq-01",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-shipping@v1#faq-shipping:v1:0#span:0:0:38"
+      ],
+      "returnedKeys": [
+        "faq-shipping@v1#faq-shipping:v1:0#span:0:0:38",
+        "faq-install@v1#faq-install:v1:0#span:0:0:36",
+        "csv-delta5@v1#csv-delta5:v1:0#row:12:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 4.1857500000000005
+    },
+    {
+      "id": "faq-02",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-delivery@v1#faq-delivery:v1:0#span:0:0:29"
+      ],
+      "returnedKeys": [
+        "faq-delivery@v1#faq-delivery:v1:0#span:0:0:29",
+        "faq-hours@v1#faq-hours:v1:0#span:0:0:34",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.39687499999999787
+    },
+    {
+      "id": "faq-03",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-return@v1#faq-return:v1:0#span:0:0:43"
+      ],
+      "returnedKeys": [
+        "faq-return@v1#faq-return:v1:0#span:0:0:43",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40",
+        "faq-hours@v1#faq-hours:v1:0#span:0:0:34"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.24774999999999991
+    },
+    {
+      "id": "faq-04",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-hours@v1#faq-hours:v1:0#span:0:0:34"
+      ],
+      "returnedKeys": [
+        "faq-hours@v1#faq-hours:v1:0#span:0:0:34",
+        "faq-address@v1#faq-address:v1:0#span:0:0:37",
+        "pdf-brake@v1#pdf-brake:v1:1#page:5:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.16945799999999878
+    },
+    {
+      "id": "faq-05",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40"
+      ],
+      "returnedKeys": [
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40",
+        "csv-echo7@v1#csv-echo7:v1:0#row:14:0",
+        "faq-return@v1#faq-return:v1:0#span:0:0:43"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.3932500000000019
+    },
+    {
+      "id": "faq-06",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-install@v1#faq-install:v1:0#span:0:0:36"
+      ],
+      "returnedKeys": [
+        "faq-install@v1#faq-install:v1:0#span:0:0:36",
+        "faq-address@v1#faq-address:v1:0#span:0:0:37",
+        "faq-delivery@v1#faq-delivery:v1:0#span:0:0:29"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.17179199999999994
+    },
+    {
+      "id": "faq-07",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-payment@v1#faq-payment:v1:0#span:0:0:37"
+      ],
+      "returnedKeys": [
+        "faq-payment@v1#faq-payment:v1:0#span:0:0:37",
+        "pdf-oil@v1#pdf-oil:v1:0#page:8:0",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.15245799999999932
+    },
+    {
+      "id": "faq-08",
+      "category": "faq",
+      "expectedKeys": [
+        "faq-address@v1#faq-address:v1:0#span:0:0:37"
+      ],
+      "returnedKeys": [
+        "faq-address@v1#faq-address:v1:0#span:0:0:37",
+        "faq-hours@v1#faq-hours:v1:0#span:0:0:34",
+        "pdf-fuse@v1#pdf-fuse:v1:0#page:15:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.13195799999999736
+    },
+    {
+      "id": "faq-09",
+      "category": "thai-typo",
+      "expectedKeys": [
+        "faq-delivery@v1#faq-delivery:v1:0#span:0:0:29"
+      ],
+      "returnedKeys": [
+        "faq-delivery@v1#faq-delivery:v1:0#span:0:0:29",
+        "csv-foxtrot3@v1#csv-foxtrot3:v1:0#row:18:0",
+        "faq-hours@v1#faq-hours:v1:0#span:0:0:34"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.14054199999999994
+    },
+    {
+      "id": "pdf-01",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-brake@v1#pdf-brake:v1:0#page:4:0"
+      ],
+      "returnedKeys": [
+        "pdf-brake@v1#pdf-brake:v1:0#page:4:0",
+        "pdf-brake@v1#pdf-brake:v1:1#page:5:0",
+        "csv-golf11@v1#csv-golf11:v1:0#row:23:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.18091599999999985
+    },
+    {
+      "id": "pdf-02",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-oil@v1#pdf-oil:v1:0#page:8:0"
+      ],
+      "returnedKeys": [
+        "pdf-oil@v1#pdf-oil:v1:0#page:8:0",
+        "pdf-service@v1#pdf-service:v1:0#page:30:0",
+        "csv-delta5@v1#csv-delta5:v1:0#row:12:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.15191599999999994
+    },
+    {
+      "id": "pdf-03",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-tire@v1#pdf-tire:v1:0#page:11:0"
+      ],
+      "returnedKeys": [
+        "pdf-tire@v1#pdf-tire:v1:0#page:11:0",
+        "pdf-battery@v1#pdf-battery:v1:0#page:18:0",
+        "pdf-brake@v1#pdf-brake:v1:0#page:4:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.1401249999999976
+    },
+    {
+      "id": "pdf-04",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-fuse@v1#pdf-fuse:v1:0#page:15:0"
+      ],
+      "returnedKeys": [
+        "pdf-fuse@v1#pdf-fuse:v1:0#page:15:0",
+        "faq-address@v1#faq-address:v1:0#span:0:0:37",
+        "csv-zx650@v1#csv-zx650:v1:1#row:3:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.14162500000000122
+    },
+    {
+      "id": "pdf-05",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-battery@v1#pdf-battery:v1:0#page:18:0"
+      ],
+      "returnedKeys": [
+        "pdf-battery@v1#pdf-battery:v1:0#page:18:0",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40",
+        "pdf-brake@v1#pdf-brake:v1:1#page:5:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.20545800000000014
+    },
+    {
+      "id": "pdf-06",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-chain@v1#pdf-chain:v1:0#page:21:0"
+      ],
+      "returnedKeys": [
+        "pdf-chain@v1#pdf-chain:v1:0#page:21:0",
+        "faq-payment@v1#faq-payment:v1:0#span:0:0:37",
+        "faq-shipping@v1#faq-shipping:v1:0#span:0:0:38"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.13437499999999858
+    },
+    {
+      "id": "pdf-07",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-weight@v1#pdf-weight:v1:0#page:25:0"
+      ],
+      "returnedKeys": [
+        "pdf-weight@v1#pdf-weight:v1:0#page:25:0",
+        "csv-delta5@v1#csv-delta5:v1:0#row:12:0",
+        "pdf-service@v1#pdf-service:v1:0#page:30:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.14170800000000128
+    },
+    {
+      "id": "pdf-08",
+      "category": "pdf",
+      "expectedKeys": [
+        "pdf-service@v1#pdf-service:v1:0#page:30:0"
+      ],
+      "returnedKeys": [
+        "pdf-service@v1#pdf-service:v1:0#page:30:0",
+        "pdf-oil@v1#pdf-oil:v1:0#page:8:0",
+        "faq-return@v1#faq-return:v1:0#span:0:0:43"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.1623340000000013
+    },
+    {
+      "id": "csv-01",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-zx650@v1#csv-zx650:v1:0#row:2:0"
+      ],
+      "returnedKeys": [
+        "csv-zx650@v1#csv-zx650:v1:0#row:2:0",
+        "csv-zx650@v1#csv-zx650:v1:1#row:3:0",
+        "csv-bravo9@v1#csv-bravo9:v1:0#row:6:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.2024589999999975
+    },
+    {
+      "id": "csv-02",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-bravo9@v1#csv-bravo9:v1:0#row:6:0"
+      ],
+      "returnedKeys": [
+        "csv-bravo9@v1#csv-bravo9:v1:0#row:6:0",
+        "pdf-brake@v1#pdf-brake:v1:1#page:5:0",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.140625
+    },
+    {
+      "id": "csv-03",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-coral22@v1#csv-coral22:v1:0#row:9:0"
+      ],
+      "returnedKeys": [
+        "csv-coral22@v1#csv-coral22:v1:0#row:9:0",
+        "faq-payment@v1#faq-payment:v1:0#span:0:0:37",
+        "csv-foxtrot3@v1#csv-foxtrot3:v1:0#row:18:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.1450839999999971
+    },
+    {
+      "id": "csv-04",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-delta5@v1#csv-delta5:v1:0#row:12:0"
+      ],
+      "returnedKeys": [
+        "csv-delta5@v1#csv-delta5:v1:0#row:12:0",
+        "pdf-weight@v1#pdf-weight:v1:0#page:25:0",
+        "faq-address@v1#faq-address:v1:0#span:0:0:37"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.1595829999999978
+    },
+    {
+      "id": "csv-05",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-echo7@v1#csv-echo7:v1:0#row:14:0"
+      ],
+      "returnedKeys": [
+        "csv-echo7@v1#csv-echo7:v1:0#row:14:0",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40",
+        "faq-return@v1#faq-return:v1:0#span:0:0:43"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.1525829999999999
+    },
+    {
+      "id": "csv-06",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-foxtrot3@v1#csv-foxtrot3:v1:0#row:18:0"
+      ],
+      "returnedKeys": [
+        "csv-foxtrot3@v1#csv-foxtrot3:v1:0#row:18:0",
+        "faq-delivery@v1#faq-delivery:v1:0#span:0:0:29",
+        "faq-warranty@v1#faq-warranty:v1:0#span:0:0:40"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.28229100000000074
+    },
+    {
+      "id": "csv-07",
+      "category": "csv-sku",
+      "expectedKeys": [
+        "csv-golf11@v1#csv-golf11:v1:0#row:23:0"
+      ],
+      "returnedKeys": [
+        "csv-golf11@v1#csv-golf11:v1:0#row:23:0",
+        "pdf-weight@v1#pdf-weight:v1:0#page:25:0",
+        "pdf-brake@v1#pdf-brake:v1:1#page:5:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.1149579999999979
+    },
+    {
+      "id": "csv-08",
+      "category": "sku-punctuation-variant",
+      "expectedKeys": [
+        "csv-zx650@v1#csv-zx650:v1:0#row:2:0"
+      ],
+      "returnedKeys": [
+        "csv-zx650@v1#csv-zx650:v1:0#row:2:0",
+        "csv-zx650@v1#csv-zx650:v1:1#row:3:0"
+      ],
+      "citationValidity": [
+        true,
+        true
+      ],
+      "latencyMs": 0.14412499999999895
+    },
+    {
+      "id": "conflict-01",
+      "category": "contradiction",
+      "expectedKeys": [
+        "faq-conflict-a@v1#faq-conflict-a:v1:0#span:0:0:27",
+        "faq-conflict-b@v1#faq-conflict-b:v1:0#span:0:0:29"
+      ],
+      "returnedKeys": [
+        "faq-conflict-a@v1#faq-conflict-a:v1:0#span:0:0:27",
+        "faq-conflict-b@v1#faq-conflict-b:v1:0#span:0:0:29"
+      ],
+      "citationValidity": [
+        true,
+        true
+      ],
+      "latencyMs": 0.10549999999999926
+    },
+    {
+      "id": "revoked-01",
+      "category": "revoked",
+      "expectedKeys": [],
+      "returnedKeys": [],
+      "citationValidity": [],
+      "latencyMs": 0.10012499999999847
+    },
+    {
+      "id": "unknown-01",
+      "category": "no-answer",
+      "expectedKeys": [],
+      "returnedKeys": [],
+      "citationValidity": [],
+      "latencyMs": 0.17624999999999957
+    },
+    {
+      "id": "forbidden-01",
+      "category": "forbidden",
+      "expectedKeys": [],
+      "returnedKeys": [
+        "pdf-brake@v1#pdf-brake:v1:1#page:5:0",
+        "faq-return@v1#faq-return:v1:0#span:0:0:43",
+        "csv-bravo9@v1#csv-bravo9:v1:0#row:6:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.12191699999999983
+    },
+    {
+      "id": "injection-01",
+      "category": "prompt-injection-fixture",
+      "expectedKeys": [
+        "faq-injection@v1#faq-injection:v1:0#span:0:0:68"
+      ],
+      "returnedKeys": [
+        "faq-injection@v1#faq-injection:v1:0#span:0:0:68",
+        "csv-bravo9@v1#csv-bravo9:v1:0#row:6:0",
+        "csv-coral22@v1#csv-coral22:v1:0#row:9:0"
+      ],
+      "citationValidity": [
+        true,
+        true,
+        true
+      ],
+      "latencyMs": 0.10687499999999872
+    }
+  ],
+  "limitations": [
+    "Synthetic in-memory corpus only; does not estimate production data quality or database performance.",
+    "No language model is called, so answer grounding, generated-answer bad rate, provider latency, and AI cost are not measured.",
+    "Estimated external provider spend for this run is USD 0 because the harness makes zero provider calls; local compute and future production cost are not measured.",
+    "PDF and CSV cases use already-extracted synthetic segments; parser behavior is tested separately by Task 003.",
+    "This lexical baseline has no semantic embeddings, Thai tokenizer, reranker, or conflict answerability policy.",
+    "Forbidden-topic behavior is a policy-abstention case and is not measured by retrieval abstention accuracy; the policy decision is unmeasured.",
+    "Prompt-injection case checks retrieval/citation only; it does not establish model prompt-injection resistance."
+  ]
+}

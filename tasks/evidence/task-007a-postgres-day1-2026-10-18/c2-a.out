@@ -1,0 +1,13 @@
+BEGIN
+ session_a_pid |   current_user    
+---------------+-------------------
+         52160 | knowledge_runtime
+(1 row)
+
+ set_config 
+------------
+ ws_a
+(1 row)
+
+UPDATE 1
+COMMIT

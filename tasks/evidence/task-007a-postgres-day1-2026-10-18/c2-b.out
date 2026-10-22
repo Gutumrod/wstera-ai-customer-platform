@@ -1,0 +1,18 @@
+BEGIN
+ session_b_pid |   current_user    
+---------------+-------------------
+         52156 | knowledge_runtime
+(1 row)
+
+ set_config 
+------------
+ ws_a
+(1 row)
+
+INSERT 0 1
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT

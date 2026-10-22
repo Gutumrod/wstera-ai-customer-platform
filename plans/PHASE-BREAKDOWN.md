@@ -4,7 +4,7 @@
 
 ## Phase 0 — Foundation and reusable boundaries
 
-**0A (Task 001 / PR #2 open):** Harden signed LINE boundary and tests, verify live-protocol assumptions, event claim/recovery contract. Independent review flagged M1/M2; no merge until resolved or owner explicitly accepts risk.
+**0A (Task 001 / PR #2 merged):** Foundation merged at `edcf503`; signed LINE boundaries remain a prototype, without live LINE or durable delivery proof.
 **0B (this docs PR):** Locked master brief, folder responsibilities, port/adapters contracts, phased delivery. No production code moves.
 **0C (after 0A/0B):** Incremental module-boundary refactor from `platform/src/` to target directories, maintain same behavior + tests; verify imports, port typing and no duplicate engines.
 

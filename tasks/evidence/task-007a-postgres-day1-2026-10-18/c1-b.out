@@ -1,0 +1,14 @@
+BEGIN
+ session_b_pid |   current_user    
+---------------+-------------------
+         52032 | knowledge_runtime
+(1 row)
+
+ set_config 
+------------
+ ws_a
+(1 row)
+
+psql:/tmp/wstera-task007a-evidence/c1-b.sql:4: ERROR:  23514: knowledge chunks can only be added before approval
+CONTEXT:  PL/pgSQL function guard_knowledge_chunk_insert() line 16 at RAISE
+LOCATION:  exec_stmt_raise, pl_exec.c:3923

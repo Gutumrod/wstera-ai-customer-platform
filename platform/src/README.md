@@ -1,15 +1,15 @@
 # Existing TypeScript Boundary Scaffold (Temporary)
 
-This is the current executable TypeScript source tree (`core/`, `line/`, `policy/` and tests), created before the feature-oriented module structure was defined.
+This is the remaining executable TypeScript source tree (`core/`, `line/`, `policy/` and tests), created before the feature-oriented module structure was defined. The trusted workspace context moved to `platform/modules/tenancy/workspace.ts` in Phase 0C; `src/core/workspace.ts` remains a compatibility export.
 
-**Do not move or duplicate these files during the active Task 001 / PR #2 security remediation.** They remain the executable baseline until a separate, explicitly approved refactor PR migrates each use case behind a port and preserves the existing public exports and test results.
+Do not mass-move or duplicate the remaining files. Migrate one use case at a time through a separately scoped PR that preserves public exports and test behavior.
 
 Migration sequence:
-1. Close Task 001 and accept actual GitHub test evidence.
-2. Introduce contract types in `platform/contracts/`, unit tests first.
+1. Read the active task and its accepted design/contract.
+2. Introduce or extend contract types with regression tests.
 3. Move one boundary at a time to `platform/modules/` or `platform/adapters/`.
-4. Keep compatibility re-exports in `platform/src/index.ts` until the new imports are stable.
-5. Run clean build, security tests, negative tenant tests, no-dependency-cycle checks.
-6. Delete old files ONLY after owner-reviewed evidence and explicit migration PR.
+4. Keep compatibility exports until new imports are stable.
+5. Run build, security tests, negative tenant tests, and dependency-boundary checks.
+6. Delete old files only after reviewable migration evidence and an explicit scoped PR.
 
 See `BRIEF.md`, `architecture/REPOSITORY-STRUCTURE.md` and `architecture/PORTS-AND-ADAPTERS.md` from repository root.

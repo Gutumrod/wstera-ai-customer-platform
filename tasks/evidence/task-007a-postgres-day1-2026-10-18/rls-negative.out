@@ -1,0 +1,50 @@
+BEGIN
+ backend_pid |   current_user    | rolsuper | rolbypassrls 
+-------------+-------------------+----------+--------------
+       52194 | knowledge_runtime | f        | f
+(1 row)
+
+ trusted_workspace 
+-------------------
+ ws_a
+(1 row)
+
+ visible_b_sources 
+-------------------
+                 0
+(1 row)
+
+ visible_b_versions 
+--------------------
+                  0
+(1 row)
+
+ visible_b_chunks 
+------------------
+                0
+(1 row)
+
+ source_id 
+-----------
+(0 rows)
+
+UPDATE 0
+ version_id 
+------------
+(0 rows)
+
+UPDATE 0
+SAVEPOINT
+psql:/tmp/wstera-task007a-evidence/rls-negative.sql:10: ERROR:  42501: new row violates row-level security policy for table "knowledge_sources"
+LOCATION:  ExecWithCheckOptions, execMain.c:2340
+ROLLBACK
+SAVEPOINT
+psql:/tmp/wstera-task007a-evidence/rls-negative.sql:13: ERROR:  42501: new row violates row-level security policy for table "knowledge_versions"
+LOCATION:  ExecWithCheckOptions, execMain.c:2340
+ROLLBACK
+SAVEPOINT
+psql:/tmp/wstera-task007a-evidence/rls-negative.sql:16: ERROR:  23514: knowledge chunks can only be added before approval
+CONTEXT:  PL/pgSQL function guard_knowledge_chunk_insert() line 16 at RAISE
+LOCATION:  exec_stmt_raise, pl_exec.c:3923
+ROLLBACK
+ROLLBACK

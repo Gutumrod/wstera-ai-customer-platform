@@ -1,0 +1,76 @@
+TAP version 13
+# Subtest: PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators
+    # Subtest: workspace RLS is default-deny and transaction-local scope does not leak
+    ok 1 - workspace RLS is default-deny and transaction-local scope does not leak
+      ---
+      duration_ms: 8.197375
+      type: 'test'
+      ...
+    # Subtest: approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility
+    ok 2 - approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility
+      ---
+      duration_ms: 20.144209
+      type: 'test'
+      ...
+    # Subtest: FAQ, PDF page and CSV row citations round-trip exactly
+    ok 3 - FAQ, PDF page and CSV row citations round-trip exactly
+      ---
+      duration_ms: 6.951042
+      type: 'test'
+      ...
+    # Subtest: failed chunk persistence rolls back its version row
+    ok 4 - failed chunk persistence rolls back its version row
+      ---
+      duration_ms: 2.189625
+      type: 'test'
+      ...
+    # Subtest: invalid tenant-bound drafts fail before touching SQL
+    ok 5 - invalid tenant-bound drafts fail before touching SQL
+      ---
+      duration_ms: 0.5705
+      type: 'test'
+      ...
+    # Subtest: rejects noncanonical chunk segmentation for FAQ and imported sources
+    ok 6 - rejects noncanonical chunk segmentation for FAQ and imported sources
+      ---
+      duration_ms: 2.03775
+      type: 'test'
+      ...
+    # Subtest: persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks
+    not ok 7 - persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks
+      ---
+      duration_ms: 3.934041
+      type: 'test'
+      location: '/Users/wachirayachankhonkan/.codex/worktrees/pr-consolidation-20261023/wstera-ai-customer-platform/dist/adapters/persistence/postgres/knowledge-repository.test.js:179:17'
+      failureType: 'testCodeFailure'
+      error: 'INVALID_KNOWLEDGE_INPUT'
+      code: 'INVALID_KNOWLEDGE_INPUT'
+      name: 'KnowledgeError'
+      stack: |-
+        snapshotVersionDraft (file:///Users/wachirayachankhonkan/.codex/worktrees/pr-consolidation-20261023/wstera-ai-customer-platform/dist/adapters/persistence/postgres/knowledge-repository.js:157:15)
+        PostgresKnowledgeRepository.createVersion (file:///Users/wachirayachankhonkan/.codex/worktrees/pr-consolidation-20261023/wstera-ai-customer-platform/dist/adapters/persistence/postgres/knowledge-repository.js:322:29)
+        TestContext.<anonymous> (file:///Users/wachirayachankhonkan/.codex/worktrees/pr-consolidation-20261023/wstera-ai-customer-platform/dist/adapters/persistence/postgres/knowledge-repository.test.js:189:48)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///Users/wachirayachankhonkan/.codex/worktrees/pr-consolidation-20261023/wstera-ai-customer-platform/dist/adapters/persistence/postgres/knowledge-repository.test.js:179:9)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    1..7
+not ok 1 - PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators
+  ---
+  duration_ms: 625.81625
+  type: 'test'
+  location: '/Users/wachirayachankhonkan/.codex/worktrees/pr-consolidation-20261023/wstera-ai-customer-platform/dist/adapters/persistence/postgres/knowledge-repository.test.js:59:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 8
+# suites 0
+# pass 6
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 673.722875

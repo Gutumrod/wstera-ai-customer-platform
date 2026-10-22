@@ -47,8 +47,11 @@ HMAC fail-closed, event replay dedupe, workspace ownership enforcement, empty ve
 
 1. [Task 001 — Harden foundation](../tasks/TASK-001-FOUNDATION.md)
 2. [Task 002 — Data and RAG contract](../tasks/TASK-002-RAG-CONTRACT.md)
-3. Task 003 (not yet issued): synthetic fixtures + ingestion, Thai hybrid retrieval evaluation.
-4. Task 004 (not yet issued): Web UI, operator handoff.
-5. Task 005 (not yet issued): real LINE sandbox pilot.
+3. [Task 003 — bounded PDF/CSV document extraction](../tasks/TASK-003-DOCUMENT-INGESTION.md): local parser and source locators. Authenticated upload, persistence, async processing, and approval workflow remain separate implementation work.
+4. [Task 004 — Thai retrieval evaluation baseline](../tasks/TASK-004-THAI-RETRIEVAL-EVALUATION.md): establish synthetic retrieval/citation/abstention metrics before choosing a retrieval stack; no pass threshold until Owner review.
+5. [Task 005 — shared conversation/handoff core](../tasks/TASK-005-CONVERSATION-HANDOFF.md): local state machine and ports; durable persistence and channel delivery remain separate gates.
+6. Task 006A — citation identity validator; Task 006B — provider-neutral response orchestration core; Task 006C — metered OpenAI-compatible model adapter without provider selection or live calls.
+7. Task 007A — PostgreSQL knowledge repository with local PGlite/RLS integration coverage; hosted database/authenticated upload remains pending. Next G1 slices are authenticated upload/approval, real host composition, Web Chat and one-shop integration proof.
+8. Task 008 (not yet issued): real LINE sandbox pilot, after the G1 Web gate.
 
 **Owner is final approval authority.** Do not merge features / deploy without review.

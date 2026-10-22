@@ -1,0 +1,2 @@
+# เก็บรูปแบบผล psql เดิมไว้เป็นหลักฐาน ไม่ตัดช่องว่างท้ายบรรทัด
+tasks/evidence/task-007a-postgres-day1-2026-10-18/*.out -whitespace

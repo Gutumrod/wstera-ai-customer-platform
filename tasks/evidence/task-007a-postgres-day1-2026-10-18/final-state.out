@@ -1,0 +1,28 @@
+    source_id    | version_id |  status  | chunk_count 
+-----------------+------------+----------+-------------
+ race-approve    | v1         | approved |           1
+ race-concurrent | v1         | approved |           1
+ race-concurrent | v2         | indexed  |           1
+ race-insert     | v1         | approved |           1
+(4 rows)
+
+ approved_and_retrievable_versions 
+-----------------------------------
+                                 1
+(1 row)
+
+ source_id | status 
+-----------+--------
+ rls-only  | active
+(1 row)
+
+ version_id | status  
+------------+---------
+ v1         | indexed
+(1 row)
+
+ forged_rows 
+-------------
+           0
+(1 row)
+

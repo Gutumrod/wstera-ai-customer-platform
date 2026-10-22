@@ -1,0 +1,16 @@
+BEGIN
+ session_b_pid |   current_user    
+---------------+-------------------
+         52179 | knowledge_runtime
+(1 row)
+
+ set_config 
+------------
+ ws_a
+(1 row)
+
+psql:/tmp/wstera-task007a-evidence/c3-b.sql:4: ERROR:  23505: duplicate key value violates unique constraint "knowledge_one_approved_version_per_source"
+SCHEMA NAME:  public
+TABLE NAME:  knowledge_versions
+CONSTRAINT NAME:  knowledge_one_approved_version_per_source
+LOCATION:  _bt_check_unique, nbtinsert.c:673
