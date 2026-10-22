@@ -1,13 +1,13 @@
 # Blockers and Owner Gates
 
-Updated: 2026-10-23. Replaces the stale 2026-10-15 queue snapshot.
+Updated: 2026-10-23, after PR #16 merge.
 
 | ID | Gate | Evidence / next action |
 |---|---|---|
-| B-01 | Consolidated review and Owner merge | Former PRs #4–#15 are preserved in one candidate. Fresh local tests do not replace independent code/security review or authorize self-merge. |
-| B-02 | Hosted verification | Original feature-targeted PRs had no Actions runs because CI filtered the target branch. The candidate includes PR #12 and targets `main`; verify its own head check before merge. |
-| B-03 | G1 product integration | No authenticated upload, host auth/pool, live model, Web UI or durable human delivery is demonstrated. Define and approve the next scoped task after candidate acceptance. |
-| B-04 | Quality and spend decisions | Synthetic retrieval is measured; generated-answer grounding, conflict/policy decisions and production cost remain unmeasured. No paid provider is selected. |
-| B-05 | PostgreSQL operational boundary | PGlite tests pass; historical two-session evidence is preserved, not freshly rerun. Runtime role/pool provisioning and arbitrary-SQL custom-GUC threat boundary need host review. |
+| B-01 | Consolidation merge/review | **Cleared for PR #16:** merged as `857b2e5`; final source head `19288ec` passed hosted CI and independent OpenCode review with no blockers in the reviewed delta. This does not certify G1 or production readiness. |
+| B-02 | Hosted CI | **Cleared for PR #16:** `typescript-foundation` passed on reviewed head `19288ec` (run `39840363749`) and merge commit `857b2e5` (run `39840675679`). |
+| B-03 | G1 host and product integration | Open: no authenticated upload host, private source storage, Web Chat composition or durable human-delivery path. Define and approve the next task before implementation. |
+| B-04 | Answer quality and spend | Open: current retrieval metrics are synthetic; generated-answer grounding, conflicting-source policy, live-provider behavior and production cost remain unmeasured. Provider and spend ceiling need Owner approval. |
+| B-05 | PostgreSQL operational boundary | Open: local PGlite tests and historical 2026-10-18 two-session evidence exist; production host pool/role provisioning and trusted-host/custom-GUC threat review remain unverified. |
 
-No green test clears product, merge, production or spending gates by itself. No deployment, hosted migration, customer data or paid API is included.
+No green test clears product, deployment, production-data or spending gates by itself. No hosted migration, customer data or paid API use is authorized by PR #16 merge.

@@ -1,6 +1,6 @@
 # Task 003 — Bounded PDF and CSV extraction (G1-B)
 
-**Status:** Implemented locally on `codex/g1b-document-ingestion-20261015`; stacked on G1-A PR #7. No merge or deployment has occurred.
+**Status (2026-10-23):** Bounded local PDF/CSV extraction from this task was included in PR #16 and is merged on `main` (`857b2e5`). Authenticated upload, private original-file storage and deployed processing remain unimplemented.
 
 ## Goal
 

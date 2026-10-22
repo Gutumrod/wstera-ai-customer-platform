@@ -1,6 +1,6 @@
 # Task 004A — Structured SKU punctuation normalization (G1-C1)
 
-**Status:** Pushed as PR #11 from `codex/g1c1-sku-punctuation-20261016`, stacked on PR #10. Independent local review is complete; hosted review and Owner merge decision remain pending.
+**Status (2026-10-23):** Included in PR #16 and merged on `main` (`857b2e5`). This implements the synthetic SKU normalization slice; it does not establish production retrieval quality.
 
 ## Goal
 

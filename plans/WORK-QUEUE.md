@@ -1,26 +1,22 @@
 # Work Queue
 
-Updated: 2026-10-23. Candidate implementation is distinct from acceptance or release.
+Updated: 2026-10-23. Merged code and product acceptance are tracked separately.
 
 ## Done on main
 
-- Task 001 foundation/security boundary (PR #2), main `edcf503`.
-- Locked product goals and initial modular architecture (PR #3).
+- Task 001 foundation/security boundary (PR #2), retained from the initial baseline.
+- PR #16 consolidated and merged prior PRs #4–#15 at `857b2e5`; former heads remain preserved in Git ancestry.
+- Included slices: Phase 0C tenancy/channel boundary, synthetic knowledge lifecycle and retrieval, bounded local PDF/CSV extraction, retrieval evaluation/SKU normalization, local conversation/handoff core, citation validation, response orchestration, mocked-transport model adapter, and PostgreSQL knowledge persistence with PGlite coverage.
 
-## Consolidated candidate
+## Next planned G1 work
 
-`codex/pr-consolidation-20261023` preserves PRs #4–#15, Task 007A local follow-up, and historical synthetic PostgreSQL evidence. The superseded PR branches remain available; no branch deletion or self-merge is part of cleanup.
-
-| Work | Candidate state | Next gate |
+| Work | Current state | Next evidence needed |
 |---|---|---|
-| Brief, Phase 0C contracts, planning, CI | Included | Independent review and Owner merge |
-| Task 002 / G1-A | Synthetic FAQ lifecycle and retrieval included | Review; authenticated ownership remains separate |
-| Task 003 / G1-B | Bounded PDF/CSV extraction included | Review; authenticated upload/private storage remains separate |
-| Task 004 / G1-C and SKU follow-up | 30-query lexical baseline and unique SKU normalization included | Owner quality thresholds; generated answers remain unmeasured |
-| Task 005 / G1-D | Local handoff state machine included | Durable repository and atomic delivery enforcement |
-| Task 006A/B/C | Citation validator, orchestration and mocked model adapter included | Live-provider/semantic evaluation and durable usage |
-| Task 007A | PostgreSQL adapter and local follow-up included; consolidated candidate currently passes 129 full-suite tests (initial Task 007A evidence remains 112) | Independent candidate review, host role/pool wiring |
+| Authenticated host/bootstrap | Not implemented; runtime/auth architecture still proposed | Owner-approved host runtime, identity/membership model and workspace resolver |
+| Knowledge upload and approval | Domain lifecycle and extractor exist; no host or private file storage | Authenticated upload → validation → version persistence/approval with cross-workspace denial |
+| Web Chat | No app or web channel adapter | Allowed-origin/session binding, shared-engine answer, citation and abuse-limit tests |
+| Durable handoff | Local state/ports only | Persistent staff authorization, durable pause/resume and atomic dispatch/outbox guard |
+| Live model and usage | Adapter tested with mocked transport; no provider selected | Owner-approved provider, data region and budget; durable usage ledger and measured answer quality |
+| G1 acceptance | No one-shop end-to-end run | Browser trace from upload through grounded answer and human takeover; independent security review |
 
-## Not implemented / not unlocked
-
-Authenticated upload/approval, private original-file storage, production auth, live model setup, durable staff/usage state, Web Chat, one-shop end-to-end proof and real LINE pilot remain separate scoped work. G2–G4 and deployment remain gated.
+G2 real LINE sandbox follows G1. G3 onboarding and G4 commercial validation remain gated. Do not deploy, run hosted migrations, or incur provider spend without separate Owner approval.

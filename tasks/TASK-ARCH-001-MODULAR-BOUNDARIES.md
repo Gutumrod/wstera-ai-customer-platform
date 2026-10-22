@@ -1,6 +1,6 @@
 # Future Codex Task — Incremental Modular Boundaries
 
-**Status:** IN PROGRESS in scoped Phase 0C increments after Task 001 merge and owner approval. This PR covers I1 and the single-boundary portion of I2 only; later increments remain gated.
+**Status (2026-10-23):** The shared channel/workspace contracts and single-boundary migration (I1 and the approved I2 slice) were included in PR #16 and merged on `main` (`857b2e5`). Composition wiring and later increments remain separately scoped and gated.
 
 ## Phase 0C migration slice — approved scope
 

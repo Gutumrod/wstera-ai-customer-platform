@@ -1,6 +1,6 @@
 # Task 004 — Thai Retrieval Evaluation Baseline (G1-C)
 
-**Status:** Implemented and independently reviewed on `codex/g1c-retrieval-evaluation-20261015`, stacked on Task 003 / PR #8. Local verification passed at tested code commit `a0fdf05`; PR #9 is still open and hosted/parent gates remain pending.
+**Status (2026-10-23):** The synthetic 30-query retrieval baseline from this task was included in PR #16 and is merged on `main` (`857b2e5`). Metrics remain diagnostic only; there are no owner-approved thresholds or generated-answer quality results.
 
 ## Goal
 

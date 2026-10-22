@@ -1,6 +1,6 @@
 # Codex Cloud Task 001 — Foundation & Security Contract
 
-**Status:** READY FOR IMPLEMENTATION PR. **Priority:** First task.
+**Status:** Completed on `main` via PR #2 (`edcf503`). This brief is retained as historical acceptance scope.
 **Goal:** Make the current public scaffold a reproducible, reviewable, fail-closed foundation. No production features or live integrations.
 
 ## Read first

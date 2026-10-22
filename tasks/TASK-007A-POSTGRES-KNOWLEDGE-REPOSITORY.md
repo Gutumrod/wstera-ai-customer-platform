@@ -1,6 +1,6 @@
 # Task 007A — Durable PostgreSQL knowledge repository
 
-**Status (2026-10-23):** Existing local follow-up and 2026-10-18 synthetic PostgreSQL evidence are preserved in `codex/pr-consolidation-20261023`. Fresh local checks are recorded in the reconciliation report. Historical no-commit/no-push restrictions below describe the earlier continuation; the Owner has since requested repository/PR cleanup. The consolidated candidate still requires independent review and Owner merge approval; no deployment or hosted migration is authorized.
+**Status (2026-10-23):** The PostgreSQL knowledge adapter, local follow-up and 2026-10-18 synthetic PostgreSQL evidence are merged on `main` through PR #16 (`857b2e5`). The reviewed candidate passed hosted CI and independent review. No hosted migration, runtime-role provisioning or production host connection is included.
 
 **History:** The sections below retain their original checkpoint dates. Historical two-session/reviewer claims are not a new verification performed during PR consolidation.
 

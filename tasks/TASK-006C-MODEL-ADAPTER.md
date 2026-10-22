@@ -1,6 +1,6 @@
 # Task 006C — Metered OpenAI-compatible model adapter
 
-**Status:** PR [#15](https://github.com/Gutumrod/wstera-ai-customer-platform/pull/15) is open and independently reviewed with no actionable findings, stacked on PR #14.
+**Status (2026-10-23):** The mocked-transport OpenAI-compatible model adapter was included in PR #16 and is merged on `main` (`857b2e5`). No provider is selected or called live; usage persistence and spend limits remain separate work.
 
 ## Goal
 
