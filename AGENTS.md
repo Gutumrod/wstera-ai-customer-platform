@@ -7,7 +7,7 @@ Build WSTERA AI Customer Platform: two channel products (website support chat an
 ## Start here
 
 Read in this order:
-1. **`BRIEF.md` — owner-locked product goals and safety invariants.**
+1. **`BRIEF.md` — concise project goal and non-negotiable rules.** Read the detailed appendix at `architecture/PRODUCT-REQUIREMENTS-DETAIL.md` only when a task needs additional requirements.
 2. `architecture/REPOSITORY-STRUCTURE.md` — module ownership and target layout.
 3. `architecture/PORTS-AND-ADAPTERS.md` — dependency direction and extension rules.
 4. `plans/PHASE-BREAKDOWN.md` — phase sequencing and acceptance gates.
