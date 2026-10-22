@@ -45,7 +45,7 @@ function locatorKey(locator: unknown): string | null {
       return JSON.stringify(["span", locator.chunkIndex, locator.start, locator.end]);
     case "page":
     case "row":
-      if (!hasOnlyKeys(locator, locator.chunkIndex === undefined ? ["kind", locator.kind] : ["kind", locator.kind, "chunkIndex"])
+      if (!hasOnlyKeys(locator, ["kind", locator.kind, "chunkIndex"])
         || !Number.isSafeInteger(locator[locator.kind]) || (locator[locator.kind] as number) < 1) return null;
       if (locator.chunkIndex !== undefined && !isNonNegativeInteger(locator.chunkIndex)) return null;
       return JSON.stringify([locator.kind, locator[locator.kind], locator.chunkIndex ?? 0]);

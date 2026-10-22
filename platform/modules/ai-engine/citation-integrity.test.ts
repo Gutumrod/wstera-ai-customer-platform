@@ -59,6 +59,11 @@ test("normalizes omitted page and row chunk indexes to zero", () => {
     const draft = { ...item.citation, locator };
     assert.equal(validateAnswerCitations(workspace, { text: "คำตอบ", citations: [draft] }, [item]).kind, "accepted");
   }
+  for (const locator of [{ kind: "page", page: 4, chunkIndex: undefined }, { kind: "row", row: 3, chunkIndex: undefined }] satisfies KnowledgeCitation["locator"][]) {
+    const item = hit({ ...locator, chunkIndex: 0 } as KnowledgeCitation["locator"]);
+    const draft = { ...item.citation, locator };
+    assert.equal(validateAnswerCitations(workspace, { text: "คำตอบ", citations: [draft] }, [item]).kind, "accepted");
+  }
 });
 
 test("hands off when evidence or citations are absent", () => {

@@ -142,8 +142,12 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await isolationRepository.isCurrentCitation(shopA, currentCitation), true);
       assert.equal(isolationStatements.some((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)), false);
       isolationStatements.length = 0;
-      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation]), true);
+      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation, currentCitation]), true);
       assert.equal(isolationStatements.filter((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)).length, 1);
+      const isolationIndex = isolationStatements.findIndex((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql));
+      const firstCitationReadIndex = isolationStatements.findIndex((sql) => /SELECT 1 AS current/i.test(sql));
+      const secondCitationReadIndex = isolationStatements.findIndex((sql, index) => index > firstCitationReadIndex && /SELECT 1 AS current/i.test(sql));
+      assert.ok(isolationIndex >= 0 && firstCitationReadIndex > isolationIndex && secondCitationReadIndex > firstCitationReadIndex);
       const approved = eligible[0]!.version;
       assert.equal(approved.chunks.length, 1);
       const multiChunkDraft = createFaqVersion({
