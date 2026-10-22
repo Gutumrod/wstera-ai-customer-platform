@@ -1,0 +1,704 @@
+
+> wstera-ai-customer-platform@0.1.0 check
+> npm run typecheck && npm test
+
+
+> wstera-ai-customer-platform@0.1.0 typecheck
+> tsc --noEmit
+
+
+> wstera-ai-customer-platform@0.1.0 test
+> npm run build && node --test dist/src/tests/core.test.js dist/modules/knowledge/knowledge.test.js dist/modules/knowledge/evaluation/evaluation.test.js dist/modules/handoff/handoff.test.js dist/modules/ai-engine/citation-integrity.test.js dist/modules/ai-engine/support-orchestrator.test.js dist/adapters/models/openai-compatible/chat-completions.test.js dist/adapters/persistence/postgres/knowledge-repository.test.js
+
+
+> wstera-ai-customer-platform@0.1.0 build
+> tsc
+
+TAP version 13
+# Subtest: answerability sends bounded JSON-mode request and records per-workspace token usage
+ok 1 - answerability sends bounded JSON-mode request and records per-workspace token usage
+  ---
+  duration_ms: 15.901666
+  type: 'test'
+  ...
+# Subtest: grounded answer returns only bounded text and evidence references
+ok 2 - grounded answer returns only bounded text and evidence references
+  ---
+  duration_ms: 0.504625
+  type: 'test'
+  ...
+# Subtest: configuration rejects missing credentials, unsafe URLs and invalid HTTP endpoints
+ok 3 - configuration rejects missing credentials, unsafe URLs and invalid HTTP endpoints
+  ---
+  duration_ms: 0.2785
+  type: 'test'
+  ...
+# Subtest: invalid input and oversized request do not call the transport
+ok 4 - invalid input and oversized request do not call the transport
+  ---
+  duration_ms: 0.176541
+  type: 'test'
+  ...
+# Subtest: configuration is snapshotted and inherited usage recorder methods remain supported
+ok 5 - configuration is snapshotted and inherited usage recorder methods remain supported
+  ---
+  duration_ms: 0.246
+  type: 'test'
+  ...
+# Subtest: provider errors are normalized and never include response bodies or credentials
+ok 6 - provider errors are normalized and never include response bodies or credentials
+  ---
+  duration_ms: 0.171334
+  type: 'test'
+  ...
+# Subtest: timeouts abort the request and return a normalized error
+ok 7 - timeouts abort the request and return a normalized error
+  ---
+  duration_ms: 5.82575
+  type: 'test'
+  ...
+# Subtest: timeout settles even when the host transport ignores AbortSignal
+ok 8 - timeout settles even when the host transport ignores AbortSignal
+  ---
+  duration_ms: 6.031125
+  type: 'test'
+  ...
+# Subtest: timeout cancels and settles a stalled response body
+ok 9 - timeout cancels and settles a stalled response body
+  ---
+  duration_ms: 5.44375
+  type: 'test'
+  ...
+# Subtest: oversized, malformed, and usage-free responses fail closed
+    # Subtest: oversized body
+    ok 1 - oversized body
+      ---
+      duration_ms: 1.04425
+      type: 'test'
+      ...
+    # Subtest: invalid JSON
+    ok 2 - invalid JSON
+      ---
+      duration_ms: 0.455
+      type: 'test'
+      ...
+    # Subtest: missing token usage
+    ok 3 - missing token usage
+      ---
+      duration_ms: 0.264541
+      type: 'test'
+      ...
+    # Subtest: usage persistence failure
+    ok 4 - usage persistence failure
+      ---
+      duration_ms: 0.392042
+      type: 'test'
+      ...
+    # Subtest: usage persistence is included in the operation timeout
+    ok 5 - usage persistence is included in the operation timeout
+      ---
+      duration_ms: 6.049417
+      type: 'test'
+      ...
+    1..5
+ok 10 - oversized, malformed, and usage-free responses fail closed
+  ---
+  duration_ms: 8.607958
+  type: 'test'
+  ...
+# Subtest: malformed assessment and fabricated citation references never reach callers
+    # Subtest: assessment schema
+    ok 1 - assessment schema
+      ---
+      duration_ms: 0.366
+      type: 'test'
+      ...
+    # Subtest: fabricated citation
+    ok 2 - fabricated citation
+      ---
+      duration_ms: 0.169041
+      type: 'test'
+      ...
+    # Subtest: empty answer
+    ok 3 - empty answer
+      ---
+      duration_ms: 0.185792
+      type: 'test'
+      ...
+    1..3
+ok 11 - malformed assessment and fabricated citation references never reach callers
+  ---
+  duration_ms: 0.835959
+  type: 'test'
+  ...
+# Subtest: PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators
+    # Subtest: workspace RLS is default-deny and transaction-local scope does not leak
+    ok 1 - workspace RLS is default-deny and transaction-local scope does not leak
+      ---
+      duration_ms: 8.155375
+      type: 'test'
+      ...
+    # Subtest: approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility
+    ok 2 - approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility
+      ---
+      duration_ms: 19.737791
+      type: 'test'
+      ...
+    # Subtest: FAQ, PDF page and CSV row citations round-trip exactly
+    ok 3 - FAQ, PDF page and CSV row citations round-trip exactly
+      ---
+      duration_ms: 7.122458
+      type: 'test'
+      ...
+    # Subtest: failed chunk persistence rolls back its version row
+    ok 4 - failed chunk persistence rolls back its version row
+      ---
+      duration_ms: 2.08775
+      type: 'test'
+      ...
+    # Subtest: invalid tenant-bound drafts fail before touching SQL
+    ok 5 - invalid tenant-bound drafts fail before touching SQL
+      ---
+      duration_ms: 0.570959
+      type: 'test'
+      ...
+    # Subtest: rejects noncanonical chunk segmentation for FAQ and imported sources
+    ok 6 - rejects noncanonical chunk segmentation for FAQ and imported sources
+      ---
+      duration_ms: 2.0865
+      type: 'test'
+      ...
+    # Subtest: persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks
+    ok 7 - persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks
+      ---
+      duration_ms: 211.26375
+      type: 'test'
+      ...
+    1..7
+ok 12 - PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators
+  ---
+  duration_ms: 856.3865
+  type: 'test'
+  ...
+# Subtest: accepts canonical FAQ, PDF page, and CSV row citations from retrieved evidence
+ok 13 - accepts canonical FAQ, PDF page, and CSV row citations from retrieved evidence
+  ---
+  duration_ms: 0.644292
+  type: 'test'
+  ...
+# Subtest: deduplicates repeated citations and returns the canonical evidence reference
+ok 14 - deduplicates repeated citations and returns the canonical evidence reference
+  ---
+  duration_ms: 0.101125
+  type: 'test'
+  ...
+# Subtest: hands off when evidence or citations are absent
+ok 15 - hands off when evidence or citations are absent
+  ---
+  duration_ms: 0.152667
+  type: 'test'
+  ...
+# Subtest: hands off for malformed draft and empty answer text
+ok 16 - hands off for malformed draft and empty answer text
+  ---
+  duration_ms: 0.228916
+  type: 'test'
+  ...
+# Subtest: fails closed on foreign evidence and cross-workspace citations
+ok 17 - fails closed on foreign evidence and cross-workspace citations
+  ---
+  duration_ms: 0.197417
+  type: 'test'
+  ...
+# Subtest: fails closed when retrieval hit metadata does not match its citation identity
+ok 18 - fails closed when retrieval hit metadata does not match its citation identity
+  ---
+  duration_ms: 0.080042
+  type: 'test'
+  ...
+# Subtest: rejects fabricated evidence identities and malformed locators
+ok 19 - rejects fabricated evidence identities and malformed locators
+  ---
+  duration_ms: 0.199791
+  type: 'test'
+  ...
+# Subtest: returns only a cited answer mapped from opaque evidence references
+ok 20 - returns only a cited answer mapped from opaque evidence references
+  ---
+  duration_ms: 1.64075
+  type: 'test'
+  ...
+# Subtest: no approved evidence requests handoff without invoking assessment or model
+ok 21 - no approved evidence requests handoff without invoking assessment or model
+  ---
+  duration_ms: 0.167667
+  type: 'test'
+  ...
+# Subtest: insufficient, conflicting, and uncertain evidence fail closed to handoff
+    # Subtest: insufficient_evidence
+    ok 1 - insufficient_evidence
+      ---
+      duration_ms: 0.134541
+      type: 'test'
+      ...
+    # Subtest: conflicting_evidence
+    ok 2 - conflicting_evidence
+      ---
+      duration_ms: 0.110167
+      type: 'test'
+      ...
+    # Subtest: uncertain
+    ok 3 - uncertain
+      ---
+      duration_ms: 0.073833
+      type: 'test'
+      ...
+    1..3
+ok 22 - insufficient, conflicting, and uncertain evidence fail closed to handoff
+  ---
+  duration_ms: 0.551459
+  type: 'test'
+  ...
+# Subtest: malformed assessment, provider errors, and bad citations never produce an answer
+    # Subtest: assessment shape
+    ok 1 - assessment shape
+      ---
+      duration_ms: 0.135625
+      type: 'test'
+      ...
+    # Subtest: assessment getter throws
+    ok 2 - assessment getter throws
+      ---
+      duration_ms: 0.203084
+      type: 'test'
+      ...
+    # Subtest: assessment failure
+    ok 3 - assessment failure
+      ---
+      duration_ms: 0.594667
+      type: 'test'
+      ...
+    # Subtest: generation failure
+    ok 4 - generation failure
+      ---
+      duration_ms: 0.194041
+      type: 'test'
+      ...
+    # Subtest: foreign evidence reference
+    ok 5 - foreign evidence reference
+      ---
+      duration_ms: 0.131125
+      type: 'test'
+      ...
+    # Subtest: empty answer
+    ok 6 - empty answer
+      ---
+      duration_ms: 0.072709
+      type: 'test'
+      ...
+    # Subtest: oversized answer
+    ok 7 - oversized answer
+      ---
+      duration_ms: 0.088958
+      type: 'test'
+      ...
+    # Subtest: too many citation references
+    ok 8 - too many citation references
+      ---
+      duration_ms: 0.133334
+      type: 'test'
+      ...
+    # Subtest: extra model field
+    ok 9 - extra model field
+      ---
+      duration_ms: 0.054042
+      type: 'test'
+      ...
+    # Subtest: generated getter throws
+    ok 10 - generated getter throws
+      ---
+      duration_ms: 0.061791
+      type: 'test'
+      ...
+    1..10
+ok 23 - malformed assessment, provider errors, and bad citations never produce an answer
+  ---
+  duration_ms: 2.096875
+  type: 'test'
+  ...
+# Subtest: retrieval and handoff failures are surfaced without leaking adapter errors
+ok 24 - retrieval and handoff failures are surfaced without leaking adapter errors
+  ---
+  duration_ms: 0.195917
+  type: 'test'
+  ...
+# Subtest: invalid request is rejected before any port is called
+ok 25 - invalid request is rejected before any port is called
+  ---
+  duration_ms: 0.112
+  type: 'test'
+  ...
+# Subtest: paused conversations stop before retrieval and a handoff during generation suppresses the answer
+    # Subtest: already paused
+    ok 1 - already paused
+      ---
+      duration_ms: 0.041
+      type: 'test'
+      ...
+    # Subtest: handoff starts while generating
+    ok 2 - handoff starts while generating
+      ---
+      duration_ms: 0.065625
+      type: 'test'
+      ...
+    # Subtest: conversation state unavailable
+    ok 3 - conversation state unavailable
+      ---
+      duration_ms: 0.035292
+      type: 'test'
+      ...
+    # Subtest: stateful conversation getter is rejected before retrieval
+    ok 4 - stateful conversation getter is rejected before retrieval
+      ---
+      duration_ms: 0.034417
+      type: 'test'
+      ...
+    # Subtest: stateful evidence getter is rejected before model use
+    ok 5 - stateful evidence getter is rejected before model use
+      ---
+      duration_ms: 0.047625
+      type: 'test'
+      ...
+    # Subtest: conversation Proxy uses its captured descriptor value
+    ok 6 - conversation Proxy uses its captured descriptor value
+      ---
+      duration_ms: 0.053208
+      type: 'test'
+      ...
+    # Subtest: generated reference Proxy validates and uses the same descriptor value
+    ok 7 - generated reference Proxy validates and uses the same descriptor value
+      ---
+      duration_ms: 0.398791
+      type: 'test'
+      ...
+    1..7
+ok 26 - paused conversations stop before retrieval and a handoff during generation suppresses the answer
+  ---
+  duration_ms: 0.81975
+  type: 'test'
+  ...
+# Subtest: new conversation starts with AI enabled and tenant-scoped identity
+ok 27 - new conversation starts with AI enabled and tenant-scoped identity
+  ---
+  duration_ms: 2.305709
+  type: 'test'
+  ...
+# Subtest: handoff request pauses AI before operator claim and staff reply keeps it paused
+ok 28 - handoff request pauses AI before operator claim and staff reply keeps it paused
+  ---
+  duration_ms: 0.27275
+  type: 'test'
+  ...
+# Subtest: customer-facing calls cannot release handoff and unauthorized staff cannot release it
+ok 29 - customer-facing calls cannot release handoff and unauthorized staff cannot release it
+  ---
+  duration_ms: 0.254541
+  type: 'test'
+  ...
+# Subtest: authorized staff release is the only transition that resumes AI
+ok 30 - authorized staff release is the only transition that resumes AI
+  ---
+  duration_ms: 0.077583
+  type: 'test'
+  ...
+# Subtest: handoff commands reject a forged workspace and an active conversation cannot be claimed
+ok 31 - handoff commands reject a forged workspace and an active conversation cannot be claimed
+  ---
+  duration_ms: 0.135167
+  type: 'test'
+  ...
+# Subtest: handoff failures are explicit and invalid transition requests fail closed
+ok 32 - handoff failures are explicit and invalid transition requests fail closed
+  ---
+  duration_ms: 0.115042
+  type: 'test'
+  ...
+# Subtest: repository compare-and-append rejects a stale transition version
+ok 33 - repository compare-and-append rejects a stale transition version
+  ---
+  duration_ms: 0.061167
+  type: 'test'
+  ...
+# Subtest: evaluation summary reports recall, precision, citation validity, abstention, and latency separately
+ok 34 - evaluation summary reports recall, precision, citation validity, abstention, and latency separately
+  ---
+  duration_ms: 0.587167
+  type: 'test'
+  ...
+# Subtest: empty evaluation returns null rates and zero latency instead of NaN
+ok 35 - empty evaluation returns null rates and zero latency instead of NaN
+  ---
+  duration_ms: 0.080333
+  type: 'test'
+  ...
+# Subtest: evaluation rejects invalid latency observations instead of recording zero
+ok 36 - evaluation rejects invalid latency observations instead of recording zero
+  ---
+  duration_ms: 0.150875
+  type: 'test'
+  ...
+# Subtest: Precision@k divides relevant returned evidence by k, including when fewer than k hits return
+ok 37 - Precision@k divides relevant returned evidence by k, including when fewer than k hits return
+  ---
+  duration_ms: 0.056042
+  type: 'test'
+  ...
+# Subtest: a wrong page from the correct source and version is not relevant evidence
+ok 38 - a wrong page from the correct source and version is not relevant evidence
+  ---
+  duration_ms: 0.11425
+  type: 'test'
+  ...
+# Subtest: synthetic baseline covers 30 FAQ, PDF, CSV and negative cases with verifiable citations
+ok 39 - synthetic baseline covers 30 FAQ, PDF, CSV and negative cases with verifiable citations
+  ---
+  duration_ms: 15.726875
+  type: 'test'
+  ...
+# Subtest: synthetic corpus manifest enforces unique cases, outcomes, source kinds, and locators
+ok 40 - synthetic corpus manifest enforces unique cases, outcomes, source kinds, and locators
+  ---
+  duration_ms: 0.235625
+  type: 'test'
+  ...
+# Subtest: approved FAQ retrieval returns exact version and deterministic span citation
+ok 41 - approved FAQ retrieval returns exact version and deterministic span citation
+  ---
+  duration_ms: 3.393083
+  type: 'test'
+  ...
+# Subtest: Thai lexical query and punctuation variants of mixed-language SKUs retrieve approved knowledge
+ok 42 - Thai lexical query and punctuation variants of mixed-language SKUs retrieve approved knowledge
+  ---
+  duration_ms: 1.411375
+  type: 'test'
+  ...
+# Subtest: SKU punctuation normalization abstains when distinct identifiers collide
+ok 43 - SKU punctuation normalization abstains when distinct identifiers collide
+  ---
+  duration_ms: 0.471792
+  type: 'test'
+  ...
+# Subtest: inactive SKU variants do not make active punctuation matches ambiguous
+ok 44 - inactive SKU variants do not make active punctuation matches ambiguous
+  ---
+  duration_ms: 0.397917
+  type: 'test'
+  ...
+# Subtest: unapproved and revoked versions never appear in retrieval
+ok 45 - unapproved and revoked versions never appear in retrieval
+  ---
+  duration_ms: 0.127334
+  type: 'test'
+  ...
+# Subtest: repository refuses a caller-supplied approved status at version creation
+ok 46 - repository refuses a caller-supplied approved status at version creation
+  ---
+  duration_ms: 0.170458
+  type: 'test'
+  ...
+# Subtest: repository rejects an imported version whose kind differs from its source
+ok 47 - repository rejects an imported version whose kind differs from its source
+  ---
+  duration_ms: 0.201541
+  type: 'test'
+  ...
+# Subtest: retrieval locator order is deterministic when repository rows are reversed
+ok 48 - retrieval locator order is deterministic when repository rows are reversed
+  ---
+  duration_ms: 4.08325
+  type: 'test'
+  ...
+# Subtest: repository derives tenant scope from trusted context and rejects forged or mismatched workspace data
+ok 49 - repository derives tenant scope from trusted context and rejects forged or mismatched workspace data
+  ---
+  duration_ms: 0.388917
+  type: 'test'
+  ...
+# Subtest: version conflicts fail closed and approved version content is immutable
+ok 50 - version conflicts fail closed and approved version content is immutable
+  ---
+  duration_ms: 0.276791
+  type: 'test'
+  ...
+# Subtest: archived source is excluded even when its version remains approved
+ok 51 - archived source is excluded even when its version remains approved
+  ---
+  duration_ms: 0.124375
+  type: 'test'
+  ...
+# Subtest: a source cannot have two approved versions and does not resurrect older content
+ok 52 - a source cannot have two approved versions and does not resurrect older content
+  ---
+  duration_ms: 0.120917
+  type: 'test'
+  ...
+# Subtest: no match yields no evidence and malformed or oversized FAQ content is rejected
+ok 53 - no match yields no evidence and malformed or oversized FAQ content is rejected
+  ---
+  duration_ms: 0.151
+  type: 'test'
+  ...
+# Subtest: instruction-like document text remains inert retrieved data and cannot change source state
+ok 54 - instruction-like document text remains inert retrieved data and cannot change source state
+  ---
+  duration_ms: 0.08225
+  type: 'test'
+  ...
+# Subtest: imported page and row segments retain exact content offsets and source locators
+ok 55 - imported page and row segments retain exact content offsets and source locators
+  ---
+  duration_ms: 0.087042
+  type: 'test'
+  ...
+# Subtest: document version builder rejects locators that do not match the source format
+ok 56 - document version builder rejects locators that do not match the source format
+  ---
+  duration_ms: 0.039125
+  type: 'test'
+  ...
+# Subtest: retrieval citations preserve the extracted PDF page locator
+ok 57 - retrieval citations preserve the extracted PDF page locator
+  ---
+  duration_ms: 0.109125
+  type: 'test'
+  ...
+# Subtest: CSV extractor handles UTF-8 BOM, Thai, quoted commas and maps the data row
+ok 58 - CSV extractor handles UTF-8 BOM, Thai, quoted commas and maps the data row
+  ---
+  duration_ms: 9.517709
+  type: 'test'
+  ...
+# Subtest: PDF extractor returns per-page text and rejects image-only PDFs without OCR claims
+ok 59 - PDF extractor returns per-page text and rejects image-only PDFs without OCR claims
+  ---
+  duration_ms: 212.571833
+  type: 'test'
+  ...
+# Subtest: PDF extractor fails closed on highly-compressible page output
+ok 60 - PDF extractor fails closed on highly-compressible page output
+  ---
+  duration_ms: 161.652708
+  type: 'test'
+  ...
+# Subtest: PDF text consumer cancels the stream as soon as the extraction cap is crossed
+ok 61 - PDF text consumer cancels the stream as soon as the extraction cap is crossed
+  ---
+  duration_ms: 22.764709
+  type: 'test'
+  ...
+# Subtest: PDF text consumer ignores trailing whitespace when no output budget remains
+ok 62 - PDF text consumer ignores trailing whitespace when no output budget remains
+  ---
+  duration_ms: 0.176584
+  type: 'test'
+  ...
+# Subtest: PDF page budgets do not reject an empty trailing page at the extraction ceiling
+ok 63 - PDF page budgets do not reject an empty trailing page at the extraction ceiling
+  ---
+  duration_ms: 0.057583
+  type: 'test'
+  ...
+# Subtest: document extractor fails closed for invalid UTF-8, malformed files and oversized input
+ok 64 - document extractor fails closed for invalid UTF-8, malformed files and oversized input
+  ---
+  duration_ms: 0.834667
+  type: 'test'
+  ...
+# Subtest: document preparation carries extracted CSV row citations into approved retrieval
+ok 65 - document preparation carries extracted CSV row citations into approved retrieval
+  ---
+  duration_ms: 0.583917
+  type: 'test'
+  ...
+# Subtest: document preparation converts thrown or malformed extractor results to safe failures
+ok 66 - document preparation converts thrown or malformed extractor results to safe failures
+  ---
+  duration_ms: 0.086583
+  type: 'test'
+  ...
+# Subtest: trusted workspace enforces a strict, immutable context
+ok 67 - trusted workspace enforces a strict, immutable context
+  ---
+  duration_ms: 0.503334
+  type: 'test'
+  ...
+# Subtest: tenancy contract and legacy workspace APIs preserve constructor and enforcement parity
+ok 68 - tenancy contract and legacy workspace APIs preserve constructor and enforcement parity
+  ---
+  duration_ms: 0.338291
+  type: 'test'
+  ...
+# Subtest: shared channel contracts keep message identity connection-scoped and errors normalized
+ok 69 - shared channel contracts keep message identity connection-scoped and errors normalized
+  ---
+  duration_ms: 0.127334
+  type: 'test'
+  ...
+# Subtest: LINE HMAC verifies raw bytes and rejects modifications/missing secret
+ok 70 - LINE HMAC verifies raw bytes and rejects modifications/missing secret
+  ---
+  duration_ms: 4.133584
+  type: 'test'
+  ...
+# Subtest: signed LINE ingress is bound to server-owned destination and filters group messages
+ok 71 - signed LINE ingress is bound to server-owned destination and filters group messages
+  ---
+  duration_ms: 0.976958
+  type: 'test'
+  ...
+# Subtest: empty signed LINE verification event is accepted and invalid destination is rejected before lookup
+ok 72 - empty signed LINE verification event is accepted and invalid destination is rejected before lookup
+  ---
+  duration_ms: 0.955667
+  type: 'test'
+  ...
+# Subtest: LINE ingress fails closed for malformed signed payloads and bounds input
+ok 73 - LINE ingress fails closed for malformed signed payloads and bounds input
+  ---
+  duration_ms: 2.735791
+  type: 'test'
+  ...
+# Subtest: same LINE user in two connections resolves to separate workspace identities
+ok 74 - same LINE user in two connections resolves to separate workspace identities
+  ---
+  duration_ms: 0.293708
+  type: 'test'
+  ...
+# Subtest: dedupe lease contract recovers a failed first event before redelivery
+ok 75 - dedupe lease contract recovers a failed first event before redelivery
+  ---
+  duration_ms: 0.352041
+  type: 'test'
+  ...
+# Subtest: source gate filters scope and approval while preserving excerpt text as untrusted data
+ok 76 - source gate filters scope and approval while preserving excerpt text as untrusted data
+  ---
+  duration_ms: 0.286292
+  type: 'test'
+  ...
+# Subtest: reply client rejects missing creds and surfaces provider failure
+ok 77 - reply client rejects missing creds and surfaces provider failure
+  ---
+  duration_ms: 6.251292
+  type: 'test'
+  ...
+1..77
+# tests 112
+# suites 0
+# pass 112
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 917.819375
