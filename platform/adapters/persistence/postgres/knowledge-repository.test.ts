@@ -206,6 +206,21 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await repository.getVersion(shopA, faq.sourceId, faq.versionId), null);
       assert.equal(await repository.getVersion(shopA, pdf.sourceId, pdf.versionId), null);
     });
+
+    await t.test("persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks", async () => {
+      const segments = Array.from({ length: 5_000 }, (_, index) => ({
+        text: index < 200 ? "x".repeat(321) : "x",
+        locator: { kind: "row" as const, row: index + 1 },
+      }));
+      const csv = createImportedKnowledgeVersion({
+        workspace: shopA, sourceId: "large-catalog", versionId: "csv-v1", title: "Large catalog", kind: "csv", segments,
+      });
+      assert.equal(csv.chunks.length, 5_200);
+      await repository.createSource(shopA, { sourceId: csv.sourceId, title: csv.title, kind: "csv" });
+      const persisted = await repository.createVersion(shopA, csv);
+      assert.equal(persisted.chunks.length, 5_200);
+      assert.equal((await repository.getVersion(shopA, csv.sourceId, csv.versionId))?.chunks.length, 5_200);
+    });
   } finally {
     await database.close();
   }

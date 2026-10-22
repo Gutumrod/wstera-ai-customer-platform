@@ -1,10 +1,10 @@
 # Task 007A — Durable PostgreSQL knowledge repository
 
-**Status:** Implementation checkpoint in progress on `codex/g1-knowledge-postgres-continuation-20261016` at `fc3d52517cbf93727e74510c24d89d3630e5e2d0` (PR #15 base `f8d8aae0fffcb09e058bc66195ce555cb865a17c`). Canonical draft validation is shared by the PostgreSQL adapter and in-memory repository. Independent review and true PostgreSQL two-session race evidence remain pending; do not claim concurrency verified.
+**Status:** Local implementation, checks and PostgreSQL two-session evidence complete on `codex/g1-knowledge-postgres-continuation-20261016` at `fc3d52517cbf93727e74510c24d89d3630e5e2d0` (PR #15 base `f8d8aae0fffcb09e058bc66195ce555cb865a17c`). Independent security re-review: **PASS WITH NOTES**, with no behavior blockers. Evidence files are untracked and must be included in any later Owner-authorized PR. No commit, push or PR was authorized in this continuation.
 
 ## Current state
 
-The G1 knowledge module and extractor can create, approve, revoke and retrieve FAQ/PDF/CSV versions, but the only repository is the test-only in-memory implementation. There is no database or authenticated upload host. The current source of truth explicitly names a persisted repository and authenticated upload/approval path as the next executable slice; this task implements the persistence half.
+The G1 knowledge module and extractor can create, approve, revoke and retrieve FAQ/PDF/CSV versions. This task implements the PostgreSQL persistence half, including local database-level RLS/lifecycle tests and separate real-PostgreSQL concurrency evidence. There is still no authenticated upload host or production connection pool; those remain separate work.
 
 ## Goal
 
@@ -69,11 +69,22 @@ An authenticated upload/approval HTTP path, real host connection pool and role p
 - The Windows machine has no `psql`, `postgres`, `initdb`, `pg_ctl`, Docker or Podman binaries and no PostgreSQL service was found. PGlite integration uses one connection. **True two-session interleaving remains BLOCKED/unverified.** Do not interpret `Promise.all` on PGlite as multi-session evidence.
 - No commit, push, new PR, merge, hosted migration or deployment is authorized or performed. `PR #15` is the existing model-adapter base of this task's proposed stacked PR, not a TASK-007A PR.
 
-### Pending two-session proof (not run)
+### Two-session proof — pending at the 2026-10-16 checkpoint; completed 2026-10-18
 
-Use a separately approved *disposable local PostgreSQL* instance with two independent connections, a non-owner `NOBYPASSRLS` runtime role, the reviewed migration, grants and synthetic workspace data. Capture server/version, role, both session IDs, commands, observed blocking, SQLSTATE and final rows.
+The following proof was run against a disposable local PostgreSQL 18.6 instance on 2026-10-18. It supersedes the 2026-10-16 “not run” status above. Full SQL, wait observations and outputs are stored in `tasks/evidence/task-007a-postgres-day1-2026-10-18/`.
 
-1. **Approve-first:** Session A updates an indexed version to approved within an open transaction and holds its row lock. Session B (same tenant, separate connection) attempts to insert a chunk into that version. Verify B waits for A; commit A; verify B rejects the insert and no late chunk exists.
-2. **Insert-first:** Session B inserts a valid chunk into an indexed version but holds the transaction open. Session A attempts to approve that version. Verify A waits until B commits; after B commits, verify the approval observes a complete immutable chunk set, with no late mutation after approval.
-3. **Two approvals:** Parallel sessions approve two different indexed versions of the same source. Verify exactly one succeeds and the partial unique index rejects the other (`23505`); verify only one version is retrievable.
-4. After each scenario verify RLS, lifecycle state, chunk count and rollback; run full checks and a separate independent security re-review. Do not claim acceptance until evidence is recorded and Owner approves the next PR/merge step.
+1. **C1 approve-first — PASS:** Session A PID `52028` held the approval transaction while session B PID `52032` blocked on a `transactionid` lock inserting a late chunk. After A committed, B failed with `23514`; final state was approved with one chunk.
+2. **C2 insert-first — PASS:** Session B PID `52156` held an inserted chunk while session A PID `52160` blocked on a `transactionid` lock approving the version. After B committed, A approved; final state was approved with one complete chunk.
+3. **C3 concurrent approval — PASS:** Sessions A/B PIDs `52175`/`52179` attempted approval of separate versions for the same source. B blocked, then failed with `23505` at `knowledge_one_approved_version_per_source`; final state had one approved/retrievable version (`v1`) and `v2` remained indexed.
+4. **RLS — PASS:** Runtime role `knowledge_runtime` was `NOSUPERUSER NOBYPASSRLS`, distinct from the `postgres` table owner. All three tenant tables had RLS enabled and forced. With `app.workspace_id=ws_a`, cross-workspace SELECTs returned zero rows; source/version INSERTs failed with `42501`; source/version UPDATEs affected zero rows and no forged rows remained. A chunk INSERT attempt was rejected by its parent-version trigger with `23514` before the RLS check; it is not counted as direct RLS INSERT evidence.
+5. Final database state and independent re-review are recorded in the evidence directory. The static review and PostgreSQL two-session proof passed; the independent reviewer returned **PASS WITH NOTES** and found no behavior blockers. Do not commit, push, open a PR, merge, migrate a hosted database or deploy in this continuation.
+
+## Day 1 execution evidence — 2026-10-18
+
+- **Environment:** macOS 27.0 arm64; Node.js 22.22.3; npm 10.9.8; PostgreSQL Server 18.6 (Homebrew), client `psql` 18.3. The disposable cluster bound only to `127.0.0.1:55439`; no hosted database or production credential was used.
+- **Dependencies:** Owner approved `npm ci`; it exited 0 from the lockfile. `package-lock.json` did not change.
+- **Checks:** `npm run check` PASS — typecheck and build passed, **112 tests passed, 0 failed, 0 skipped**. `npm audit --json` and `npm audit --omit=dev --json` each exited 0 with 0 vulnerabilities across 18 dependency records. `git diff --check` exited 0.
+- **Reviewer finding fixed:** `snapshotVersionDraft` capped chunks at 5,000 even though valid imported content can produce more. Added a regression that failed first with `INVALID_KNOWLEDGE_INPUT`, then raised the bounded snapshot cap to 100,000; the valid canonical CSV creates, persists and reloads 5,200 chunks.
+- **Independent review:** Initial review found a chunk-bound mismatch and evidence drift in this task record. The code finding is fixed and the record now matches current evidence. Final read-only re-review: **PASS WITH NOTES**; no behavior blockers in tenant isolation, RLS, parameter binding, transaction atomicity, lock ordering, immutable lifecycle, identity/citations or error handling.
+- **Evidence files:** `tasks/evidence/task-007a-postgres-day1-2026-10-18/` contains the migration setup grants, synthetic seed SQL, C1–C3 session SQL, lock wait observations, RLS negative checks, final state query and captured outputs.
+- **Remaining scope:** There is no host connection pool, authenticated upload path, role provisioning for a deployed host, or approved PR. These remain separate tasks or Owner decisions; no commit, push, PR, merge, hosted migration or deployment was done.

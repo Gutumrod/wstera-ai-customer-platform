@@ -1,0 +1,19 @@
+ current_user |      rolname      | rolsuper | rolbypassrls 
+--------------+-------------------+----------+--------------
+ postgres     | knowledge_runtime | f        | f
+(1 row)
+
+                             relname                             | relrowsecurity | relforcerowsecurity |  owner   
+-----------------------------------------------------------------+----------------+---------------------+----------
+ knowledge_chunks                                                | t              | t                   | postgres
+ knowledge_chunks_order                                          | f              | f                   | postgres
+ knowledge_chunks_pkey                                           | f              | f                   | postgres
+ knowledge_chunks_workspace_id_source_id_version_id_chunk_in_key | f              | f                   | postgres
+ knowledge_one_approved_version_per_source                       | f              | f                   | postgres
+ knowledge_retrievable_versions                                  | f              | f                   | postgres
+ knowledge_sources                                               | t              | t                   | postgres
+ knowledge_sources_pkey                                          | f              | f                   | postgres
+ knowledge_versions                                              | t              | t                   | postgres
+ knowledge_versions_pkey                                         | f              | f                   | postgres
+(10 rows)
+

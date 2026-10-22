@@ -1,0 +1,18 @@
+BEGIN;
+SELECT pg_backend_pid() AS backend_pid, current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname=current_user;
+SELECT set_config('app.workspace_id', 'ws_a', true) AS trusted_workspace;
+SELECT count(*) AS visible_b_sources FROM knowledge_sources WHERE workspace_id='ws_b';
+SELECT count(*) AS visible_b_versions FROM knowledge_versions WHERE workspace_id='ws_b';
+SELECT count(*) AS visible_b_chunks FROM knowledge_chunks WHERE workspace_id='ws_b';
+UPDATE knowledge_sources SET status='archived' WHERE workspace_id='ws_b' AND source_id='rls-only' RETURNING source_id;
+UPDATE knowledge_versions SET status='quarantined' WHERE workspace_id='ws_b' AND source_id='rls-only' AND version_id='v1' RETURNING version_id;
+SAVEPOINT source_insert;
+INSERT INTO knowledge_sources (workspace_id, source_id, kind, title, created_at) VALUES ('ws_b','forged-source','faq','Forged',now());
+ROLLBACK TO source_insert;
+SAVEPOINT version_insert;
+INSERT INTO knowledge_versions (workspace_id, source_id, version_id, kind, title, content, created_at) VALUES ('ws_b','rls-only','forged-v','faq','Forged','forged content',now());
+ROLLBACK TO version_insert;
+SAVEPOINT chunk_insert;
+INSERT INTO knowledge_chunks (workspace_id, source_id, version_id, chunk_id, chunk_index, text, locator_kind, locator_chunk_index, locator_position, start_offset, end_offset) VALUES ('ws_b','rls-only','v1','forged-chunk',1,'forged','chunk',1,NULL,0,6);
+ROLLBACK TO chunk_insert;
+ROLLBACK;

@@ -1,0 +1,10 @@
+CREATE ROLE knowledge_runtime LOGIN NOSUPERUSER NOBYPASSRLS;
+GRANT CONNECT ON DATABASE postgres TO knowledge_runtime;
+GRANT USAGE ON SCHEMA public TO knowledge_runtime;
+GRANT SELECT ON knowledge_sources TO knowledge_runtime;
+GRANT INSERT (workspace_id, source_id, kind, title, created_at) ON knowledge_sources TO knowledge_runtime;
+GRANT UPDATE (status) ON knowledge_sources TO knowledge_runtime;
+GRANT SELECT ON knowledge_versions TO knowledge_runtime;
+GRANT INSERT (workspace_id, source_id, version_id, kind, title, content, created_at) ON knowledge_versions TO knowledge_runtime;
+GRANT UPDATE (status, approved_at, approved_by, revoked_at, revoked_by, revocation_reason) ON knowledge_versions TO knowledge_runtime;
+GRANT SELECT, INSERT ON knowledge_chunks TO knowledge_runtime;

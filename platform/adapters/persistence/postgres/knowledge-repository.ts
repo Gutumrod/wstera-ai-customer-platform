@@ -242,7 +242,7 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
     || typeof fields.createdAt !== "string" || !Number.isFinite(Date.parse(fields.createdAt))) {
     throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
   }
-  const rawChunks = snapshotArray(fields.chunks, 5_000);
+  const rawChunks = snapshotArray(fields.chunks, 100_000);
   if (!rawChunks || rawChunks.length === 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
   const chunks: KnowledgeChunk[] = [];
   let previousEnd = 0;

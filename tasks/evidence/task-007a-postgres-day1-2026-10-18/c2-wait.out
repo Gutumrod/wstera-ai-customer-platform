@@ -1,0 +1,1 @@
+52160|Lock|transactionid|UPDATE knowledge_versions SET status='approved', approved_at=now(), approved_by='staff-a' WHERE workspace_id='ws_a' AND source_id='race-insert' AND version_id='v1';
