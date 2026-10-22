@@ -1,17 +1,16 @@
-# Proposed Task — G1 authenticated knowledge host
+# Task G1-HOST-001 — Authenticated knowledge host
 
-**Status: PROPOSED; Owner must approve this scope and the host/auth/storage choices before implementation.** This is the next implementation slice toward G1, not a claim that the one-shop Web MVP is complete.
+**Status: APPROVED FOR LOCAL SYNTHETIC IMPLEMENTATION.** On 2026-10-23, the Owner approved Node.js + Next.js + Supabase Auth/Postgres/Private Storage and authorized local-only synthetic data. Hosted setup, deployment, production data and spend remain unauthorized. This is the next implementation slice toward G1, not a claim that the one-shop Web MVP is complete.
 
 ## Goal
 
 Let an authenticated staff member in one controlled workspace upload, validate, review, and approve FAQ/PDF/CSV knowledge through a server-owned identity boundary. Persist the approved version and source-addressable page/row/span citations using the existing knowledge module and PostgreSQL adapter. Keep this host provider-neutral outside replaceable auth/storage/database adapters.
 
-## Recommended starting architecture (not locked)
+## Approved local architecture
 
-- Run upload and PDF extraction on a Node.js runtime because `LocalKnowledgeDocumentExtractor` uses `node:worker_threads` and PDF.js package assets. Cloudflare Workers currently exposes `node:worker_threads` only as a non-functional stub. A runtime-neutral extractor or separate Node ingestion service is an alternative, but adds implementation scope.
-- Use the proposed Next.js/TypeScript host and Supabase Auth, PostgreSQL and private Storage only after Owner approval. Pin exact dependencies and follow current official documentation during implementation; do not add service credentials to browser code.
+- Run upload and PDF extraction on Node.js using the approved Next.js/TypeScript host and Supabase Auth, PostgreSQL and private Storage. Pin exact dependencies and follow current official documentation; do not add server credentials to browser code.
 - For serverless PostgreSQL, validate the selected driver with the Supabase transaction pooler, disable prepared statements if required, and keep workspace `SET LOCAL` within the adapter transaction. Connect with a runtime role that is not superuser and has no `BYPASSRLS`.
-- Do not select a model provider, call a live model, apply hosted migrations, deploy, or incur paid resource use in this task.
+- Do not select a model provider, call a live model, apply hosted migrations, deploy, or incur paid resource use in this task. Local Supabase migrations and synthetic fixtures are allowed.
 
 ## Scope
 
@@ -40,9 +39,15 @@ Let an authenticated staff member in one controlled workspace upload, validate, 
 - Browser E2E demonstration of upload → cited answer → durable human takeover and authorized resume.
 - LINE integration, multi-shop self-service, billing and deployment.
 
-## Owner decisions required before implementation
+## Owner decisions and safe defaults
 
-- Approve Node.js host runtime or choose the Cloudflare route with a separately validated extractor design.
-- Approve the proposed Next.js + Supabase Auth/Postgres/Storage direction, or name a replacement.
-- Specify controlled-shop bootstrap/initial staff identity, data region, retention/deletion policy and maximum source upload constraints.
+- Architecture decision: **approved** (Node.js + Next.js + Supabase Auth/Postgres/Private Storage), local-only synthetic operation.
+- Initial staff/workspace bootstrap: local seed script, one synthetic user/workspace, credentials supplied only through ignored `.env.local`.
+- For the local prototype, use the extractor's enforced limits: 5 MiB/file, 100 PDF pages, 5,000 CSV rows, 100 columns, 100,000 extracted characters. These are implementation bounds, not customer-facing limits.
+- Region: local machine only for this task; proposed future hosted evaluation region is Singapore (`ap-southeast-1`), pending separate Owner approval.
+- Retention: synthetic local data only; recommend wiping the local Supabase volume when the task is complete. For future hosted evaluation, propose deleting originals on source deletion and 30-day backup retention; pending separate Owner approval.
 - Keep live model/provider spend and all hosted deployment/migration outside this task unless separately approved.
+
+## Implementation status
+
+Implemented on the task branch; see [`../reports/G1-HOST-001-IMPLEMENTATION.md`](../reports/G1-HOST-001-IMPLEMENTATION.md). Code review, hosted CI and Owner merge decision remain pending. Local Docker-backed Supabase E2E could not run on the current machine because no Docker daemon is available; automated adapter, migration-policy, and synthetic integration tests are the evidence available so far.

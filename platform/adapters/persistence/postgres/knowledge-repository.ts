@@ -405,6 +405,17 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     });
   }
 
+  async listSources(workspace: TrustedWorkspaceContext): Promise<readonly KnowledgeSource[]> {
+    return this.scoped(workspace, async (query) => {
+      const result = await query.query<SourceRow>(
+        `SELECT workspace_id, source_id, kind, title, status, created_at
+         FROM knowledge_sources WHERE workspace_id = $1 ORDER BY created_at DESC, source_id LIMIT 100`,
+        [workspace.workspaceId],
+      );
+      return Object.freeze(result.rows.map(mapSource));
+    });
+  }
+
   async archiveSource(workspace: TrustedWorkspaceContext, sourceId: string): Promise<KnowledgeSource> {
     return this.scoped(workspace, async (query) => {
       const result = await query.query<SourceRow>(
@@ -482,6 +493,21 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
 
   async getVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string): Promise<KnowledgeVersion | null> {
     return this.scoped(workspace, (query) => this.loadVersion(query, workspace.workspaceId, sourceId, versionId));
+  }
+
+  async listVersions(workspace: TrustedWorkspaceContext, sourceId: string): Promise<readonly KnowledgeVersion[]> {
+    return this.scoped(workspace, async (query) => {
+      const result = await query.query<VersionRow>(
+        `SELECT workspace_id, source_id, version_id, kind, title, content, status, created_at,
+                approved_at, approved_by, revoked_at, revoked_by, revocation_reason
+         FROM knowledge_versions WHERE workspace_id = $1 AND source_id = $2
+         ORDER BY created_at DESC, version_id LIMIT 50`,
+        [workspace.workspaceId, sourceId],
+      );
+      const versions: KnowledgeVersion[] = [];
+      for (const row of result.rows) versions.push(mapVersion(row, await this.loadChunks(query, workspace.workspaceId, sourceId, row.version_id)));
+      return Object.freeze(versions);
+    });
   }
 
   async transitionVersion(

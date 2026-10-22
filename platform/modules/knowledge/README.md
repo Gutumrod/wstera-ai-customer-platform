@@ -17,7 +17,7 @@ Citation spans are UTF-16 code-unit offsets into the exact stored `content`; hit
 
 ## Not implemented / remaining G1 work
 
-An authenticated upload/approval path, durable async ingestion state machine, private object storage for original files, hosted PostgreSQL connection pool and role provisioning, pgvector/hybrid search, production authorization beyond database RLS, Web Chat UI, and staff takeover remain unimplemented. The PostgreSQL repository is exercised locally with PGlite, not a hosted database. The Node parser is not a deployment integration. Untrusted document instructions remain text data; this module has no code path that interprets them as commands.
+G1-HOST-001 adds a local-only authenticated upload/approval host, private original storage, workspace lookup and local PostgreSQL role wiring. These parts are tested through local adapters/PGlite but are not a hosted Supabase/browser E2E. A durable async ingestion state machine, pgvector/hybrid search, broader production authorization, Web Chat UI, and staff takeover remain unimplemented. Untrusted document instructions remain text data; this module has no code path that interprets them as commands.
 
 ## Local evidence
 
@@ -25,4 +25,4 @@ An authenticated upload/approval path, durable async ingestion state machine, pr
 
 ## Next executable slice
 
-Task 007A adds a transaction-scoped PostgreSQL repository and local RLS integration coverage. Next add a server-authenticated upload/approval host that uses a real least-privileged connection pool and private file storage, then compose the shared engine into Web Chat. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Handoff domain state exists separately, but no production delivery path is integrated.
+Next add route-level tests and perform Docker-backed local Supabase authenticated upload/approval/search E2E, then compose the shared engine into Web Chat. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Handoff domain state exists separately, but no production delivery path is integrated.

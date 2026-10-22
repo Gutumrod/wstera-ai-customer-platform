@@ -1,5 +1,4 @@
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type {
@@ -9,7 +8,7 @@ import type {
 
 const MAX_PDF_PAGES = 100;
 const MAX_EXTRACTED_CHARS = 100_000;
-const PDFJS_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.resolve("pdfjs-dist/legacy/build/pdf.mjs")))));
+const PDFJS_ROOT = resolve(process.cwd(), "node_modules/pdfjs-dist");
 const PDFJS_STANDARD_FONTS = `${join(PDFJS_ROOT, "standard_fonts").replaceAll("\\", "/")}/`;
 const PDFJS_CMAPS = `${join(PDFJS_ROOT, "cmaps").replaceAll("\\", "/")}/`;
 
