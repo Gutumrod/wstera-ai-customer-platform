@@ -15,6 +15,7 @@ import type {
   KnowledgeRepositoryPort,
   KnowledgeSource,
   KnowledgeVersion,
+  KnowledgeVersionDraft,
   KnowledgeVersionTransition,
   KnowledgeVersionStatus,
 } from "../../contracts/data/knowledge.js";
@@ -226,6 +227,78 @@ export function createImportedKnowledgeVersion(input: Readonly<{
     chunks,
     createdAt,
   });
+}
+
+/** Rebuild and validate a repository draft with the module's canonical chunker. */
+export function canonicalizeKnowledgeVersionDraft(
+  workspace: TrustedWorkspaceContext,
+  version: KnowledgeVersionDraft,
+): KnowledgeVersion {
+  assertWorkspace(workspace, version.workspaceId);
+  const canonical = version.kind === "faq"
+    ? createFaqVersion({
+      workspace,
+      sourceId: version.sourceId,
+      versionId: version.versionId,
+      title: version.title,
+      content: version.content,
+      createdAt: version.createdAt,
+    })
+    : (() => {
+      if (version.kind !== "pdf" && version.kind !== "csv") throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+      const segments: KnowledgeExtractedSegment[] = [];
+      let current: { locator: KnowledgeExtractedSegment["locator"]; text: string; nextChunkIndex: number } | undefined;
+      for (const chunk of version.chunks) {
+        const locator = chunk.locator;
+        if (locator.kind !== "page" && locator.kind !== "row") throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+        const position = locator.kind === "page" ? locator.page : locator.row;
+        if (!Number.isSafeInteger(position) || position < 1) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+        if (!current || locator.chunkIndex === 0) {
+          if (current) segments.push(current);
+          if (locator.chunkIndex !== 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+          current = {
+            locator: locator.kind === "page" ? { kind: "page", page: locator.page } : { kind: "row", row: locator.row },
+            text: "",
+            nextChunkIndex: 0,
+          };
+        }
+        const currentPosition = current.locator.kind === "page" ? current.locator.page : current.locator.row;
+        if (locator.kind !== current.locator.kind || position !== currentPosition || locator.chunkIndex !== current.nextChunkIndex) {
+          throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+        }
+        current.text += chunk.text;
+        current.nextChunkIndex += 1;
+      }
+      if (current) segments.push(current);
+      return createImportedKnowledgeVersion({
+        workspace,
+        sourceId: version.sourceId,
+        versionId: version.versionId,
+        title: version.title,
+        kind: version.kind,
+        segments,
+        createdAt: version.createdAt,
+      });
+    })();
+
+  const sameLocator = (left: KnowledgeCitationLocator, right: KnowledgeCitationLocator): boolean => {
+    if (left.kind !== right.kind) return false;
+    if (left.kind === "span" && right.kind === "span") {
+      return left.chunkIndex === right.chunkIndex && left.start === right.start && left.end === right.end;
+    }
+    if (left.kind === "page" && right.kind === "page") return left.page === right.page && left.chunkIndex === right.chunkIndex;
+    if (left.kind === "row" && right.kind === "row") return left.row === right.row && left.chunkIndex === right.chunkIndex;
+    return left.kind === "chunk" && right.kind === "chunk" && left.chunkIndex === right.chunkIndex;
+  };
+  if (version.content !== canonical.content || version.chunks.length !== canonical.chunks.length
+    || version.chunks.some((chunk, index) => {
+      const expected = canonical.chunks[index]!;
+      return chunk.workspaceId !== expected.workspaceId || chunk.sourceId !== expected.sourceId
+        || chunk.versionId !== expected.versionId || chunk.chunkId !== expected.chunkId
+        || chunk.chunkIndex !== expected.chunkIndex || chunk.text !== expected.text
+        || chunk.start !== expected.start || chunk.end !== expected.end || !sameLocator(chunk.locator, expected.locator);
+    })) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+  return canonical;
 }
 
 export type PreparedKnowledgeDocumentVersion =

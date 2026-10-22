@@ -80,11 +80,33 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       await assert.rejects(databasePort(database).transaction(async (query) => {
         await query.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
         await query.query(
-          "INSERT INTO knowledge_sources (workspace_id, source_id, kind, title, status, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
-          [shopB.workspaceId, "forged", "faq", "Forged", "active", "2026-10-16T00:00:00.000Z"],
+          "INSERT INTO knowledge_sources (workspace_id, source_id, kind, title, created_at) VALUES ($1, $2, $3, $4, $5)",
+          [shopB.workspaceId, "forged", "faq", "Forged", "2026-10-16T00:00:00.000Z"],
         );
-      }), (error: unknown) => !(error instanceof KnowledgeError));
+      }), (error: unknown) => {
+        assert.equal((error as { code?: string }).code, "42501", "cross-workspace INSERT must fail at RLS, not a grant error");
+        return true;
+      });
       assert.equal(await repository.getSource(shopB, "forged"), null);
+
+      const forgedRead = await databasePort(database).transaction(async (query) => {
+        await query.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
+        return query.query(
+          "SELECT source_id FROM knowledge_sources WHERE workspace_id = $1 AND source_id = $2",
+          [shopB.workspaceId, "same-id"],
+        );
+      });
+      assert.equal(forgedRead.rows.length, 0);
+
+      const forgedUpdate = await databasePort(database).transaction(async (query) => {
+        await query.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
+        return query.query(
+          "UPDATE knowledge_sources SET status = 'archived' WHERE workspace_id = $1 AND source_id = $2 RETURNING source_id",
+          [shopB.workspaceId, "same-id"],
+        );
+      });
+      assert.equal(forgedUpdate.rows.length, 0);
+      assert.equal((await repository.getSource(shopB, "same-id"))?.status, "active");
     });
 
     await t.test("approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility", async () => {
@@ -155,6 +177,34 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const foreign = createFaqVersion({ workspace: shopB, sourceId: "foreign", versionId: "v1", title: "FAQ", content: "Answer" });
       await assert.rejects(repository.createVersion(shopA, foreign), { code: "CROSS_WORKSPACE_ACCESS_DENIED" });
       assert.equal(await repository.getVersion(shopA, "foreign", "v1"), null);
+    });
+
+    await t.test("rejects noncanonical chunk segmentation for FAQ and imported sources", async () => {
+      const content = `${"a".repeat(195)} ${"b".repeat(200)}`;
+      const faq = createFaqVersion({ workspace: shopA, sourceId: "noncanonical-faq", versionId: "v1", title: "FAQ", content });
+      const faqChunks = [
+        { ...faq.chunks[0]!, chunkId: "noncanonical-faq:v1:0", chunkIndex: 0, text: content.slice(0, 250), start: 0, end: 250,
+          locator: { kind: "span" as const, chunkIndex: 0, start: 0, end: 250 } },
+        { ...faq.chunks[1]!, chunkId: "noncanonical-faq:v1:1", chunkIndex: 1, text: content.slice(250), start: 250, end: content.length,
+          locator: { kind: "span" as const, chunkIndex: 1, start: 250, end: content.length } },
+      ];
+      await repository.createSource(shopA, { sourceId: faq.sourceId, title: faq.title, kind: "faq" });
+      await assert.rejects(repository.createVersion(shopA, { ...faq, chunks: faqChunks }), { code: "INVALID_KNOWLEDGE_INPUT" });
+
+      const pdf = createImportedKnowledgeVersion({
+        workspace: shopA, sourceId: "noncanonical-pdf", versionId: "v1", title: "PDF", kind: "pdf",
+        segments: [{ text: content, locator: { kind: "page", page: 4 } }],
+      });
+      const pdfChunks = [
+        { ...pdf.chunks[0]!, chunkId: "noncanonical-pdf:v1:0", chunkIndex: 0, text: content.slice(0, 250), start: 0, end: 250,
+          locator: { kind: "page" as const, page: 4, chunkIndex: 0 } },
+        { ...pdf.chunks[1]!, chunkId: "noncanonical-pdf:v1:1", chunkIndex: 1, text: content.slice(250), start: 250, end: content.length,
+          locator: { kind: "page" as const, page: 4, chunkIndex: 1 } },
+      ];
+      await repository.createSource(shopA, { sourceId: pdf.sourceId, title: pdf.title, kind: "pdf" });
+      await assert.rejects(repository.createVersion(shopA, { ...pdf, chunks: pdfChunks }), { code: "INVALID_KNOWLEDGE_INPUT" });
+      assert.equal(await repository.getVersion(shopA, faq.sourceId, faq.versionId), null);
+      assert.equal(await repository.getVersion(shopA, pdf.sourceId, pdf.versionId), null);
     });
   } finally {
     await database.close();
