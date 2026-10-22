@@ -1,5 +1,6 @@
 import { Readable } from "node:stream";
 import { Worker } from "node:worker_threads";
+import { resolve } from "node:path";
 import { parse as createCsvParser } from "csv-parse";
 import type {
   KnowledgeDocumentExtractionResult,
@@ -14,6 +15,7 @@ const MAX_CSV_COLUMNS = 100;
 const MAX_CSV_RECORD_CHARS = 16_384;
 const MAX_EXTRACTED_CHARS = 100_000;
 const PDF_WORKER_TIMEOUT_MS = 15_000;
+const PDF_WORKER_PATH = resolve(process.cwd(), "dist/adapters/knowledge/pdf-text-worker.js");
 const PDF_WORKER_RESOURCE_LIMITS = Object.freeze({
   maxOldGenerationSizeMb: 128,
   maxYoungGenerationSizeMb: 32,
@@ -106,7 +108,7 @@ export class LocalKnowledgeDocumentExtractor implements KnowledgeDocumentExtract
     if (!header) return failure("MALFORMED_FILE");
     return new Promise((resolve) => {
       let settled = false;
-      const worker = new Worker(new URL("./pdf-text-worker.js", import.meta.url), {
+      const worker = new Worker(PDF_WORKER_PATH, {
         workerData: { bytes: bytes.slice() },
         resourceLimits: PDF_WORKER_RESOURCE_LIMITS,
       });

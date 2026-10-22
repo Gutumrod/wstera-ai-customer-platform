@@ -13,5 +13,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["platform/**/*.ts"],
-  "exclude": ["node_modules", "dist", "source-repos", "_migration"]
+  "exclude": ["node_modules", "dist", "source-repos", "_migration", "platform/apps/merchant-console"]
 }

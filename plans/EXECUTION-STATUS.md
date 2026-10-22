@@ -1,6 +1,6 @@
 # Execution Status
 
-Updated: 2026-10-23. This records merged repository state, not product release approval.
+Updated: 2026-10-23. This records merged repository state and current local candidate, not product release approval.
 
 ## Current milestone
 
@@ -17,8 +17,8 @@ PR #16 merged the consolidated Phase 0C and G1 foundation work into `main` at me
 
 ## Remaining G1 work
 
-The next planned product slice is a controlled one-shop host integration: authenticated staff/workspace resolution, private knowledge upload and approval, shared-engine Web Chat composition, and durable operator handoff. No authenticated host or Web Chat app exists yet; the `platform/apps/` and `platform/composition/` folders are responsibility markers.
+Task G1-HOST-001 is implemented on `codex/g1-authenticated-knowledge-host`: local synthetic authenticated merchant console, workspace resolution, private knowledge upload/quarantine/approval, and composition with the shared knowledge engine. Its report records automated test evidence and the missing Docker-backed local Supabase E2E. It has not been reviewed or merged. Next: independent security review, hosted CI, and Owner merge decision. This slice does not include Web Chat, generated answers, or durable handoff.
 
 The current local PDF extractor uses Node `worker_threads`; Cloudflare Workers expose that API as a non-functional stub. A Node runtime is the compatibility recommendation for the first host slice, but the host/auth/storage architecture remains proposed until Owner approval. No provider spend, hosted migration, customer data or deployment has been authorized.
 
-G2 LINE pilot, G3 self-service multi-tenant onboarding, and G4 commercial validation remain gated behind G1 evidence.
+G2 LINE pilot, G3 self-service multi-tenant onboarding, and G4 commercial validation remain gated behind G1 evidence. Future hosted evaluation region (Singapore), deletion and backup-retention defaults are proposals only and need separate Owner approval.
