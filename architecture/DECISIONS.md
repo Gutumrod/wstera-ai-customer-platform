@@ -32,6 +32,16 @@ Tools are merely proposals from AI. Backend checks principal, workspace, policy,
 
 This Public repository contains newly authored scaffold, research and small reviewed adapters. Local copies of four previously private repos are .gitignored and are NOT public dependencies. Any future upstream/vendor code import needs a signed-off provenance/licensing/security report.
 
+## ADR-007 — Business-action contract lands ahead of its phase (Owner order 2026-10-25)
+
+`platform/contracts/business-actions/` was marked "Phase 3+ gated". On 2026-10-25 the Owner directed this repository to absorb the reusable parts of the retired private LINE product (`D-20261025-01..02` in the house decisions register), which includes the action lifecycle.
+
+What was allowed, and the boundary that keeps it safe:
+- Only DTOs, ports and a **pure** state reducer were added. There is no executor, no payment/order/booking write, no vendor SDK and no caller.
+- Risk is derived from the action kind inside `platform/modules/business-actions/`; a risk level, authorisation or confirmation coming from model text is ignored by construction.
+- A record that changes business state cannot reach `executed` without confirmation; re-confirmation is idempotent on the same confirmation id and refused on a different one.
+- Executing remains Phase 3+ work and needs its own task, review and gate. This ADR records a scoped exception, not a phase promotion: the roadmap order is unchanged.
+
 ## Target component contracts
 
 ```text
