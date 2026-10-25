@@ -1,8 +1,11 @@
 # WSTERA AI Customer Platform
 
-**Status (2026-10-15):** Discovery + small testable security boundary only. Two customer-support products will share ONE workspace-isolated AI/RAG engine.
+**Status (2026-10-25):** Early G1 build in progress. Workspace-isolated knowledge ingestion, review,
+approval and citation-backed search exist behind a local authenticated host; two customer-support
+products will share ONE workspace-isolated AI/RAG engine. Nothing here is production-ready, and no
+LINE round-trip has been run.
 
-**Start here:** [Concise Project Goal](BRIEF.md) · [Detailed Requirements](architecture/PRODUCT-REQUIREMENTS-DETAIL.md) · [Modular folder layout](architecture/REPOSITORY-STRUCTURE.md) · [Adapter contracts](architecture/PORTS-AND-ADAPTERS.md) · [Detailed phase plan](plans/PHASE-BREAKDOWN.md).
+**Start here:** [Concise Project Goal](BRIEF.md) · [Detailed Requirements](architecture/PRODUCT-REQUIREMENTS-DETAIL.md) · [Modular folder layout](architecture/REPOSITORY-STRUCTURE.md) · [Adapter contracts](architecture/PORTS-AND-ADAPTERS.md) · [Detailed phase plan](plans/PHASE-BREAKDOWN.md) · [Source-import provenance](architecture/SOURCE-IMPORT-PROVENANCE.md).
 
 **The new module folders are architecture placeholders, not implemented features.** Existing executable security-boundary code remains in `platform/src/` while Task 001 is reviewed.
 
@@ -53,7 +56,9 @@ Open `tasks/TASK-001-FOUNDATION.md` as first scoped Codex Cloud task, on its own
 
 ## Private source separation
 
-Four local source repository copies remain under `source-repos/` and are **intentionally excluded by .gitignore**, as are private local docs under `docs/` and copy verification under `_migration/`. They are not published or available to Codex Cloud. This repository contains original small boundary implementations informed by reviewed designs, **not bulk-copied source code** from those repositories. All future source import requires licensing/security review.
+Four local source repository copies remain under `source-repos/` and are **intentionally excluded by .gitignore**, as are private local docs under `docs/` and copy verification under `_migration/`. They are not published or available to Codex Cloud.
+
+This repository contains original boundary implementations informed by reviewed designs plus a small, itemised source import authorised by the Owner on 2026-10-25. Each imported item is rewritten in this repository's style, listed file-by-file with its source path and commit, and recorded in [SOURCE-IMPORT-PROVENANCE.md](architecture/SOURCE-IMPORT-PROVENANCE.md) together with its secret scan. Bulk copying a private repository remains prohibited; any further import needs its own licensing, secret and provenance review.
 
 [Public architecture overview](ARCHITECTURE.md) · [Proposed decisions](architecture/DECISIONS.md)
 
