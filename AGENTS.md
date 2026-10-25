@@ -32,8 +32,24 @@ Read in this order:
 - Keep architecture simple and free-tier-first until measurements justify operational dependencies. Do not invent test passes, cost figures or external integrations.
 - Write tests including malicious inputs, repeated events, timeout, tenant crossover, knowledge changes and human override. Fail closed.
 - Do not initiate deployment, access production, migrate databases or purchase resources without owner approval.
+- Keep task branches in this repository. Branches and worktrees follow the rule below.
 - Work in a task-specific branch and open a PR with summary, touched paths, fresh test output, security impact, cost impact and remaining blockers. Do not self-merge.
 - If a task conflicts with a security rule, stop and document the conflict rather than bypassing gates.
+
+## Branches and worktrees (Owner order 2026-10-25, register D-20261025-12)
+
+Every branch and worktree for this product stays inside the product folder. Do not create
+worktrees anywhere else — scattered checkouts are what this rule exists to prevent.
+
+- Worktrees live at `<repo>/.worktrees/<task>/` only. Never `%TEMP%`, `D:\wt`,
+  `runtime/worktrees`, a sibling clone, or a drive root.
+- Add `.worktrees/` to `.git/info/exclude`, not to the repository `.gitignore`.
+- Before removing a worktree: it must be clean, its HEAD must be on `origin`, and its work must
+  be merged or explicitly abandoned. Remove with `git worktree remove`; never `rm -rf`.
+- Delete a local branch only after its work is merged and pushed. Never rewrite, force-push or
+  delete a branch you do not own.
+- Do not edit another agent's worktree, branch, commits, task briefs or evidence files. If one is
+  broken or blocks a gate, report it to the Owner/Commander instead of fixing it silently.
 
 ## Build/verification
 
