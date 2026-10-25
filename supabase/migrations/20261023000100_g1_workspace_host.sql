@@ -76,6 +76,19 @@ END $$;
 ALTER ROLE aicp_migrator NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT;
 ALTER SCHEMA aicp OWNER TO aicp_migrator;
 
+-- Product schema objects belong to the product migrator; the runtime role remains grant-only.
+ALTER TABLE aicp.knowledge_sources OWNER TO aicp_migrator;
+ALTER TABLE aicp.knowledge_versions OWNER TO aicp_migrator;
+ALTER TABLE aicp.knowledge_chunks OWNER TO aicp_migrator;
+ALTER TABLE aicp.workspaces OWNER TO aicp_migrator;
+ALTER TABLE aicp.workspace_memberships OWNER TO aicp_migrator;
+ALTER TABLE aicp.workspace_connections OWNER TO aicp_migrator;
+ALTER FUNCTION aicp.protect_knowledge_version_identity() OWNER TO aicp_migrator;
+ALTER FUNCTION aicp.guard_knowledge_chunk_insert() OWNER TO aicp_migrator;
+ALTER FUNCTION aicp.is_active_workspace_member(text) OWNER TO aicp_migrator;
+GRANT SELECT ON aicp.workspaces, aicp.workspace_memberships TO aicp_migrator;
+GRANT USAGE ON SCHEMA auth TO aicp_migrator;
+
 -- Dedicated direct-Postgres runtime role. Local setup grants a password only to the ignored local role.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'knowledge_runtime') THEN
@@ -123,6 +136,8 @@ CREATE TABLE aicp.knowledge_original_objects (
   FOREIGN KEY (workspace_id, source_id, version_id)
     REFERENCES aicp.knowledge_versions (workspace_id, source_id, version_id) ON DELETE CASCADE
 );
+ALTER TABLE aicp.knowledge_original_objects OWNER TO aicp_migrator;
+ALTER TABLE aicp.knowledge_quarantine_records OWNER TO aicp_migrator;
 ALTER TABLE aicp.knowledge_original_objects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE aicp.knowledge_original_objects FORCE ROW LEVEL SECURITY;
 CREATE POLICY knowledge_original_objects_workspace_policy ON aicp.knowledge_original_objects

@@ -54,17 +54,17 @@ async function main() {
     const passwordDdl = await database.query("SELECT format('ALTER ROLE knowledge_runtime LOGIN PASSWORD %L', $1) AS statement", [runtimePassword]);
     await database.query(passwordDdl.rows[0].statement);
     await database.query(`
-      INSERT INTO public.workspaces (workspace_id, name, status)
+      INSERT INTO aicp.workspaces (workspace_id, name, status)
       VALUES ('synthetic-shop', 'Synthetic shop', 'active')
       ON CONFLICT (workspace_id) DO UPDATE SET name = EXCLUDED.name, status = 'active'
     `);
     await database.query(`
-      INSERT INTO public.workspace_memberships (workspace_id, user_id, role, status)
+      INSERT INTO aicp.workspace_memberships (workspace_id, user_id, role, status)
       VALUES ('synthetic-shop', $1, 'owner', 'active')
       ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'owner', status = 'active'
     `, [user.id]);
     await database.query(`
-      INSERT INTO public.workspace_connections (workspace_id, connection_id, channel, status)
+      INSERT INTO aicp.workspace_connections (workspace_id, connection_id, channel, status)
       VALUES ('synthetic-shop', 'synthetic-web', 'web', 'active')
       ON CONFLICT (workspace_id, connection_id) DO UPDATE SET channel = 'web', status = 'active'
     `);

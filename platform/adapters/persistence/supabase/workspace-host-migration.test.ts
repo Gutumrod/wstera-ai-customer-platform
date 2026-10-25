@@ -92,6 +92,22 @@ test("Supabase local migrations stay in sync and enforce workspace membership/st
       "SELECT r.rolname AS owner FROM pg_namespace n JOIN pg_roles r ON r.oid = n.nspowner WHERE n.nspname = 'aicp'",
     );
     assert.deepEqual(schemaOwner.rows[0], { owner: "aicp_migrator" });
+    const relationOwners = await database.query<{ owner: string }>(
+      `SELECT DISTINCT r.rolname AS owner
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_roles r ON r.oid = c.relowner
+       WHERE n.nspname = 'aicp' AND c.relkind IN ('r', 'p', 'i', 'S') ORDER BY owner`,
+    );
+    assert.deepEqual(relationOwners.rows, [{ owner: "aicp_migrator" }]);
+    const functionOwners = await database.query<{ function_name: string; owner: string }>(
+      `SELECT p.proname AS function_name, r.rolname AS owner
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_roles r ON r.oid = p.proowner
+       WHERE n.nspname = 'aicp' ORDER BY p.proname`,
+    );
+    assert.deepEqual(functionOwners.rows, [
+      { function_name: "guard_knowledge_chunk_insert", owner: "aicp_migrator" },
+      { function_name: "is_active_workspace_member", owner: "aicp_migrator" },
+      { function_name: "protect_knowledge_version_identity", owner: "aicp_migrator" },
+    ]);
     const quarantinePrivileges = await database.query<{ can_select: boolean; can_insert: boolean }>(
       `SELECT has_table_privilege('knowledge_runtime', 'aicp.knowledge_quarantine_records', 'SELECT') AS can_select,
               has_table_privilege('knowledge_runtime', 'aicp.knowledge_quarantine_records', 'INSERT') AS can_insert`,
