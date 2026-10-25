@@ -5,9 +5,11 @@ export function requiredKnowledgeDatabaseUrl(appEnv = process.env.APP_ENV, value
     try { parsed = new URL(value); } catch { throw new Error("LAB_KNOWLEDGE_DATABASE_URL_REQUIRED"); }
     const username = decodeURIComponent(parsed.username);
     const validRole = /^(knowledge_runtime|postgres)\.[a-z0-9]{20}$/.test(username);
+    const expectedProjectRef = process.env.SUPABASE_PROJECT_REF;
     if (!/^postgres(?:ql)?:$/.test(parsed.protocol) || !parsed.hostname.endsWith(".pooler.supabase.com")
       || !["5432", "6543"].includes(parsed.port) || parsed.pathname !== "/postgres"
-      || parsed.password.length === 0 || !validRole) {
+      || parsed.search !== "" || parsed.hash !== "" || parsed.password.length === 0 || !validRole
+      || (expectedProjectRef !== undefined && !username.endsWith(`.${expectedProjectRef}`))) {
       throw new Error("LAB_KNOWLEDGE_DATABASE_URL_REQUIRED");
     }
     return value;

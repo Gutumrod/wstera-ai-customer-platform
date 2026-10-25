@@ -3,7 +3,10 @@ import { register } from "node:module";
 import test from "node:test";
 import { requiredKnowledgeDatabaseUrl } from "./knowledge-database-url.js";
 
-test("knowledge database URL policy preserves local guard and accepts only Supabase LAB pooler URLs", async () => {
+test("knowledge database URL policy preserves local guard and accepts only Supabase LAB pooler URLs", async (t) => {
+  const previousProjectRef = process.env.SUPABASE_PROJECT_REF;
+  delete process.env.SUPABASE_PROJECT_REF;
+
   assert.equal(requiredKnowledgeDatabaseUrl("local", "postgresql://knowledge_runtime:local@127.0.0.1:54322/postgres"),
     "postgresql://knowledge_runtime:local@127.0.0.1:54322/postgres");
   assert.throws(() => requiredKnowledgeDatabaseUrl("local", "postgresql://knowledge_runtime:local@db.example.com:54322/postgres"),
@@ -27,7 +30,21 @@ test("knowledge database URL policy preserves local guard and accepts only Supab
     "postgresql://knowledge_runtime.abcdefghijklmnopqrst@aws-0.pooler.supabase.com:5432/postgres",
     "postgresql://attacker.project-ref:synthetic@aws-0.pooler.supabase.com:5432/postgres",
     "postgresql://knowledge_runtime.project-ref:synthetic@evilpooler.supabase.com:5432/postgres",
+    "postgresql://knowledge_runtime.abcdefghijklmnopqrst:pw@evilstuff.pooler.supabase.com:5432/postgres?sslmode=disable",
+    "postgresql://knowledge_runtime.abcdefghijklmnopqrst:pw@aws-0.pooler.supabase.com:5432/postgres#disable-tls",
   ]) assert.throws(() => requiredKnowledgeDatabaseUrl("lab", url), /LAB_KNOWLEDGE_DATABASE_URL_REQUIRED/);
+
+  process.env.SUPABASE_PROJECT_REF = "abcdefghijklmnopqrst";
+  try {
+    const matchingRefUrl = "postgresql://knowledge_runtime.abcdefghijklmnopqrst:synthetic@aws-0.pooler.supabase.com:5432/postgres";
+    assert.equal(requiredKnowledgeDatabaseUrl("lab", matchingRefUrl), matchingRefUrl);
+    assert.throws(() => requiredKnowledgeDatabaseUrl("lab",
+      "postgresql://knowledge_runtime.uvwxyzabcdefghijklmn:synthetic@aws-0.pooler.supabase.com:5432/postgres"),
+    /LAB_KNOWLEDGE_DATABASE_URL_REQUIRED/);
+  } finally {
+    if (previousProjectRef === undefined) delete process.env.SUPABASE_PROJECT_REF;
+    else process.env.SUPABASE_PROJECT_REF = previousProjectRef;
+  }
 
   register("data:text/javascript,export async function resolve(specifier, context, nextResolve) { if (specifier === 'server-only') return { url: 'data:text/javascript,', shortCircuit: true }; return nextResolve(specifier, context); }", import.meta.url);
   const { createSupabaseAdminClient } = await import("../apps/merchant-console/lib/supabase/admin.js");
@@ -40,7 +57,10 @@ test("knowledge database URL policy preserves local guard and accepts only Supab
   process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
   process.env.SUPABASE_SECRET_KEY = "synthetic";
   try {
-    assert.throws(() => createSupabaseAdminClient(), { message: "LOCAL_SUPABASE_SERVER_SECRET_REQUIRED" });
+    // LAB host startup is blocked on HOST-004 storage configuration; pin fail-closed behavior until that task lands.
+    await t.test("lab admin client remains blocked pending HOST-004 storage configuration", () => {
+      assert.throws(() => createSupabaseAdminClient(), { message: "LOCAL_SUPABASE_SERVER_SECRET_REQUIRED" });
+    });
   } finally {
     if (previous.appEnv === undefined) delete process.env.APP_ENV;
     else process.env.APP_ENV = previous.appEnv;

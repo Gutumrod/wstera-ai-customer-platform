@@ -54,6 +54,8 @@ No secrets, external services or paid APIs are required for baseline checks.
 
 Product knowledge and workspace objects live in schema `aicp`; the product migrator is `aicp_migrator` and the application runtime role is `knowledge_runtime`. The product migrations leave the `public` schema empty. Local Supabase exposes `aicp` through `supabase/config.toml`; for any separately approved hosted project, an operator must also add `aicp` to the project's exposed API schemas in the Supabase dashboard before the membership API can use it. Hosted database access and migrations are outside this prototype's current approval.
 
+For an approved hosted lab run, set `SUPABASE_PROJECT_REF` to that project's exact 20-character ref; the `DATABASE_URL` username must end in the same ref (for example, `knowledge_runtime.<project-ref>`). Hosted runs should always set `SUPABASE_PROJECT_REF` so the connection is bound to the intended project. Lab database URLs with query strings or fragments are rejected.
+
 ## Local merchant console (synthetic data only)
 
 Requires Node.js 22+, npm, Docker Desktop or another working Docker daemon, and the Supabase CLI. This flow targets loopback addresses only; do not put hosted Supabase values in `.env.local`.

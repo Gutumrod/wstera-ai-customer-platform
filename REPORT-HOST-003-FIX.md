@@ -275,4 +275,12 @@ Route (app)
 - HOST-004 storage configuration is required before LAB host startup can run. Hosted exposure must be configured by an operator in the dashboard when a hosted project is separately approved.
 - Local Docker-backed seed/bootstrap was not run in this task; only source changes and the prescribed automated check were verified.
 
+## Round 3 — lab URL policy hardening
+
+- Lab URLs now reject non-empty query strings and fragments; the regression test includes `?sslmode=disable` and a fragment case.
+- When `SUPABASE_PROJECT_REF` is set, the database username's project suffix must match exactly. A matching synthetic ref passes and a different ref fails. README tells operators to set this variable for hosted runs.
+- The blocked lab admin assertion is named explicitly and documents that startup remains blocked on HOST-004 storage configuration; the storage guard was not changed.
+- `npm run check`: passed — typecheck passed, **177 tests passed, 0 failed, 0 skipped, 0 todo**, and the Next.js console production build passed.
+- No hosted database was contacted or written. Changes committed locally only; not pushed.
+
 DONE
