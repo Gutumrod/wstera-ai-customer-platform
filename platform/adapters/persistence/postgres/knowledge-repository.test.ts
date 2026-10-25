@@ -20,7 +20,7 @@ function databasePort(database: PGlite, failOnChunkInsert = false, statements?: 
         const queryPort: PostgresQueryPort = {
           async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
             statements?.push(sql);
-            if (failOnChunkInsert && sql.startsWith("INSERT INTO knowledge_chunks")) {
+            if (failOnChunkInsert && sql.startsWith("INSERT INTO aicp.knowledge_chunks")) {
               throw Object.assign(new Error("test injection"), { code: "XX000" });
             }
             const result = await transaction.query<Row>(sql, [...values]);
@@ -39,13 +39,14 @@ async function createRepository() {
   const migration = await readFile(migrationPath, "utf8");
   await database.exec(migration);
   await database.exec(`
-    GRANT SELECT ON knowledge_sources TO knowledge_runtime;
-    GRANT INSERT (workspace_id, source_id, kind, title, created_at) ON knowledge_sources TO knowledge_runtime;
-    GRANT UPDATE (status) ON knowledge_sources TO knowledge_runtime;
-    GRANT SELECT ON knowledge_versions TO knowledge_runtime;
-    GRANT INSERT (workspace_id, source_id, version_id, kind, title, content, created_at) ON knowledge_versions TO knowledge_runtime;
-    GRANT UPDATE (status, approved_at, approved_by, revoked_at, revoked_by, revocation_reason) ON knowledge_versions TO knowledge_runtime;
-    GRANT SELECT, INSERT ON knowledge_chunks TO knowledge_runtime;
+    GRANT USAGE ON SCHEMA aicp TO knowledge_runtime;
+    GRANT SELECT ON aicp.knowledge_sources TO knowledge_runtime;
+    GRANT INSERT (workspace_id, source_id, kind, title, created_at) ON aicp.knowledge_sources TO knowledge_runtime;
+    GRANT UPDATE (status) ON aicp.knowledge_sources TO knowledge_runtime;
+    GRANT SELECT ON aicp.knowledge_versions TO knowledge_runtime;
+    GRANT INSERT (workspace_id, source_id, version_id, kind, title, content, created_at) ON aicp.knowledge_versions TO knowledge_runtime;
+    GRANT UPDATE (status, approved_at, approved_by, revoked_at, revoked_by, revocation_reason) ON aicp.knowledge_versions TO knowledge_runtime;
+    GRANT SELECT, INSERT ON aicp.knowledge_chunks TO knowledge_runtime;
   `);
   return { database, repository: new PostgresKnowledgeRepository(databasePort(database)) };
 }
@@ -74,14 +75,14 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
 
       const unscoped = await database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
-        return transaction.query("SELECT source_id FROM knowledge_sources WHERE source_id = 'same-id'");
+        return transaction.query("SELECT source_id FROM aicp.knowledge_sources WHERE source_id = 'same-id'");
       });
       assert.equal(unscoped.rows.length, 0);
 
       await assert.rejects(databasePort(database).transaction(async (query) => {
         await query.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
         await query.query(
-          "INSERT INTO knowledge_sources (workspace_id, source_id, kind, title, created_at) VALUES ($1, $2, $3, $4, $5)",
+          "INSERT INTO aicp.knowledge_sources (workspace_id, source_id, kind, title, created_at) VALUES ($1, $2, $3, $4, $5)",
           [shopB.workspaceId, "forged", "faq", "Forged", "2026-10-16T00:00:00.000Z"],
         );
       }), (error: unknown) => {
@@ -93,7 +94,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const forgedRead = await databasePort(database).transaction(async (query) => {
         await query.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
         return query.query(
-          "SELECT source_id FROM knowledge_sources WHERE workspace_id = $1 AND source_id = $2",
+          "SELECT source_id FROM aicp.knowledge_sources WHERE workspace_id = $1 AND source_id = $2",
           [shopB.workspaceId, "same-id"],
         );
       });
@@ -102,7 +103,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const forgedUpdate = await databasePort(database).transaction(async (query) => {
         await query.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
         return query.query(
-          "UPDATE knowledge_sources SET status = 'archived' WHERE workspace_id = $1 AND source_id = $2 RETURNING source_id",
+          "UPDATE aicp.knowledge_sources SET status = 'archived' WHERE workspace_id = $1 AND source_id = $2 RETURNING source_id",
           [shopB.workspaceId, "same-id"],
         );
       });
@@ -167,7 +168,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
         await transaction.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
         await transaction.query(
-          `INSERT INTO knowledge_chunks
+          `INSERT INTO aicp.knowledge_chunks
             (workspace_id, source_id, version_id, chunk_id, chunk_index, text, locator_kind,
              locator_chunk_index, locator_position, start_offset, end_offset)
            VALUES ($1, $2, $3, 'late-chunk', 99, 'late content', 'span', 99, NULL, 0, 12)`,
