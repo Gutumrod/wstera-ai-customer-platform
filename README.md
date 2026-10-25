@@ -1,10 +1,12 @@
 # WSTERA AI Customer Platform
 
-**Status (2026-10-25):** Early G1 build in progress. A local-only authenticated merchant knowledge
-host (staff sign-in, workspace-scoped PDF/CSV ingestion with review and approval, citation-backed
-search) exists as a candidate; G1 end-to-end acceptance is still open. Two customer-support
-products will share ONE workspace-isolated AI/RAG engine. Nothing here is production-ready, and no
-LINE round-trip has been run.
+**Status (2026-10-25, `main` `9b4f997`):** Early G1 build in progress. PR #18 merged the local-only
+authenticated merchant knowledge host (staff sign-in, workspace-scoped PDF/CSV ingestion with review
+and approval, citation-backed search); Docker-backed local Supabase E2E and G1 end-to-end acceptance
+remain open. PRs #19–#21 added a pure PromptPay payload builder, business-action lifecycle contract,
+and provenance/pilot-gate docs; these do not wire live business actions or payments. Two
+customer-support products will share ONE workspace-isolated AI/RAG engine. Nothing here is
+production-ready, and no LINE round-trip has been run.
 
 **Start here:** [Concise Project Goal](BRIEF.md) · [Detailed Requirements](architecture/PRODUCT-REQUIREMENTS-DETAIL.md) · [Modular folder layout](architecture/REPOSITORY-STRUCTURE.md) · [Adapter contracts](architecture/PORTS-AND-ADAPTERS.md) · [Detailed phase plan](plans/PHASE-BREAKDOWN.md) · [Source-import provenance](architecture/SOURCE-IMPORT-PROVENANCE.md).
 

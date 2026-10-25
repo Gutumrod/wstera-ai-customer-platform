@@ -24,6 +24,6 @@
 
 **G0 Foundation → G1 Web + RAG MVP → G2 LINE Pilot → G3 Multi-tenant Self-service → G4 ลูกค้าจ่ายเงินจริง**
 
-**สถานะปัจจุบัน (2026-10-23):** PR #16 รวมงานเดิม #4–#15 และ merge เข้า `main` ที่ `857b2e5` แล้ว งานที่ merge เป็น foundation และ G1 slices บางส่วนเท่านั้น; G1 แบบครบเส้นทางยังไม่ผ่าน ดู [สถานะล่าสุด](plans/EXECUTION-STATUS.md) งานถัดไปต้องผ่าน scope, security review และ Owner approval ก่อน merge/deploy
+**สถานะปัจจุบัน (2026-10-25):** PR #16 รวม foundation/G1 slices; PR #18–#21 merge เข้า `main` เพิ่มแล้ว รวม local authenticated knowledge host, PromptPay payload builder, business-action lifecycle contract และ provenance/pilot gates แต่ G1 แบบครบเส้นทางยังไม่ผ่าน ดู [สถานะล่าสุด](plans/EXECUTION-STATUS.md) และ [แผนงาน](plans/PLAN-G1-WEB-RAG-MVP.md) งานต่อไปยังต้องผ่าน scope, security review และ Owner approval ก่อน merge/deploy
 
 **รายละเอียดล็อกทั้งหมด:** [Product Requirements](architecture/PRODUCT-REQUIREMENTS-DETAIL.md) · [Folder Map](architecture/REPOSITORY-STRUCTURE.md) · [Adapter Rules](architecture/PORTS-AND-ADAPTERS.md) · [Roadmap](plans/PHASE-BREAKDOWN.md) · [Agent Rules](AGENTS.md)

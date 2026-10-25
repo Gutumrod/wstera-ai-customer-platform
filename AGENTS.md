@@ -32,6 +32,7 @@ Read in this order:
 - Keep architecture simple and free-tier-first until measurements justify operational dependencies. Do not invent test passes, cost figures or external integrations.
 - Write tests including malicious inputs, repeated events, timeout, tenant crossover, knowledge changes and human override. Fail closed.
 - Do not initiate deployment, access production, migrate databases or purchase resources without owner approval.
+- Keep task branches in this repository. Create project task worktrees only under `<repo>/.worktrees/<task>`; do not create external clones or worktrees for this project.
 - Work in a task-specific branch and open a PR with summary, touched paths, fresh test output, security impact, cost impact and remaining blockers. Do not self-merge.
 - If a task conflicts with a security rule, stop and document the conflict rather than bypassing gates.
 

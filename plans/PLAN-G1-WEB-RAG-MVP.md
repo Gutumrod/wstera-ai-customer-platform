@@ -1,6 +1,6 @@
 # Proposed Execution Plan — G1 One-Shop Web/RAG MVP
 
-**Status: PROPOSED; implementation scope and host/auth/storage choices still require Owner approval.** PR #16 has cleared the consolidation gate. Product goals remain those locked in `BRIEF.md`; this plan does not lock the proposed stack or invent evaluation thresholds.
+**Status: PROPOSED execution plan, updated 2026-10-25 against `main` at `9b4f997`.** PRs #16 and #18–#21 are merged. The local synthetic knowledge host is implemented and merged, but G1 end-to-end acceptance remains open. Product goals remain those locked in `BRIEF.md`; this plan does not invent evaluation thresholds or authorize hosted/production work.
 
 ## Problem and user
 
@@ -22,13 +22,15 @@ Excluded: live LINE integration, self-service multi-shop onboarding, billing, pr
 
 ## Proposed work order
 
-1. Clear G0 review/merge and stale-document gates; accept the Phase 0C tenancy contract base. **Completed:** PR #16 merged and post-merge CI passed.
-2. Approve and execute Task 002 knowledge/retrieval contracts. **Implemented locally and merged as a slice; full task remains partial.**
-3. Build bounded ingestion and establish the Thai/SKU synthetic baseline. **Local extraction/evaluation slices are merged; authenticated upload/private storage are not implemented.**
-4. Implement [Task G1 authenticated knowledge host](../tasks/TASK-G1-HOST-001.md): resolve authenticated staff to trusted workspace identity, upload and approve source versions through the existing ports.
-5. Add Web Chat and the smallest usable operator takeover path on the same conversation/engine contracts, with durable state and send-time enforcement.
-6. Approve a live provider and budget, then record usage, latency, failures and estimated cost. No hidden mock success.
-7. Run the end-to-end acceptance pass and independent security review; present evidence for Owner demo/approval.
+1. **Reconcile status documents.** Update execution status, blockers and work queue to reflect PRs #18–#21 merged on 2026-10-25; do not inherit stale pending-merge statements.
+2. **Close the local host evidence gap.** Run the documented Docker-backed synthetic Supabase sign-in → upload → review/approve → citation-search flow. The PR #18 automated checks and review do not replace this E2E trace. Keep the gate open if Docker is unavailable.
+3. **Harden the host boundary.** Add route-level tests and rate limiting, resolve the documented membership-revalidation race, then obtain independent security review against the final candidate.
+4. **Build the Web Chat vertical slice.** Add origin/session binding and visitor UI on the shared support engine; return approved-source citations and fail closed on unknown, conflicting or insufficient evidence. No live model/provider call without separate Owner approval and budget.
+5. **Make human takeover durable.** Add persistent staff authorization, pause/resume state and send-time compare-and-send/outbox enforcement; test retries, provider failures and tenant crossover.
+6. **Run G1 acceptance.** Capture one reproducible browser trace from authenticated knowledge upload through cited visitor answer and authorized staff takeover/resume, plus negative cross-workspace cases. Record current tests, review, limitations and observed measurements; ask Owner to review the evidence.
+7. **Open G2 only after G1 acceptance.** Scope LINE sandbox round-trip and human handoff separately. Keep the merged PromptPay builder and business-action lifecycle as isolated foundations; P3A executor and P4 PromptPay wiring remain planned tasks, not part of this G1 slice.
+
+The current checkout may be behind `main`; start any follow-up from the latest `main` and follow the project-local branch/worktree rule in `AGENTS.md`. Do not merge or deploy without Owner review.
 
 ## Acceptance criteria for G1
 
