@@ -67,6 +67,12 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     return this.sources.get(key(workspace.workspaceId, sourceId)) ?? null;
   }
 
+  listSources(workspace: TrustedWorkspaceContext): readonly KnowledgeSource[] {
+    return Object.freeze([...this.sources.values()]
+      .filter((source) => source.workspaceId === workspace.workspaceId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.sourceId.localeCompare(b.sourceId)));
+  }
+
   createVersion(workspace: TrustedWorkspaceContext, version: KnowledgeVersionDraft): KnowledgeVersion {
     assertScope(workspace, version);
     const source = this.getSource(workspace, version.sourceId);
@@ -103,6 +109,13 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
 
   getVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string): KnowledgeVersion | null {
     return this.versions.get(versionKey(workspace.workspaceId, sourceId, versionId)) ?? null;
+  }
+
+  listVersions(workspace: TrustedWorkspaceContext, sourceId: string): readonly KnowledgeVersion[] {
+    if (!this.sources.has(key(workspace.workspaceId, sourceId))) return Object.freeze([]);
+    return Object.freeze([...this.versions.values()]
+      .filter((version) => version.workspaceId === workspace.workspaceId && version.sourceId === sourceId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.versionId.localeCompare(b.versionId)));
   }
 
   archiveSource(workspace: TrustedWorkspaceContext, sourceId: string): KnowledgeSource {

@@ -158,11 +158,15 @@ export interface KnowledgeRepositoryPort {
     workspace: TrustedWorkspaceContext,
     input: Readonly<{ sourceId: string; title: string; kind: KnowledgeSourceKind }>,
   ): Awaitable<KnowledgeSource>;
+  /** List only sources in the authenticated workspace for merchant review. */
+  listSources(workspace: TrustedWorkspaceContext): Awaitable<readonly KnowledgeSource[]>;
   getSource(workspace: TrustedWorkspaceContext, sourceId: string): Awaitable<KnowledgeSource | null>;
   archiveSource(workspace: TrustedWorkspaceContext, sourceId: string): Awaitable<KnowledgeSource>;
   /** Persist only an uploaded draft and reject conflicting source/version IDs. */
   createVersion(workspace: TrustedWorkspaceContext, version: KnowledgeVersionDraft): Awaitable<KnowledgeVersion>;
   getVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string): Awaitable<KnowledgeVersion | null>;
+  /** List source versions for the merchant review queue; never used for retrieval. */
+  listVersions(workspace: TrustedWorkspaceContext, sourceId: string): Awaitable<readonly KnowledgeVersion[]>;
   transitionVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, next: KnowledgeVersionTransition): Awaitable<KnowledgeVersion>;
   /** Approval must be atomic and preserve at most one approved/current version per source. */
   approveVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: Readonly<{ approvedBy: string; approvedAt?: string }>): Awaitable<KnowledgeVersion>;

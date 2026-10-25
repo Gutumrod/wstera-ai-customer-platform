@@ -1,6 +1,6 @@
 # Application Composition Root
 
-**Status:** FOLDER CONTRACT ONLY - not implemented. **Planned phase:** Phase 1 onward.
+**Status:** G1-HOST-001 composition implemented locally for synthetic knowledge intake and merchant host wiring. Web Chat and provider routing remain out of scope.
 
 ## Responsibility
 
@@ -12,4 +12,4 @@ Only host/composition imports both modules and vendor adapters; invalid configur
 
 Do not add vendor SDK calls to core modules. Follow [the master brief](../../BRIEF.md), [repository structure](../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
 
-No runtime code exists in this folder until a separately reviewed implementation task.
+See `merchant-knowledge-host.ts` and `knowledge-intake.ts`. The current composition requires local server-only configuration and is not production/deployment evidence. See [the task report](../../reports/G1-HOST-001-IMPLEMENTATION.md).

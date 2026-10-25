@@ -7,19 +7,33 @@
     "node": ">=22.13.0 || >=24"
   },
   "scripts": {
+    "dev:console": "npm run build && next dev --webpack platform/apps/merchant-console --hostname 127.0.0.1",
+    "build:console": "npm run build && next build --webpack platform/apps/merchant-console",
+    "start:console": "next start platform/apps/merchant-console --hostname 127.0.0.1",
+    "seed:local": "node scripts/seed-local.mjs",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "test": "npm run build && node --test dist/src/tests/core.test.js dist/modules/knowledge/knowledge.test.js dist/modules/knowledge/evaluation/evaluation.test.js dist/modules/handoff/handoff.test.js dist/modules/ai-engine/citation-integrity.test.js dist/modules/ai-engine/support-orchestrator.test.js dist/adapters/models/openai-compatible/chat-completions.test.js dist/adapters/persistence/postgres/knowledge-repository.test.js dist/modules/payments/payments.test.js dist/modules/business-actions/business-actions.test.js",
+    "test": "npm run build && node --test dist/src/tests/core.test.js dist/modules/knowledge/knowledge.test.js dist/modules/knowledge/evaluation/evaluation.test.js dist/modules/handoff/handoff.test.js dist/modules/ai-engine/citation-integrity.test.js dist/modules/ai-engine/support-orchestrator.test.js dist/adapters/models/openai-compatible/chat-completions.test.js dist/adapters/persistence/postgres/knowledge-repository.test.js dist/modules/payments/payments.test.js dist/modules/business-actions/business-actions.test.js dist/modules/tenancy/merchant-identity.test.js dist/composition/knowledge-intake.test.js dist/adapters/storage/supabase/private-knowledge-storage.test.js",
     "evaluate:knowledge": "npm run build && node dist/modules/knowledge/evaluation/run-baseline.js",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test && npm run build:console"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@types/node": "^22.15.0",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@next/env": "16.4.2",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.118.0",
     "csv-parse": "7.0.3",
-    "pdfjs-dist": "6.4.299"
+    "next": "16.4.2",
+    "pdfjs-dist": "6.4.299",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }
