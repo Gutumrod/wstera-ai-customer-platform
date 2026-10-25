@@ -76,6 +76,15 @@ test("malformed targets are rejected instead of guessed", () => {
   }
 });
 
+test("payload matches a pinned vector computed outside this module", () => {
+  // Expected value produced by an independent CRC16-CCITT implementation (poly 0x1021, init 0xFFFF)
+  // and TLV assembly, not by the code under test. Fake target, never a real account.
+  assert.equal(
+    buildPromptPayPayload({ target: MOBILE, amountThb: 39.5 }),
+    "00020101021229370016A000000677010111011300660000000005303764540539.505802TH63040FA5",
+  );
+});
+
 test("same input yields identical payload", () => {
   assert.equal(
     buildPromptPayPayload({ target: MOBILE, amountThb: 39.5 }),
