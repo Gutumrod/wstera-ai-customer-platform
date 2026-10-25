@@ -17,6 +17,10 @@ PR #16 merged the consolidated Phase 0C and G1 foundation work. On 2026-10-25, P
 
 PR #19 provides a pure PromptPay EMVCo payload builder; it is not wired to a payment flow and has no real banking-app scan proof. PR #20 provides typed action contracts and a pure lifecycle reducer; it does not include an executor or business writes. PR #21 records provenance and pilot criteria. P3A executor and P4 PromptPay wiring remain planned and unauthorized tasks.
 
+## Owner decisions 2026-10-25
+
+Docker Desktop + Supabase CLI installation is approved for the local E2E on this machine. The G1 answer path is extractive citations by default with the model-backed path behind an off-by-default flag; turning the flag on needs separate Owner approval, a budget ceiling, a usage ledger and a data-region choice. Work order is host hardening → Web Chat → durable handoff → G1 acceptance.
+
 ## Remaining G1 work
 
 Task G1-HOST-001 is merged via PR #18: local synthetic authenticated merchant console, workspace resolution, private knowledge upload/quarantine/approval and citation-backed search. Automated checks and a second-pass review are reported in PR #18; Docker-backed browser-to-local-Supabase E2E remains unverified. This slice does not include Web Chat, generated answers, or durable handoff.

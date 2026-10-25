@@ -20,14 +20,20 @@ Excluded: live LINE integration, self-service multi-shop onboarding, billing, pr
 - Provider failures fail closed. Human takeover is durable and stops automated replies until authorized staff resume.
 - Modules depend on contracts; channel/model/storage/retrieval integrations stay behind ports/adapters.
 
+## Owner decisions locked 2026-10-25
+
+- **Local E2E runtime (step 2):** Owner approved installing Docker Desktop + Supabase CLI on the local Windows machine so the browser-to-local-Supabase trace is real. Hosted resources, hosted migrations and provider spend remain unauthorized.
+- **G1 answer path (steps 4–6):** build both an extractive cited-answer path (default, no provider call) and the model-backed path behind an off-by-default flag. G1 acceptance runs the extractive path; enabling the flag needs separate Owner approval plus a budget ceiling, usage ledger and data-region choice.
+- **Work order:** harden the host boundary (step 3) → Web Chat (step 4) → durable handoff (step 5) → G1 acceptance (step 6). Do not start Web Chat before the host hardening task is merged.
+
 ## Proposed work order
 
 1. **Reconcile status documents.** Update execution status, blockers and work queue to reflect PRs #18–#21 merged on 2026-10-25; do not inherit stale pending-merge statements.
-2. **Close the local host evidence gap.** Run the documented Docker-backed synthetic Supabase sign-in → upload → review/approve → citation-search flow. The PR #18 automated checks and review do not replace this E2E trace. Keep the gate open if Docker is unavailable.
+2. **Close the local host evidence gap.** Run the documented Docker-backed synthetic Supabase sign-in → upload → review/approve → citation-search flow. The PR #18 automated checks and review do not replace this E2E trace. Docker Desktop + Supabase CLI were approved for this machine on 2026-10-25; if the stack cannot run after install, stop and report rather than substituting mocks.
 3. **Harden the host boundary.** Add route-level tests and rate limiting, resolve the documented membership-revalidation race, then obtain independent security review against the final candidate.
-4. **Build the Web Chat vertical slice.** Add origin/session binding and visitor UI on the shared support engine; return approved-source citations and fail closed on unknown, conflicting or insufficient evidence. No live model/provider call without separate Owner approval and budget.
+4. **Build the Web Chat vertical slice.** Add origin/session binding and visitor UI on the shared support engine; return approved-source citations and fail closed on unknown, conflicting or insufficient evidence. Ship the extractive cited-answer path as the default and keep the model-backed path behind an off-by-default flag. No live model/provider call without separate Owner approval and budget.
 5. **Make human takeover durable.** Add persistent staff authorization, pause/resume state and send-time compare-and-send/outbox enforcement; test retries, provider failures and tenant crossover.
-6. **Run G1 acceptance.** Capture one reproducible browser trace from authenticated knowledge upload through cited visitor answer and authorized staff takeover/resume, plus negative cross-workspace cases. Record current tests, review, limitations and observed measurements; ask Owner to review the evidence.
+6. **Run G1 acceptance.** Capture one reproducible browser trace from authenticated knowledge upload through cited visitor answer (extractive path, model flag off) and authorized staff takeover/resume, plus negative cross-workspace cases. Record current tests, review, limitations and observed measurements; ask Owner to review the evidence.
 7. **Open G2 only after G1 acceptance.** Scope LINE sandbox round-trip and human handoff separately. Keep the merged PromptPay builder and business-action lifecycle as isolated foundations; P3A executor and P4 PromptPay wiring remain planned tasks, not part of this G1 slice.
 
 The current checkout may be behind `main`; start any follow-up from the latest `main` and follow the project-local branch/worktree rule in `AGENTS.md`. Do not merge or deploy without Owner review.
