@@ -53,20 +53,24 @@ test("Supabase local migrations stay in sync and enforce workspace membership/st
       CREATE FUNCTION storage.foldername(object_name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
         SELECT string_to_array(regexp_replace(object_name, '/[^/]*$', ''), '/')
       $$;
-      GRANT USAGE ON SCHEMA public, storage TO authenticated;
+      GRANT USAGE ON SCHEMA storage TO authenticated;
       GRANT SELECT ON storage.objects TO authenticated;
       GRANT INSERT, DELETE ON storage.objects TO authenticated;
     `);
     await database.exec(baseMigration);
     await database.exec(hostMigration);
+    const publicTables = await database.query<{ tablename: string }>(
+      "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
+    );
+    assert.deepEqual(publicTables.rows, [], "product migrations must leave public without tables");
     await database.exec(`
       INSERT INTO auth.users (id) VALUES ('00000000-0000-0000-0000-000000000001');
-      INSERT INTO public.workspaces (workspace_id, name, status) VALUES ('shop-a', 'Shop A', 'active'), ('shop-b', 'Shop B', 'active'), ('shop-suspended', 'Suspended', 'suspended');
-      INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
+      INSERT INTO aicp.workspaces (workspace_id, name, status) VALUES ('shop-a', 'Shop A', 'active'), ('shop-b', 'Shop B', 'active'), ('shop-suspended', 'Suspended', 'suspended');
+      INSERT INTO aicp.workspace_memberships (workspace_id, user_id, role)
       VALUES ('shop-a', '00000000-0000-0000-0000-000000000001', 'owner');
-      INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
+      INSERT INTO aicp.workspace_memberships (workspace_id, user_id, role)
       VALUES ('shop-suspended', '00000000-0000-0000-0000-000000000001', 'owner');
-      INSERT INTO public.workspace_connections (workspace_id, connection_id, channel)
+      INSERT INTO aicp.workspace_connections (workspace_id, connection_id, channel)
       VALUES ('shop-a', 'web-a', 'web'), ('shop-b', 'web-b', 'web');
     `);
 
@@ -77,22 +81,33 @@ test("Supabase local migrations stay in sync and enforce workspace membership/st
       rolsuper: false, rolbypassrls: false, rolcreatedb: false,
       rolcreaterole: false, rolreplication: false, rolinherit: false,
     });
+    const migrator = await database.query<{ rolsuper: boolean; rolbypassrls: boolean; rolcreatedb: boolean; rolcreaterole: boolean; rolreplication: boolean; rolinherit: boolean; rolcanlogin: boolean }>(
+      "SELECT rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication, rolinherit, rolcanlogin FROM pg_roles WHERE rolname = 'aicp_migrator'",
+    );
+    assert.deepEqual(migrator.rows[0], {
+      rolsuper: false, rolbypassrls: false, rolcreatedb: false,
+      rolcreaterole: false, rolreplication: false, rolinherit: false, rolcanlogin: false,
+    });
+    const schemaOwner = await database.query<{ owner: string }>(
+      "SELECT r.rolname AS owner FROM pg_namespace n JOIN pg_roles r ON r.oid = n.nspowner WHERE n.nspname = 'aicp'",
+    );
+    assert.deepEqual(schemaOwner.rows[0], { owner: "aicp_migrator" });
     const quarantinePrivileges = await database.query<{ can_select: boolean; can_insert: boolean }>(
-      `SELECT has_table_privilege('knowledge_runtime', 'public.knowledge_quarantine_records', 'SELECT') AS can_select,
-              has_table_privilege('knowledge_runtime', 'public.knowledge_quarantine_records', 'INSERT') AS can_insert`,
+      `SELECT has_table_privilege('knowledge_runtime', 'aicp.knowledge_quarantine_records', 'SELECT') AS can_select,
+              has_table_privilege('knowledge_runtime', 'aicp.knowledge_quarantine_records', 'INSERT') AS can_insert`,
     );
     assert.deepEqual(quarantinePrivileges.rows[0], { can_select: true, can_insert: true });
 
     const ownRows = await database.transaction(async (transaction) => {
       await transaction.exec("SET LOCAL ROLE authenticated");
       await transaction.query("SELECT set_config('request.jwt.claim.sub', $1, true)", ["00000000-0000-0000-0000-000000000001"]);
-      return transaction.query("SELECT workspace_id FROM public.workspace_memberships");
+      return transaction.query("SELECT workspace_id FROM aicp.workspace_memberships");
     });
     assert.deepEqual(ownRows.rows, [{ workspace_id: "shop-a" }]);
     const activeWorkspaceRows = await database.transaction(async (transaction) => {
       await transaction.exec("SET LOCAL ROLE authenticated");
       await transaction.query("SELECT set_config('request.jwt.claim.sub', $1, true)", ["00000000-0000-0000-0000-000000000001"]);
-      return transaction.query("SELECT workspace_id FROM public.workspaces ORDER BY workspace_id");
+      return transaction.query("SELECT workspace_id FROM aicp.workspaces ORDER BY workspace_id");
     });
     assert.deepEqual(activeWorkspaceRows.rows, [{ workspace_id: "shop-a" }], "suspended workspaces must not resolve");
 
@@ -120,9 +135,9 @@ test("Supabase local migrations stay in sync and enforce workspace membership/st
     const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
     const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
     const audit = new PostgresKnowledgeIntakeAudit(runtimePort(database));
-    await database.exec("INSERT INTO public.knowledge_sources (workspace_id, source_id, kind, title, created_at) " +
+    await database.exec("INSERT INTO aicp.knowledge_sources (workspace_id, source_id, kind, title, created_at) " +
       "VALUES ('shop-a', 'source-original', 'pdf', 'Original', now())");
-    await database.exec("INSERT INTO public.knowledge_versions " +
+    await database.exec("INSERT INTO aicp.knowledge_versions " +
       "(workspace_id, source_id, version_id, kind, title, content, created_at) " +
       "VALUES ('shop-a', 'source-original', 'version-original', 'pdf', 'Original', 'synthetic', now())");
     const originalReference = {
