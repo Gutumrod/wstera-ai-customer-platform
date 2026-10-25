@@ -16,4 +16,11 @@ Freeze a validated proposal, derive its risk from the action kind, and decide st
 
 Lifecycle: `proposed -> authorized -> confirmed -> executed -> verified`, with `rejected` and
 `failed` as alternatives. A `requires_confirmation` action that reaches `execute` without a
-confirmation is refused rather than downgraded.
+confirmation is refused rather than downgraded; confirmation cannot skip authorisation.
+
+## Known limitation
+
+A record is plain data, so a caller that fabricates a fully consistent record (state plus ids)
+cannot be distinguished from a stored one. Until an executor exists, persistence must add integrity
+(server-side write or signature). This is recorded in `tasks/TASK-P3A-BUSINESS-ACTION-EXECUTOR.md`
+and is not a substitute for that work.

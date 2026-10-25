@@ -9,9 +9,10 @@ import {
   riskOfAction,
 } from "./index.js";
 
+const WS = "ws-alpha";
 const baseProposal = {
   proposalId: "prop-0001",
-  workspaceId: "ws-alpha",
+  workspaceId: WS,
   conversationId: "conv-0001",
   idempotencyKey: "idem-000000000001",
   requestedAt: 1_760_000_000_000,
@@ -24,6 +25,9 @@ function draftOrderRecord() {
     arguments: { productId: "prod-1", quantity: 2 },
   });
 }
+
+const expectCode = (code: string) => (error: unknown) =>
+  error instanceof BusinessActionError && error.code === code;
 
 test("risk is derived from the action kind, not from caller data", () => {
   assert.equal(riskOfAction("faq_answer"), "read_only");
@@ -38,93 +42,132 @@ test("risk is derived from the action kind, not from caller data", () => {
   assert.equal(injected.risk, "requires_confirmation");
 });
 
-test("an unknown action kind is refused instead of defaulting to safe", () => {
+test("an unknown or inherited property name is refused instead of resolving", () => {
+  for (const kind of ["transfer_money", "toString", "constructor", "__proto__"]) {
+    assert.throws(
+      () => proposeBusinessAction({ ...baseProposal, kind: kind as never, arguments: {} }),
+      expectCode("UNKNOWN_ACTION"),
+    );
+  }
+});
+
+test("a tampered risk field on the record cannot unlock execution", () => {
+  const authorized = applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", workspaceId: WS, byUserId: "owner-1" });
+  const forged = { ...authorized, risk: "read_only" } as typeof authorized;
   assert.throws(
-    () => proposeBusinessAction({ ...baseProposal, kind: "transfer_money" as never, arguments: {} }),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "UNKNOWN_ACTION",
+    () => applyBusinessActionEvent(forged, { kind: "execute", workspaceId: WS, executionId: "exec-1" }),
+    expectCode("EXECUTION_REQUIRES_CONFIRMATION"),
   );
 });
 
 test("an action that changes state cannot execute before confirmation", () => {
-  const authorized = applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", byUserId: "owner-1" });
+  const authorized = applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", workspaceId: WS, byUserId: "owner-1" });
   assert.throws(
-    () => applyBusinessActionEvent(authorized, { kind: "execute", executionId: "exec-1" }),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "EXECUTION_REQUIRES_CONFIRMATION",
+    () => applyBusinessActionEvent(authorized, { kind: "execute", workspaceId: WS, executionId: "exec-1" }),
+    expectCode("EXECUTION_REQUIRES_CONFIRMATION"),
+  );
+});
+
+test("confirmation cannot skip authorisation", () => {
+  assert.throws(
+    () => applyBusinessActionEvent(draftOrderRecord(), {
+      kind: "confirm",
+      workspaceId: WS,
+      byUserId: "owner-1",
+      confirmationId: "conf-1",
+    }),
+    expectCode("INVALID_TRANSITION"),
   );
 });
 
 test("a read-only action may execute after authorization without confirmation", () => {
   const lookup = proposeBusinessAction({ ...baseProposal, kind: "product_lookup", arguments: { query: "serum" } });
-  const authorized = applyBusinessActionEvent(lookup, { kind: "authorize", byUserId: "owner-1" });
-  const executed = applyBusinessActionEvent(authorized, { kind: "execute", executionId: "exec-1" });
+  const authorized = applyBusinessActionEvent(lookup, { kind: "authorize", workspaceId: WS, byUserId: "owner-1" });
+  const executed = applyBusinessActionEvent(authorized, { kind: "execute", workspaceId: WS, executionId: "exec-1" });
   assert.equal(executed.state, "executed");
   assert.equal(isExecutedAfterConfirmation(executed), true);
 });
 
 test("full confirmation cycle reaches verified state", () => {
-  const authorized = applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", byUserId: "owner-1" });
+  const authorized = applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", workspaceId: WS, byUserId: "owner-1" });
   const confirmed = applyBusinessActionEvent(authorized, {
     kind: "confirm",
+    workspaceId: WS,
     byUserId: "owner-1",
     confirmationId: "conf-1",
   });
-  const executed = applyBusinessActionEvent(confirmed, { kind: "execute", executionId: "exec-1" });
-  const verified = applyBusinessActionEvent(executed, { kind: "verify", verifiedAt: 1_760_000_100_000 });
+  const executed = applyBusinessActionEvent(confirmed, { kind: "execute", workspaceId: WS, executionId: "exec-1" });
+  const verified = applyBusinessActionEvent(executed, { kind: "verify", workspaceId: WS, verifiedAt: 1_760_000_100_000 });
 
   assert.equal(verified.state, "verified");
   assert.equal(verified.confirmationId, "conf-1");
   assert.equal(verified.version, 5);
+  assert.equal(verified.risk, "requires_confirmation");
   assert.equal(isExecutedAfterConfirmation(verified), true);
 });
 
 test("re-confirming with the same confirmation id is idempotent", () => {
-  const confirmed = applyBusinessActionEvent(draftOrderRecord(), {
-    kind: "confirm",
-    byUserId: "owner-1",
-    confirmationId: "conf-1",
-  });
+  const confirmed = applyBusinessActionEvent(
+    applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", workspaceId: WS, byUserId: "owner-1" }),
+    { kind: "confirm", workspaceId: WS, byUserId: "owner-1", confirmationId: "conf-1" },
+  );
   const again = applyBusinessActionEvent(confirmed, {
     kind: "confirm",
+    workspaceId: WS,
     byUserId: "owner-1",
     confirmationId: "conf-1",
   });
-  assert.equal(again, confirmed);
   assert.equal(again.version, confirmed.version);
+  assert.equal(again.state, "confirmed");
 });
 
 test("confirming twice with a different id is refused", () => {
-  const confirmed = applyBusinessActionEvent(draftOrderRecord(), {
-    kind: "confirm",
-    byUserId: "owner-1",
-    confirmationId: "conf-1",
-  });
+  const confirmed = applyBusinessActionEvent(
+    applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", workspaceId: WS, byUserId: "owner-1" }),
+    { kind: "confirm", workspaceId: WS, byUserId: "owner-1", confirmationId: "conf-1" },
+  );
   assert.throws(
-    () => applyBusinessActionEvent(confirmed, { kind: "confirm", byUserId: "owner-1", confirmationId: "conf-2" }),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "ALREADY_CONFIRMED",
+    () => applyBusinessActionEvent(confirmed, { kind: "confirm", workspaceId: WS, byUserId: "owner-1", confirmationId: "conf-2" }),
+    expectCode("ALREADY_CONFIRMED"),
   );
 });
 
-test("a record from another workspace is denied", () => {
+test("any event naming another workspace is denied", () => {
   assert.throws(
-    () => assertSameWorkspace(draftOrderRecord(), "ws-beta"),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "CROSS_WORKSPACE_ACTION_DENIED",
+    () => applyBusinessActionEvent(draftOrderRecord(), { kind: "authorize", workspaceId: "ws-beta", byUserId: "owner-1" }),
+    expectCode("CROSS_WORKSPACE_ACTION_DENIED"),
   );
-  assert.equal(assertSameWorkspace(draftOrderRecord(), "ws-alpha"), undefined);
+  assert.throws(() => assertSameWorkspace(draftOrderRecord(), "ws-beta"), expectCode("CROSS_WORKSPACE_ACTION_DENIED"));
+  assert.equal(assertSameWorkspace(draftOrderRecord(), WS), undefined);
 });
 
 test("terminal records accept no further events", () => {
-  const rejected = applyBusinessActionEvent(draftOrderRecord(), { kind: "reject", reason: "customer declined" });
+  const rejected = applyBusinessActionEvent(draftOrderRecord(), { kind: "reject", workspaceId: WS, reason: "customer declined" });
   assert.equal(rejected.state, "rejected");
   assert.throws(
-    () => applyBusinessActionEvent(rejected, { kind: "authorize", byUserId: "owner-1" }),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "TERMINAL_STATE",
+    () => applyBusinessActionEvent(rejected, { kind: "authorize", workspaceId: WS, byUserId: "owner-1" }),
+    expectCode("TERMINAL_STATE"),
   );
 });
 
-test("missing and unexpected arguments are refused", () => {
+test("an executed record cannot be rejected or failed afterwards", () => {
+  const lookup = proposeBusinessAction({ ...baseProposal, kind: "faq_answer", arguments: { topic: "shipping" } });
+  const authorized = applyBusinessActionEvent(lookup, { kind: "authorize", workspaceId: WS, byUserId: "owner-1" });
+  const executed = applyBusinessActionEvent(authorized, { kind: "execute", workspaceId: WS, executionId: "exec-1" });
+  assert.throws(
+    () => applyBusinessActionEvent(executed, { kind: "reject", workspaceId: WS, reason: "late" }),
+    expectCode("INVALID_TRANSITION"),
+  );
+  assert.throws(
+    () => applyBusinessActionEvent(executed, { kind: "fail", workspaceId: WS, code: "LATE" }),
+    expectCode("INVALID_TRANSITION"),
+  );
+});
+
+test("missing, unexpected or non-scalar arguments are refused", () => {
   assert.throws(
     () => proposeBusinessAction({ ...baseProposal, kind: "draft_order", arguments: { productId: "prod-1" } }),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "MISSING_ARGUMENT",
+    expectCode("MISSING_ARGUMENT"),
   );
   assert.throws(
     () => proposeBusinessAction({
@@ -132,8 +175,17 @@ test("missing and unexpected arguments are refused", () => {
       kind: "draft_order",
       arguments: { productId: "prod-1", quantity: 1, chargeNow: true },
     }),
-    (error: unknown) => error instanceof BusinessActionError && error.code === "UNEXPECTED_ARGUMENT",
+    expectCode("UNEXPECTED_ARGUMENT"),
   );
+  const nested: unknown = { ...baseProposal, kind: "draft_order", arguments: { productId: { a: 1 }, quantity: 1 } };
+  assert.throws(() => proposeBusinessAction(nested as never), expectCode("INVALID_PROPOSAL"));
+});
+
+test("argument values are copied, not shared with the caller", () => {
+  const args = { productId: "prod-1", quantity: 2 };
+  const record = proposeBusinessAction({ ...baseProposal, kind: "draft_order", arguments: args });
+  args.quantity = 99;
+  assert.equal(record.proposal.arguments.quantity, 2);
 });
 
 test("malformed identifiers and short idempotency keys are refused", () => {
@@ -145,7 +197,7 @@ test("malformed identifiers and short idempotency keys are refused", () => {
   ]) {
     assert.throws(
       () => proposeBusinessAction({ ...baseProposal, kind: "faq_answer", arguments: { topic: "shipping" }, ...patch }),
-      (error: unknown) => error instanceof BusinessActionError && error.code === "INVALID_PROPOSAL",
+      expectCode("INVALID_PROPOSAL"),
     );
   }
 });

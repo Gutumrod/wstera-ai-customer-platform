@@ -55,13 +55,14 @@ export type BusinessActionRecord = Readonly<{
   rejectionReason?: string;
 }>;
 
+/** Every event names the workspace it acts in; the reducer denies a mismatch. */
 export type BusinessActionEvent =
-  | Readonly<{ kind: "authorize"; byUserId: string }>
-  | Readonly<{ kind: "confirm"; byUserId: string; confirmationId: string }>
-  | Readonly<{ kind: "execute"; executionId: string }>
-  | Readonly<{ kind: "verify"; verifiedAt: number }>
-  | Readonly<{ kind: "reject"; reason: string }>
-  | Readonly<{ kind: "fail"; code: string }>;
+  | Readonly<{ kind: "authorize"; workspaceId: string; byUserId: string }>
+  | Readonly<{ kind: "confirm"; workspaceId: string; byUserId: string; confirmationId: string }>
+  | Readonly<{ kind: "execute"; workspaceId: string; executionId: string }>
+  | Readonly<{ kind: "verify"; workspaceId: string; verifiedAt: number }>
+  | Readonly<{ kind: "reject"; workspaceId: string; reason: string }>
+  | Readonly<{ kind: "fail"; workspaceId: string; code: string }>;
 
 /** Backend permission check. The only authority that may advance a proposal. */
 export type BusinessActionAuthorizationPort = Readonly<{
