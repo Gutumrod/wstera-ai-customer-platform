@@ -15,11 +15,21 @@ const safeLogger: StructuredLogger = {
 export class PgPostgresDatabase implements PostgresDatabasePort {
   private readonly pool: Pool;
 
-  constructor(connectionString: string, private readonly logger: StructuredLogger = safeLogger) {
+  constructor(
+    connectionString: string,
+    private readonly logger: StructuredLogger = safeLogger,
+    tls?: Readonly<{ caCertificate: string }>,
+  ) {
     if (!connectionString.startsWith("postgres://") && !connectionString.startsWith("postgresql://")) {
       throw new Error("INVALID_DATABASE_URL");
     }
-    this.pool = new Pool({ connectionString, max: 4, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 5_000 });
+    this.pool = new Pool({
+      connectionString,
+      max: 4,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 5_000,
+      ...(tls ? { ssl: { ca: tls.caCertificate, rejectUnauthorized: true } } : {}),
+    });
     this.pool.on("error", (error: Error) => this.logger.error("postgres.pool_error", { name: error.name }));
   }
 

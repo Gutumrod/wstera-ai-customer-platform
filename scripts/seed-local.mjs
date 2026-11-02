@@ -1,35 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import pg from "pg";
+import { seedEnvironment } from "./seed-environment.mjs";
 
 const { Client } = pg;
 loadEnvConfig(process.cwd());
 
-function required(name) {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name}_REQUIRED`);
-  return value;
-}
-
-function assertLocalUrl(name, value, expectedPort) {
-  const parsed = new URL(value);
-  if (!(["127.0.0.1", "localhost", "::1"].includes(parsed.hostname))
-    || parsed.port !== String(expectedPort)) throw new Error(`${name}_MUST_TARGET_LOCAL_SUPABASE`);
-  return parsed;
-}
-
 async function main() {
-  if (process.env.APP_ENV !== "local") throw new Error("LOCAL_SEED_REQUIRES_APP_ENV_LOCAL");
-  const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL");
-  assertLocalUrl("NEXT_PUBLIC_SUPABASE_URL", supabaseUrl, 54321);
-  const secretKey = required("SUPABASE_SECRET_KEY");
-  const adminUrl = required("SUPABASE_DB_ADMIN_URL");
-  assertLocalUrl("SUPABASE_DB_ADMIN_URL", adminUrl, 54322);
-  const runtimePassword = required("KNOWLEDGE_RUNTIME_PASSWORD");
-  if (!/^[a-f0-9]{64}$/u.test(runtimePassword)) throw new Error("KNOWLEDGE_RUNTIME_PASSWORD_MUST_BE_64_HEX_CHARS");
-  const email = required("LOCAL_OWNER_EMAIL");
-  const password = required("LOCAL_OWNER_PASSWORD");
-  if (password.length < 20) throw new Error("LOCAL_OWNER_PASSWORD_TOO_SHORT");
+  const { appEnv, supabaseUrl, secretKey, adminUrl, runtimePassword, email, password, ssl } = seedEnvironment(process.env);
 
   const supabase = createClient(supabaseUrl, secretKey, { auth: { autoRefreshToken: false, persistSession: false } });
   let user;
@@ -44,7 +22,7 @@ async function main() {
   }
   if (!user) throw new Error("LOCAL_AUTH_USER_NOT_FOUND");
 
-  const database = new Client({ connectionString: adminUrl, connectionTimeoutMillis: 5_000 });
+  const database = new Client({ connectionString: adminUrl, connectionTimeoutMillis: 5_000, ...(ssl ? { ssl } : {}) });
   await database.connect();
   try {
     const role = await database.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'knowledge_runtime'");
@@ -71,7 +49,7 @@ async function main() {
   } finally {
     await database.end();
   }
-  process.stdout.write("Seeded one local synthetic owner, workspace, and web connection.\n");
+  process.stdout.write(`Seeded one ${appEnv} synthetic owner, workspace, and web connection.\n`);
 }
 
 main().catch((error) => {
