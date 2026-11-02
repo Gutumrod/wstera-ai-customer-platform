@@ -56,11 +56,22 @@ No secrets, external services or paid APIs are required for baseline checks.
 
 Product knowledge and workspace objects live in schema `aicp`; the product migrator is `aicp_migrator` and the application runtime role is `knowledge_runtime`. The product migrations leave the `public` schema empty. Local Supabase exposes `aicp` through `supabase/config.toml`; for any separately approved hosted project, an operator must also add `aicp` to the project's exposed API schemas in the Supabase dashboard before the membership API can use it. Hosted database access and migrations are outside this prototype's current approval.
 
-For an approved hosted lab run, set `SUPABASE_PROJECT_REF` to that project's exact 20-character ref; the `DATABASE_URL` username must end in the same ref (for example, `knowledge_runtime.<project-ref>`). Hosted runs should always set `SUPABASE_PROJECT_REF` so the connection is bound to the intended project. Lab database URLs with query strings or fragments are rejected.
+## Lab merchant console (synthetic data only)
+
+Lab mode runs against one approved hosted project and needs no Docker. Applying the migration, seeding and any dashboard change are writes to that project: each needs a separate Owner GO. Nothing in this repository contacts it during tests or builds.
+
+Set these in ignored `.env.local`; `APP_ENV` and `NEXT_PUBLIC_APP_ENV` must both be `lab`:
+
+- `SUPABASE_PROJECT_REF` and `NEXT_PUBLIC_SUPABASE_PROJECT_REF`: the same exact 20-character project ref. Both are required.
+- `NEXT_PUBLIC_SUPABASE_URL`: exactly `https://<project-ref>.supabase.co`.
+- `DATABASE_URL`: the pooler URL with username `knowledge_runtime.<project-ref>`. Other roles, other hosts, query strings and fragments are rejected.
+- `SUPABASE_DB_CA_CERT`: the project's CA certificate in PEM form. Lab database connections verify it; without it the host refuses to start.
+
+Owner dashboard steps: expose schema `aicp` in the Data API settings and download the CA certificate. To seed, also set `SUPABASE_DB_ADMIN_URL` to the pooler URL with username `postgres.<project-ref>`, `LAB_SEED_CONFIRM_PROJECT_REF` to the project ref, and an `@example.test` value for `LOCAL_OWNER_EMAIL`, then run `npm run seed:local`. This path has not been run against a hosted project yet.
 
 ## Local merchant console (synthetic data only)
 
-Requires Node.js 22+, npm, Docker Desktop or another working Docker daemon, and the Supabase CLI. This flow targets loopback addresses only; do not put hosted Supabase values in `.env.local`.
+This flow is optional and is the only one that needs Docker. It requires Node.js 22+, npm, Docker Desktop or another working Docker daemon, and the Supabase CLI, and it targets loopback addresses only; do not put hosted Supabase values in `.env.local`.
 
 1. Run `npm ci`, then start local Supabase with `supabase start`.
 2. Apply local migrations with `supabase db reset --local`.

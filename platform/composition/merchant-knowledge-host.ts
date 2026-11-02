@@ -5,13 +5,13 @@ import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/kn
 import { PostgresKnowledgeIntakeAudit } from "../adapters/persistence/postgres/knowledge-intake-audit.js";
 import { SupabasePrivateKnowledgeStorage } from "../adapters/storage/supabase/private-knowledge-storage.js";
 import { createSupabaseAdminClient } from "../apps/merchant-console/lib/supabase/admin.js";
-import { requiredKnowledgeDatabaseUrl } from "./knowledge-database-url.js";
+import { knowledgeDatabaseTls, requiredKnowledgeDatabaseUrl } from "./knowledge-database-url.js";
 
 type HostGlobal = typeof globalThis & { __merchantKnowledgeDatabase?: PgPostgresDatabase };
 
 export async function createMerchantKnowledgeHost() {
   const shared = globalThis as HostGlobal;
-  const database = shared.__merchantKnowledgeDatabase ?? new PgPostgresDatabase(requiredKnowledgeDatabaseUrl());
+  const database = shared.__merchantKnowledgeDatabase ?? new PgPostgresDatabase(requiredKnowledgeDatabaseUrl(), undefined, knowledgeDatabaseTls());
   shared.__merchantKnowledgeDatabase = database;
   await database.assertLeastPrivilege();
   return Object.freeze({
