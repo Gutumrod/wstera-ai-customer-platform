@@ -1,6 +1,6 @@
 # Task G1-ACCEPT-001 — One-shop acceptance trace
 
-**Status: PLANNED — last G1 task; starts only after HOST-004, PR #23, HOST-002, WEBCHAT-001 and HANDOFF-002 are merged and the Owner has given the `wstera-lab` write GO.** Base: `main` @ `9b4f997`. Runs on schema `aicp` in `wstera-lab`; Docker Desktop was withdrawn by `D-20261025-11`.
+**Status: PLANNED — last G1 task; starts only after HOST-002, WEBCHAT-001 and HANDOFF-002 are merged (Owner order `D-20261025-09`).** Proposed prerequisite, not an Owner decision: HOST-004, the Owner GO for `wstera-lab` writes and the PR #23 merge decision. Base: `main` @ `9b4f997`. Runs on schema `aicp` in `wstera-lab`; Docker Desktop was withdrawn by `D-20261025-11`.
 
 ## Goal
 

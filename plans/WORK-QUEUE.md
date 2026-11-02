@@ -1,6 +1,6 @@
 # Work Queue
 
-Updated: 2026-10-25 against `main` at `9b4f997`. Merged code and product acceptance are tracked separately.
+Updated: 2026-11-02 against `main` at `9b4f997`. Merged code and product acceptance are tracked separately.
 
 ## Done on main
 
@@ -16,8 +16,8 @@ Updated: 2026-10-25 against `main` at `9b4f997`. Merged code and product accepta
 
 | Work | Current state | Next evidence needed |
 |---|---|---|
-| Authenticated host/bootstrap | Implemented and merged in PR #18; local-only synthetic scope; Docker withdrawn by `D-20261025-11` | HOST-004, separate Owner GO and PR #23 merge decision, then authenticated E2E on `wstera-lab`; route-level tests/rate limiting; resolve membership-revalidation race in the write transaction; independent review of remaining delta |
-| Knowledge upload and approval | Local-only upload, review/approval and citation search merged | Verify browser-to-local-Supabase flow and exact citations; no hosted setup implied |
+| Authenticated host/bootstrap | Implemented and merged in PR #18; local-only synthetic scope; Docker withdrawn by `D-20261025-11` | Proposed, not an Owner decision: HOST-004, separate Owner GO and PR #23 merge decision, then authenticated E2E on `wstera-lab`; route-level tests/rate limiting; resolve membership-revalidation race in the write transaction; independent review of remaining delta |
+| Knowledge upload and approval | Local-only upload, review/approval and citation search merged | Verify browser-to-`wstera-lab` flow and exact citations; no hosted setup implied |
 | Web Chat | No visitor chat UI/session host | Allowed-origin/session binding, shared-engine extractive cited answer (model flag off), citation and abuse-limit tests |
 | Durable handoff | Local state/ports only | Persistent staff authorization, durable pause/resume and atomic dispatch/outbox guard |
 | Live model and usage | Adapter tested with mocked transport; no provider selected | Owner-approved provider, data region and budget; durable usage ledger and measured answer quality |
