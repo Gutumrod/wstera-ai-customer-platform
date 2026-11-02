@@ -1,0 +1,255 @@
+Merchant Brain Core Platform เป็นเทมเพลตกลางของ WSTERA ที่ไม่ยึดติดกับ KMO หรือธุรกิจประเภทใดประเภทหนึ่งเลย
+
+แนวคิดคือ สร้างระบบสมองกลางหนึ่งครั้ง แล้วนำไปติดตั้งให้ร้านค้า แบรนด์ หรือบริษัทต่าง ๆ โดยเลือกความสามารถและใส่กฎธุรกิจของแต่ละแห่งเข้าไป
+
+ไม่ว่าจะเป็นร้านแต่งรถ ร้านอาหาร คลินิก บริษัทรับเหมา หรือบริษัทที่ขายบริการ ก็ใช้ Core เดียวกันได้ โดยไม่จำเป็นต้องใช้ทุกโมดูล
+1. สถาปัตยกรรมที่กูเสนอ
+Merchant Brain Core
+Universal Business Intelligence Foundation
+
+ระบบสมาชิก • คลังความรู้ • AI • สิทธิ์ • เคส • การตรวจสอบ
+
+
+Business Modules — เลือกตามประเภทธุรกิจ
+Commerce
+
+Booking
+
+Services
+
+CRM
+
+Projects
+
+Documents
+
+
+
+
+Business Configuration
+
+ข้อมูลแบรนด์ • ประเภทสินค้า • วิธีทำงาน • นโยบาย • AI Personality
+
+
+ร้านค้า
+
+Instance แยก
+
+บริษัท
+
+Instance แยก
+
+องค์กร
+
+Instance แยก
+
+
+
+ส่วนที่ใช้ร่วมกันคือ Source Code, มาตรฐานข้อมูล, ระบบอัปเดต และเครื่องมือติดตั้ง ไม่ใช่ฐานข้อมูลลูกค้าหรือ Infrastructure ที่ทุกคนต้องใช้ร่วมกัน
+
+2. ระบบกลางที่ทุกธุรกิจควรมี
+กูแบ่งออกเป็น 10 โมดูล โดยโมดูลเหล่านี้เป็นความสามารถพื้นฐาน ไม่บรรจุกฎเฉพาะของ KMO
+โมดูล	หน้าที่
+01. Organization & Brand	ข้อมูลบริษัท แบรนด์ สาขา เวลาทำการ ช่องทางติดต่อ
+02. Identity & Access	เจ้าของ แอดมิน พนักงาน การเข้าสู่ระบบและสิทธิ์
+03. Knowledge Vault	เก็บ SOP, FAQ, นโยบาย, คู่มือ และความรู้เฉพาะองค์กร
+04. Media Vault	เก็บรูปผลงานและสื่อที่องค์กรอนุมัติให้ AI ส่งได้
+05. AI Brain Engine	ดึงความรู้ วิเคราะห์คำถามตามสิทธิ์ และสร้างคำตอบ
+06. Conversation Hub	รับและจัดการบทสนทนาจากช่องทางที่เชื่อมต่อ
+07. Case & Human Handoff	เปิดเคส มอบหมายงาน แจ้งเตือน และติดตามการแก้ไข
+08. Rules & Configuration	กำหนดกฎการทำงาน เงื่อนไข และการตั้งค่าเฉพาะธุรกิจ
+09. Knowledge Lifecycle	เสนอความรู้ใหม่ ตรวจสอบ อนุมัติ เผยแพร่ ยกเลิกเวอร์ชัน
+10. Security & Operations	Audit, Logs, Backup, Monitoring และการกู้คืน
+
+ข้อสำคัญคือ ไม่ได้หมายความว่าต้องสร้างทั้ง 10 โมดูลเต็มรูปแบบตั้งแต่ MVP แต่เราจะกำหนดขอบเขตและ Interface กลางไว้ก่อน แล้วพัฒนาเป็นลำดับ
+สมองกลางต้องมีวงจรเรียนรู้ร่วมกัน
+รับข้อมูลจากงานประจำวัน
+
+แชต เอกสาร คำถาม ปัญหา ข้อเสนอจากพนักงาน
+
+
+Knowledge Candidate
+
+สกัดข้อเท็จจริงและความรู้ที่อาจมีประโยชน์
+
+
+Human Approval
+
+ผู้มีสิทธิ์ตรวจสอบก่อนประกาศใช้
+
+
+Internal Brain
+
+ผู้บริหารและพนักงาน
+
+Customer Brain
+
+AI ตอบลูกค้าเฉพาะข้อมูลที่เผยแพร่ได้
+
+
+
+Feedback กลับไปตรวจความรู้ ไม่แก้ Knowledge อัตโนมัติ
+
+นี่คือหัวใจที่ทุกแบรนด์ใช้ร่วมกันได้จริง
+3. Business Modules ต้องเสียบเพิ่มได้ ไม่ใช่อยู่ใน Core ทั้งหมด
+ส่วนนี้สำคัญ เพราะบริษัทบางแห่งไม่มีสินค้า บางแห่งไม่มีการจองคิว และบางแห่งไม่ได้ขายของเลย
+Business Module	ใช้กับธุรกิจประเภทไหน	ข้อมูลที่กำหนดเองได้
+Product Catalog	ร้านค้า / E-commerce	SKU, Variant, ราคา, คุณสมบัติ
+Service Catalog	ธุรกิจบริการ	ประเภทบริการ เงื่อนไข ระยะเวลา
+Compatibility	สินค้าเฉพาะรุ่น	ความเข้ากันได้และข้อจำกัด
+Booking	ร้านบริการ / คลินิก	วันเวลา พนักงาน ความจุ
+Order Management	ร้านค้า / โรงงาน	คำสั่งซื้อ การผลิต การจัดส่ง
+Payments	ธุรกิจที่รับเงิน	มัดจำ ยอดคงเหลือ ค่าธรรมเนียม
+Project Management	เอเจนซี / รับเหมา	งาน ขั้นตอน กำหนดส่ง ผู้รับผิดชอบ
+
+ยกตัวอย่าง:
+- KMO เปิด Product Catalog, Compatibility, Booking, Order และ Payments
+- ร้านอาหาร อาจเปิด Product Catalog กับ Order แต่ไม่ต้องเปิด Compatibility
+- บริษัทเอเจนซี อาจใช้ Knowledge, Case และ Project Management โดยไม่ต้องใช้ Product Catalog
+โมดูลเหล่านี้ต้องมีสัญญาการเชื่อมต่อกับ Core ชัดเจน ไม่ใช่เปิดใช้แล้วสร้างตารางข้อมูลและ Workflow ใหม่ได้ตามใจโดยไม่มีการตรวจสอบ
+
+กูไม่แนะนำให้สร้างระบบ Workflow แบบลากวางอะไรก็ได้ตั้งแต่แรก เพราะจะเพิ่มความซับซ้อนอย่างมาก ให้เริ่มจากรูปแบบ Workflow ที่ผ่านการทดสอบแล้วก่อน
+4. สิ่งที่ทำให้หยิบ Template ไปใช้กับธุรกิจใหม่ได้จริง
+นอกจาก Source Code เราต้องมี Deployment Kit ที่สร้าง Instance ใหม่ได้ซ้ำโดยไม่ต้องเริ่มเขียนระบบใหม่
+Merchant Brain — Deployment Kit
+Proposed
+
+01
+
+Provision
+
+สร้าง Infrastructure, Database และ Storage แยกสำหรับลูกค้า
+
+
+
+02
+
+Configure
+
+ตั้งชื่อแบรนด์ สิทธิ์ ธีม ภาษา และโมดูล
+
+
+
+03
+
+Connect
+
+เชื่อมช่องทาง LINE, เว็บไซต์ และระบบภายนอก
+
+
+
+04
+
+Initialize
+
+นำเข้าความรู้และตั้งกฎธุรกิจเบื้องต้น
+
+
+
+05
+
+Validate
+
+ทดสอบสิทธิ์ AI คำตอบ ความปลอดภัย และ Integration
+
+
+
+06
+
+Release
+
+Deploy พร้อมเวอร์ชัน Backup และ Health Check
+
+
+
+
+ตัวอย่างโครง Repository ที่กูเสนอ:
+merchant-brain/
+ คัดลอก
+merchant-brain/
+├── apps/
+│   └── dashboard/
+├── packages/
+│   ├── core/
+│   ├── brain/
+│   ├── vault/
+│   ├── cases/
+│   ├── media/
+│   └── contracts/
+├── modules/
+│   ├── commerce/
+│   ├── booking/
+│   └── projects/
+├── adapters/
+│   ├── line/
+│   └── web-chat/
+├── blueprints/
+│   ├── blank-business/
+│   └── kmo/
+└── infrastructure/
+    ├── migrations/
+    └── provisioning/
+
+นี่เป็นเพียง Repository Layout ที่เสนอ ยังไม่ใช่โครงสร้างที่ตรวจสอบหรือสร้างแล้ว
+
+อีกเรื่องที่ต้องไม่ลืม: ถ้า Infrastructure เป็นของลูกค้า แต่ WSTERA ถือสิทธิ์ใน Core Code ต้องใช้ทั้งการควบคุม Deployment และสัญญา License เพราะเทคนิคเพียงอย่างเดียวไม่อาจรับประกันว่าลูกค้าจะเข้าถึงหรือคัดลอกโค้ดที่ Deploy ไปไม่ได้
+5. Data Model กลางที่ต้องมี
+กูแนะนำให้เริ่มออกแบบจากกลุ่มข้อมูลต่อไปนี้ โดยไม่สร้างตารางเฉพาะ KMO ใน Core
+กลุ่มข้อมูล	ตัวอย่าง Entity
+Organization	Organizations, Brands, Locations
+Identity	Users, Memberships, Roles
+Knowledge	Knowledge Items, Versions, Approvals
+Media	Assets, Asset Links, Permissions
+Communication	Channels, Conversations, Messages
+Operations	Cases, Assignments, Status Events
+Configuration	Rules, Settings, Module Config
+Governance	Audit Events, AI Runs, Source References
+
+ข้อมูลลูกค้าปลายทางให้เป็นส่วนของ CRM/Case หรือ Conversation ตามความจำเป็น พร้อมกำหนด Consent, Retention และสิทธิ์เข้าถึง ไม่จำเป็นต้องสร้างโปรไฟล์ถาวรให้ลูกค้าทุกคน
+
+สำหรับรูปภาพให้ยึดกฎเดิม: Media Vault เก็บสื่อที่ร้านอนุมัติ ส่วนภาพจากลูกค้าเป็นไฟล์แนบเคสแบบ Private และต้องส่งต่อคน ไม่ให้ AI ประเมินเอง
+
+6. ลำดับสร้างที่กูแนะนำ
+
+Foundation — Core Platform
+
+Identity, Organization, Knowledge Vault, Approvals, AI Runtime, Media Vault และ Audit
+
+เป้าหมายคือสร้างหนึ่งสมองที่เจ้าของร้านแก้ไขความรู้ได้ และ AI ใช้ความรู้ที่อนุมัติแล้วตอบได้
+
+
+
+
+First Vertical Slice — Conversation & Handoff
+
+ต่อ LINE ให้รับคำถาม ตอบพร้อมรูปที่ถูกต้อง และสร้างเคสแจ้งแอดมินเมื่อจำเป็น ทดสอบกับ KMO
+
+
+
+
+Business Extensions
+
+ค่อยสร้าง Commerce, Order, Booking และ Payments โดยใช้กฎจริงที่เก็บจาก Discovery
+
+
+
+
+Template Validation
+
+นำ Core เดียวกันไปติดตั้งให้ธุรกิจจำลองที่ไม่เกี่ยวกับมอเตอร์ไซค์ โดยใช้ Configuration และ Module ที่เหมาะสม ไม่แก้ Core ให้เป็นเงื่อนไขพิเศษ
+
+
+
+เกณฑ์ผ่านที่กูอยากล็อก: ถ้าเรานำ Merchant Brain ไปสร้างสมองให้บริษัทเอเจนซีหนึ่งแห่งได้ โดยไม่ต้องแก้โค้ด KMO หรือเปลี่ยนโครง Core เราจึงเริ่มมีหลักฐานว่า Template ใช้ซ้ำได้จริง
+ข้อสรุปด้าน Product Strategy
+กูอยากให้เราแยกผลิตภัณฑ์เป็นสองชั้นชัดเจน:
+
+Merchant Brain Core คือระบบสมองกลางที่ทุกบริษัทใช้ได้ ทั้ง Knowledge, AI, Governance, Media, Conversation และ Case Management
+
+Merchant Brain Business Packs คือโมดูลธุรกิจที่นำมาเสียบเพิ่ม เช่น Commerce Pack, Booking Pack หรือ Service Pack
+
+ส่วน KMO เป็นเพียง Reference Blueprint แรก ที่เอา Core และ Business Packs มาประกอบเข้าด้วยกัน
+
+ดังนั้นสิ่งที่ควรออกแบบต่อก่อนเขียนโค้ดคือ Core Contract v0.1 — กำหนดว่า Core รับข้อมูลอะไร ส่งข้อมูลอะไรให้โมดูลอื่นได้ ใครอนุมัติความรู้ ใครเรียกใช้ AI ได้ และการตั้งค่าของแต่ละองค์กรแยกจาก Source Code อย่างไร
+
+เมื่อ Contract นี้นิ่งแล้ว เราถึงค่อยล็อก Technology Stack และเริ่ม Implementation โดยไม่ต้องรื้อโครงกลางตามกฎเฉพาะของแต่ละร้าน
