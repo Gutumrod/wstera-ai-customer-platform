@@ -1,4 +1,4 @@
-const loopbackHosts = ["127.0.0.1", "localhost", "::1"];
+const loopbackHosts = ["127.0.0.1", "localhost", "[::1]"];
 
 function required(env, name) {
   const value = env[name]?.trim();

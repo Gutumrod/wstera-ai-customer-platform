@@ -46,3 +46,18 @@ test("private storage rejects malformed object identity before contacting the pr
   await assert.rejects(adapter.putOriginal(shopA, { sourceId: "../other", versionId: "version-1", filename: "terms.pdf" }, new Uint8Array([1]), "application/pdf"),
     /INVALID_KNOWLEDGE_OBJECT_PATH/);
 });
+
+test("upload and delete enforce the same workspace path rule", async () => {
+  const adapter = new SupabasePrivateKnowledgeStorage({ storage: { from() { throw new Error("must not call provider"); } } } as unknown as SupabaseClient);
+  const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
+  for (const identity of [
+    { sourceId: "shop-a/source", versionId: "version-1", filename: "terms.pdf" },
+    { sourceId: "source", versionId: "..", filename: "terms.pdf" },
+    { sourceId: "source", versionId: "version-1", filename: "../../terms.pdf" },
+  ]) {
+    await assert.rejects(adapter.putOriginal(shopB, identity, new Uint8Array([1]), "application/pdf"), /INVALID_KNOWLEDGE_OBJECT_PATH/);
+  }
+  for (const path of ["shop-a/source/version-1/terms.pdf", "shop-b/../version-1/terms.pdf", "shop-b/source/terms.pdf", "shop-b/source/version-1/../terms.pdf"]) {
+    await assert.rejects(adapter.removeOriginal(shopB, path), /CROSS_WORKSPACE_OBJECT_DELETE_DENIED/);
+  }
+});

@@ -5,8 +5,7 @@ the single WSTERA platform, and reusable parts of the retired private LINE produ
 per file, with provenance and a secret scan.
 
 Source repository: `Gutumrod/line-oa-ai-sales-service-engine` at commit `739e649`
-(2026-08-24, branch `master`), private. Working copy used for review:
-`D:/AI-Workspace/projects/line-oa-ai-sales-service-engine`. The `.gitignore`d `source-repos/` copy
+(2026-08-24, branch `master`), private. Reviewed from a local working copy of that repository. The `.gitignore`d `source-repos/` copy
 was not read or used (repo rule: `AGENTS.md` forbids reading it).
 
 ## Imported items
@@ -57,7 +56,7 @@ Owner order: 2026-11-02 (`D-20261102-23` in the house decisions register). Sourc
 
 Not imported: `source/KMO-Merchant-Brain-2026-10-29.txt` (pilot-shop business rules, kept in the private vault),
 `scripts/merchant-brain-continuation-v02.js` and `scripts/merchant-brain-board.js` (board tooling), and the two tldraw setup notes
-(local machine paths). The Core Platform document names the pilot shop only as a generic example.
+(local machine paths). The Core Platform document names the pilot shop both as an example and as the first reference blueprint.
 
 Scan: the text files and the files extracted from the `.tldraw` archive were searched for token, key and private-key patterns,
 email addresses, Thai phone numbers and local paths, with no matches. The JPEG was reviewed by eye. `BUILD_PASS` scope only: these are documents and establish no readiness.

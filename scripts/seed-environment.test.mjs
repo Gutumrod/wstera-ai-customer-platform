@@ -56,3 +56,12 @@ test("any other app environment is refused", () => {
   assert.throws(() => seedEnvironment({ ...lab, APP_ENV: "production" }), /SEED_REQUIRES_APP_ENV_LOCAL_OR_LAB/);
   assert.throws(() => seedEnvironment({ ...lab, APP_ENV: undefined }), /SEED_REQUIRES_APP_ENV_LOCAL_OR_LAB/);
 });
+
+test("the IPv6 loopback form that URL parsing returns counts as local", () => {
+  const ipv6 = {
+    ...local,
+    NEXT_PUBLIC_SUPABASE_URL: "http://[::1]:54321",
+    SUPABASE_DB_ADMIN_URL: "postgresql://postgres:postgres@[::1]:54322/postgres",
+  };
+  assert.doesNotThrow(() => seedEnvironment(ipv6));
+});

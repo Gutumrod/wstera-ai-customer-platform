@@ -1,0 +1,713 @@
+
+> wstera-ai-customer-platform@0.1.0 test
+> npm run build && node --test dist/src/tests/core.test.js dist/modules/knowledge/knowledge.test.js dist/modules/knowledge/evaluation/evaluation.test.js dist/modules/handoff/handoff.test.js dist/modules/ai-engine/citation-integrity.test.js dist/modules/ai-engine/support-orchestrator.test.js dist/adapters/models/openai-compatible/chat-completions.test.js dist/adapters/persistence/postgres/knowledge-repository.test.js dist/adapters/persistence/supabase/workspace-host-migration.test.js dist/composition/knowledge-database-url.test.js dist/modules/payments/payments.test.js dist/modules/business-actions/business-actions.test.js dist/modules/tenancy/merchant-identity.test.js dist/composition/knowledge-intake.test.js dist/composition/merchant-knowledge-routes.test.js dist/adapters/persistence/supabase/host-hardening-migration.test.js dist/adapters/knowledge/document-extractor.test.js dist/adapters/storage/supabase/private-knowledge-storage.test.js scripts/seed-environment.test.mjs
+
+
+> wstera-ai-customer-platform@0.1.0 build
+> tsc
+
+✖ PDF extraction caps workers and queue, refuses the overflow, then frees every slot (1.7291ms)
+✖ CSV extraction spawns no worker and never waits on the PDF cap (8.3492ms)
+✔ answerability sends bounded JSON-mode request and records per-workspace token usage (26.9211ms)
+✔ grounded answer returns only bounded text and evidence references (1.62ms)
+✔ configuration rejects missing credentials, unsafe URLs and invalid HTTP endpoints (1.261ms)
+✔ invalid input and oversized request do not call the transport (0.724ms)
+✔ configuration is snapshotted and inherited usage recorder methods remain supported (0.9012ms)
+✔ provider errors are normalized and never include response bodies or credentials (0.8064ms)
+✔ timeouts abort the request and return a normalized error (7.1275ms)
+✔ timeout settles even when the host transport ignores AbortSignal (8.2621ms)
+✔ timeout cancels and settles a stalled response body (16.9542ms)
+▶ oversized, malformed, and usage-free responses fail closed
+  ✔ oversized body (1.0709ms)
+  ✔ invalid JSON (0.7371ms)
+  ✔ missing token usage (0.6923ms)
+  ✔ usage persistence failure (0.7494ms)
+  ✔ usage persistence is included in the operation timeout (18.7066ms)
+✔ oversized, malformed, and usage-free responses fail closed (23.1427ms)
+▶ malformed assessment and fabricated citation references never reach callers
+  ✔ assessment schema (0.823ms)
+  ✔ fabricated citation (0.6107ms)
+  ✔ empty answer (0.4912ms)
+✔ malformed assessment and fabricated citation references never reach callers (2.4988ms)
+▶ PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators
+  ✔ workspace RLS is default-deny and transaction-local scope does not leak (21.4547ms)
+  ✔ approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility (95.4567ms)
+  ✔ archived source cannot approve an indexed version (17.3594ms)
+  ✔ FAQ, PDF page and CSV row citations round-trip exactly (38.7867ms)
+  ✔ PostgreSQL infers omitted continuation indexes for page and row locators (11.9702ms)
+  ✔ PostgreSQL accepts explicit repeated page and row segments like the canonicalizer (11.3603ms)
+  ✔ failed chunk persistence rolls back its version row (5.7952ms)
+  ✔ invalid tenant-bound drafts fail before touching SQL (1.3532ms)
+  ✔ rejects noncanonical chunk segmentation for FAQ and imported sources (4.7402ms)
+  ✔ persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks (350.0619ms)
+✔ PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators (2364.169ms)
+✖ retrieval candidates are shortlisted and bounded in SQL without carrying version content (881.8051ms)
+✖ M1: the ingest role cannot approve by any path (1829.69ms)
+✖ M1: approval takes the approver from auth.uid() and checks ownership in SQL (14.9687ms)
+✖ revalidation: every repository and audit write re-checks membership in its own transaction (15.4899ms)
+✖ revalidation function locks the rows it reads and stays out of reach of request-facing roles (1.8182ms)
+✖ M3: members read only web connections, so LINE channel ids stay hidden (6.0097ms)
+✖ a workspace can hold only one active web connection (1.1475ms)
+✖ hardening objects stay in aicp, owned by the product migrator (3.7977ms)
+✔ Supabase local migrations stay in sync and enforce workspace membership/storage RLS (1871.8531ms)
+✔ private storage builds immutable workspace paths and reuses only byte-identical retries (2.983ms)
+✔ private storage rejects malformed object identity before contacting the provider (0.306ms)
+✖ upload and delete enforce the same workspace path rule (0.7871ms)
+✔ local database URL policy is unchanged (1.499ms)
+✔ lab database URL accepts only knowledge_runtime on the pinned project (1.1067ms)
+✔ lab database URL fails closed without a matching project ref (1.2636ms)
+✔ lab database connections verify TLS and local ones stay plain (1.3531ms)
+✔ Supabase environment guard accepts only local loopback and the pinned lab project (0.5035ms)
+✔ admin client starts only on an accepted environment (138.4473ms)
+✔ knowledge intake is workspace-scoped, idempotent, and exposes citation-ready indexed knowledge (5.8228ms)
+✔ reusing an idempotency key with different knowledge fails closed (1.0085ms)
+✔ bounded document intake stores the original and keeps exact page citations (1.1567ms)
+✔ database failure before version persistence does not create an orphan original (0.5737ms)
+✔ document retry with a different display filename reuses one immutable object path (0.8661ms)
+✔ unsupported and oversized uploads are rejected before storage (4.3309ms)
+✔ malformed documents are retained in workspace-scoped quarantine and never become retrievable (0.9222ms)
+✖ a busy extractor answers 503 and records nothing, so the same request can be retried (1.2937ms)
+✖ a replay that records against an earlier object removes the object it just created (1.0074ms)
+✔ a replay reusing its own existing object keeps that object (0.5786ms)
+✖ only named conflict errors become 409; other failures that mention CONFLICT stay 500 (0.6385ms)
+✔ every route answers 401 without a session and writes nothing (1819.5028ms)
+✔ state-changing routes refuse a missing or foreign origin (3.644ms)
+✖ GET accepts the console's own same-origin fetch and refuses cross-site reads (18.495ms)
+✔ upload rejects oversized, wrong content type and unknown fields before writing (20.2023ms)
+✔ search rejects oversized, malformed, wrong content type and unknown fields (12.9827ms)
+✔ a rejected file is quarantined apart from knowledge and stays inside its workspace (23.9477ms)
+✔ only the signed-in owner of the workspace can approve, and the approver comes from the session (40.8233ms)
+✔ search returns approved evidence for its own workspace only, whatever the request claims (36.6854ms)
+✖ rate limits answer 429 per identity before reading the request and write nothing (31.6178ms)
+▶ a membership revoked after identity resolution cannot write
+  ✖ FAQ upload (16.1303ms)
+  ✖ quarantine leaves no object behind (7.0344ms)
+  ✖ approval (17.4041ms)
+  ✖ a suspended workspace is refused the same way (15.6755ms)
+✖ a membership revoked after identity resolution cannot write (60.1687ms)
+✖ error status comes from known codes, not from what a message or vendor error happens to contain (1.1258ms)
+✔ accepts canonical FAQ, PDF page, and CSV row citations from retrieved evidence (2.9736ms)
+✔ deduplicates repeated citations and returns the canonical evidence reference (0.2991ms)
+✔ normalizes omitted page and row chunk indexes to zero (0.6504ms)
+✔ hands off when evidence or citations are absent (0.253ms)
+✔ hands off for malformed draft and empty answer text (0.2806ms)
+✔ fails closed on foreign evidence and cross-workspace citations (0.2294ms)
+✔ fails closed when retrieval hit metadata does not match its citation identity (0.2251ms)
+✔ rejects fabricated evidence identities and malformed locators (0.2885ms)
+✔ returns only a cited answer mapped from opaque evidence references (4.3173ms)
+✔ no approved evidence requests handoff without invoking assessment or model (0.5878ms)
+▶ insufficient, conflicting, and uncertain evidence fail closed to handoff
+  ✔ insufficient_evidence (0.5359ms)
+  ✔ conflicting_evidence (0.6418ms)
+  ✔ uncertain (0.406ms)
+✔ insufficient, conflicting, and uncertain evidence fail closed to handoff (2.4601ms)
+▶ malformed assessment, provider errors, and bad citations never produce an answer
+  ✔ assessment shape (2.1594ms)
+  ✔ assessment getter throws (0.5607ms)
+  ✔ assessment failure (0.4078ms)
+  ✔ generation failure (0.4643ms)
+  ✔ foreign evidence reference (0.3365ms)
+  ✔ empty answer (0.2916ms)
+  ✔ oversized answer (0.2253ms)
+  ✔ too many citation references (0.2531ms)
+  ✔ extra model field (0.2161ms)
+  ✔ generated getter throws (0.2525ms)
+✔ malformed assessment, provider errors, and bad citations never produce an answer (6.8368ms)
+✔ retrieval and handoff failures are surfaced without leaking adapter errors (0.7646ms)
+✔ invalid request is rejected before any port is called (0.2104ms)
+✔ over-retrieval-limit customer messages hand off instead of being silently rejected (0.1961ms)
+✔ support query accepts the 500-character retrieval boundary and routes the 5000-character ceiling (0.3482ms)
+✔ freshness revalidates every chunk shown to the model, including uncited evidence (0.3527ms)
+▶ paused conversations stop before retrieval and a handoff during generation suppresses the answer
+  ✔ already paused (0.1653ms)
+  ✔ handoff starts and is released while generating (0.2646ms)
+  ✔ knowledge is revoked during generation (0.2923ms)
+  ✔ freshness check failure fails closed (0.3472ms)
+  ✔ conversation takeover before a failure handoff returns paused without alerting an already-owned conversation (0.2814ms)
+  ✔ conversation version change before failure handoff returns changed without requesting handoff (0.2688ms)
+  ✔ malformed freshness result fails closed (0.3231ms)
+  ✔ handoff starts while generating (0.2754ms)
+  ✔ conversation state unavailable (0.1455ms)
+  ✔ stateful conversation getter is rejected before retrieval (0.1361ms)
+  ✔ stateful evidence getter is rejected before model use (0.1765ms)
+  ✔ conversation Proxy uses its captured descriptor value (0.2217ms)
+  ✔ generated reference Proxy validates and uses the same descriptor value (0.2884ms)
+✔ paused conversations stop before retrieval and a handoff during generation suppresses the answer (4.4092ms)
+✔ risk is derived from the action kind, not from caller data (1.3406ms)
+✔ an unknown or inherited property name is refused instead of resolving (0.6342ms)
+✔ a tampered risk field on the record cannot unlock execution (0.4093ms)
+✔ an action that changes state cannot execute before confirmation (0.2359ms)
+✔ confirmation cannot skip authorisation (0.2126ms)
+✔ a read-only action may execute after authorization without confirmation (0.2491ms)
+✔ full confirmation cycle reaches verified state (0.2434ms)
+✔ re-confirming with the same confirmation id is idempotent (0.209ms)
+✔ confirming twice with a different id is refused (0.2335ms)
+✔ any event naming another workspace is denied (0.3148ms)
+✔ terminal records accept no further events (0.1887ms)
+✔ an executed record cannot be rejected or failed afterwards (0.1939ms)
+✔ missing, unexpected or non-scalar arguments are refused (0.2288ms)
+✔ argument values are copied, not shared with the caller (0.1299ms)
+✔ malformed identifiers and short idempotency keys are refused (0.193ms)
+✔ new conversation starts with AI enabled and tenant-scoped identity (2.5064ms)
+✔ handoff request pauses AI before operator claim and staff reply keeps it paused (0.8937ms)
+✔ replaying the latest delivery returns the post-transition repository snapshot (0.5553ms)
+✔ customer-facing calls cannot release handoff and unauthorized staff cannot release it (0.742ms)
+✔ authorized staff release is the only transition that resumes AI (0.3214ms)
+✔ handoff commands reject a forged workspace and an active conversation cannot be claimed (0.3636ms)
+✔ handoff failures are explicit and invalid transition requests fail closed (0.3519ms)
+✔ repository compare-and-append rejects a stale transition version (0.4769ms)
+✔ evaluation summary reports recall, precision, citation validity, abstention, and latency separately (1.9989ms)
+✔ empty evaluation returns null rates and zero latency instead of NaN (0.2123ms)
+✔ evaluation rejects invalid latency observations instead of recording zero (0.5251ms)
+✔ Precision@k divides relevant returned evidence by k, including when fewer than k hits return (0.208ms)
+✔ a wrong page from the correct source and version is not relevant evidence (0.1537ms)
+✔ synthetic baseline covers 30 FAQ, PDF, CSV and negative cases with verifiable citations (34.927ms)
+✔ synthetic corpus manifest enforces unique cases, outcomes, source kinds, and locators (0.6317ms)
+✔ approved FAQ retrieval returns exact version and deterministic span citation (5.7594ms)
+✔ Thai lexical query and punctuation variants of mixed-language SKUs retrieve approved knowledge (1.1191ms)
+✔ SKU punctuation normalization abstains when distinct identifiers collide (0.6916ms)
+✔ inactive SKU variants do not make active punctuation matches ambiguous (0.5838ms)
+✔ unapproved and revoked versions never appear in retrieval (0.407ms)
+✔ citation freshness becomes false after source archive or version revocation (0.8755ms)
+✔ canonicalizes page and row version drafts when optional chunkIndex is omitted (1.0993ms)
+✔ archived source cannot approve an indexed version (0.6402ms)
+✔ repository refuses a caller-supplied approved status at version creation (0.311ms)
+✔ repository rejects an imported version whose kind differs from its source (0.3808ms)
+✔ retrieval locator order is deterministic when repository rows are reversed (9.2345ms)
+✔ repository derives tenant scope from trusted context and rejects forged or mismatched workspace data (0.6211ms)
+✔ version conflicts fail closed and approved version content is immutable (0.3401ms)
+✔ archived source is excluded even when its version remains approved (0.3175ms)
+✔ a source cannot have two approved versions and does not resurrect older content (0.4235ms)
+✔ no match yields no evidence and malformed or oversized FAQ content is rejected (0.6002ms)
+✔ instruction-like document text remains inert retrieved data and cannot change source state (0.3444ms)
+✔ imported page and row segments retain exact content offsets and source locators (0.3337ms)
+✔ document version builder rejects locators that do not match the source format (0.1859ms)
+✔ retrieval citations preserve the extracted PDF page locator (0.3324ms)
+✔ CSV extractor handles UTF-8 BOM, Thai, quoted commas and maps the data row (26.2983ms)
+✔ PDF extractor returns per-page text and rejects image-only PDFs without OCR claims (648.5404ms)
+✔ PDF extractor fails closed on highly-compressible page output (718.8058ms)
+✔ PDF text consumer cancels the stream as soon as the extraction cap is crossed (149.5671ms)
+✔ PDF text consumer ignores trailing whitespace when no output budget remains (0.4699ms)
+✔ PDF page budgets do not reject an empty trailing page at the extraction ceiling (0.1625ms)
+✔ document extractor fails closed for invalid UTF-8, malformed files and oversized input (1.4822ms)
+✔ document preparation carries extracted CSV row citations into approved retrieval (1.4034ms)
+✔ document preparation converts thrown or malformed extractor results to safe failures (0.2612ms)
+✔ TLV encoding writes tag, two-digit length and value (1.9648ms)
+✔ CRC matches the published CRC-16/CCITT-FALSE check value (0.2571ms)
+✔ CRC suffix matches a recomputation over the payload prefix (0.442ms)
+✔ payload without an amount is static and carries no amount tag (0.375ms)
+✔ payload with an amount is dynamic and carries tag 54 at two decimals (0.2891ms)
+✔ mobile target is normalised to 0066 form under tag 01 (0.8028ms)
+✔ eleven-digit target already in 66 form gains the 00 prefix (0.1477ms)
+✔ thirteen-digit target is used unchanged under tag 02 (0.1746ms)
+✔ thirteen-digit target already in 0066 form stays a mobile target (0.1335ms)
+✔ a plus-prefixed international mobile is accepted, other punctuation is not (0.6256ms)
+✔ fifteen-digit target is used unchanged under tag 03 (0.1479ms)
+✔ non-positive, over-precise or oversized amounts are rejected (0.3099ms)
+✔ malformed targets are rejected instead of guessed (0.2243ms)
+✔ payload matches a pinned vector computed outside this module (0.1051ms)
+✔ same input yields identical payload (0.0951ms)
+✔ merchant workspace identity is derived from active membership and owned web connection (1.1408ms)
+▶ workspace selection fails closed when membership or web connection is missing or ambiguous
+  ✔ no membership (0.6044ms)
+  ✔ multiple workspaces (0.2867ms)
+  ✔ no web connection (0.2127ms)
+  ✔ repository errors fail closed (0.2047ms)
+✔ workspace selection fails closed when membership or web connection is missing or ambiguous (3.0003ms)
+✔ trusted workspace enforces a strict, immutable context (1.5666ms)
+✔ tenancy contract and legacy workspace APIs preserve constructor and enforcement parity (1.1428ms)
+✔ shared channel contracts keep message identity connection-scoped and errors normalized (0.4821ms)
+✔ LINE HMAC verifies raw bytes and rejects modifications/missing secret (7.5768ms)
+✔ signed LINE ingress is bound to server-owned destination and filters group messages (1.8594ms)
+✔ empty signed LINE verification event is accepted and invalid destination is rejected before lookup (0.895ms)
+✔ LINE ingress fails closed for malformed signed payloads and bounds input (3.5855ms)
+✔ same LINE user in two connections resolves to separate workspace identities (1.0955ms)
+✔ dedupe lease contract recovers a failed first event before redelivery (0.8268ms)
+✔ source gate filters scope and approval while preserving excerpt text as untrusted data (0.5151ms)
+✔ reply client rejects missing creds and surfaces provider failure (19.6166ms)
+✔ local seed target stays loopback only and uses no TLS option (1.4763ms)
+✔ lab seed target needs the confirmed project, verified TLS and a synthetic owner (0.7419ms)
+✔ any other app environment is refused (0.9356ms)
+✖ the IPv6 loopback form that URL parsing returns counts as local (1.0287ms)
+ℹ tests 215
+ℹ suites 0
+ℹ pass 192
+ℹ fail 23
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3383.2146
+
+✖ failing tests:
+
+test at dist\adapters\knowledge\document-extractor.test.js:6:1
+✖ PDF extraction caps workers and queue, refuses the overflow, then frees every slot (1.7291ms)
+  AssertionError [ERR_ASSERTION]: pdfWorkerLoad must report the worker cap
+  + actual - expected
+
+  + 'undefined'
+  - 'function'
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/knowledge/document-extractor.test.js:7:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\adapters\knowledge\document-extractor.test.js:19:1
+✖ CSV extraction spawns no worker and never waits on the PDF cap (8.3492ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + undefined
+  - {
+  -   active: 0,
+  -   queued: 0
+  - }
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/knowledge/document-extractor.test.js:23:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { active: 0, queued: 0 },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\postgres\knowledge-repository.test.js:311:1
+✖ retrieval candidates are shortlisted and bounded in SQL without carrying version content (881.8051ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+  +   'other',
+      'shipping',
+  +   'sku-dash',
+  +   'sku-solo',
+  +   'sku-under',
+  +   'wide'
+    ]
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/persistence/postgres/knowledge-repository.test.js:334:16)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'other', 'shipping', 'sku-dash', 'sku-solo', 'sku-under', 'wide' ],
+    expected: [ 'shipping' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:28:1
+✖ M1: the ingest role cannot approve by any path (1829.69ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:35:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:42:1
+✖ M1: approval takes the approver from auth.uid() and checks ownership in SQL (14.9687ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  error: function aicp.approve_knowledge_version(unknown, unknown, unknown) does not exist
+      at async TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:44:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: error: function aicp.approve_knowledge_version(unknown, unknown, unknown) does not exist
+        at pe.Ue (<worktree>/node_modules/@electric-sql/pglite/dist/chunk-2BOC2OMW.js:1:17959)
+        at pe.tt (<worktree>/node_modules/@electric-sql/pglite/dist/chunk-2BOC2OMW.js:1:15347)
+        at pe.parse (<worktree>/node_modules/@electric-sql/pglite/dist/chunk-2BOC2OMW.js:1:14021)
+        at N.qe (<worktree>/node_modules/@electric-sql/pglite/dist/index.js:5:1762)
+        at <worktree>/node_modules/@electric-sql/pglite/dist/index.js:5:1155
+        at wasm://wasm/0267bb86:wasm-function[10930]:0x5a5ccf
+        at wasm://wasm/0267bb86:wasm-function[3585]:0x27eaeb
+        at wasm://wasm/0267bb86:wasm-function[3627]:0x2869d1
+        at wasm://wasm/0267bb86:wasm-function[3637]:0x286c2d
+        at wasm://wasm/0267bb86:wasm-function[9914]:0x54fd4d,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:62:1
+✖ revalidation: every repository and audit write re-checks membership in its own transaction (15.4899ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /assert_active_knowledge_writer/. Input:
+
+  "SELECT set_config('app.workspace_id', $1, true)\n" +
+    'INSERT INTO aicp.knowledge_sources (workspace_id, source_id, kind, title, created_at)\n' +
+    '         VALUES ($1, $2, $3, $4, $5)\n' +
+    '         ON CONFLICT (workspace_id, source_id) DO NOTHING\n' +
+    '         RETURNING workspace_id, source_id, kind, title, status, created_at'
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:68:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "SELECT set_config('app.workspace_id', $1, true)\nINSERT INTO aicp.knowledge_sources (workspace_id, source_id, kind, title, created_at)\n         VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (workspace_id, source_id) DO NOTHING\n         RETURNING workspace_id, source_id, kind, title, status, created_at",
+    expected: /assert_active_knowledge_writer/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:92:1
+✖ revalidation function locks the rows it reads and stays out of reach of request-facing roles (1.8182ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + undefined
+  - true
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:94:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:99:1
+✖ M3: members read only web connections, so LINE channel ids stay hidden (6.0097ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+      {
+  +     channel: 'line',
+  +     connection_id: 'line-a'
+  +   },
+  +   {
+        channel: 'web',
+        connection_id: 'web-a'
+      }
+    ]
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:101:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { connection_id: 'line-a', channel: 'line' }, { connection_id: 'web-a', channel: 'web' } ],
+    expected: [ { connection_id: 'web-a', channel: 'web' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:105:1
+✖ a workspace can hold only one active web connection (1.1475ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:106:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at dist\adapters\persistence\supabase\host-hardening-migration.test.js:110:1
+✖ hardening objects stay in aicp, owned by the product migrator (3.7977ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + []
+  - [
+  -   {
+  -     owner: 'aicp_migrator',
+  -     proname: 'approve_knowledge_version',
+  -     schema: 'aicp'
+  -   },
+  -   {
+  -     owner: 'aicp_migrator',
+  -     proname: 'assert_active_knowledge_writer',
+  -     schema: 'aicp'
+  -   }
+  - ]
+
+      at TestContext.<anonymous> (<worktree>/dist/adapters/persistence/supabase/host-hardening-migration.test.js:115:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ { proname: 'approve_knowledge_version', owner: 'aicp_migrator', schema: 'aicp' }, { proname: 'assert_active_knowledge_writer', owner: 'aicp_migrator', schema: 'aicp' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at dist\adapters\storage\supabase\private-knowledge-storage.test.js:46:1
+✖ upload and delete enforce the same workspace path rule (0.7871ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /CROSS_WORKSPACE_OBJECT_PATH_DENIED/. Input:
+
+  'Error: INVALID_KNOWLEDGE_OBJECT_PATH'
+
+      at async TestContext.<anonymous> (<worktree>/dist/adapters/storage/supabase/private-knowledge-storage.test.js:54:9)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: INVALID_KNOWLEDGE_OBJECT_PATH
+        at objectPath (<worktree>/dist/adapters/storage/supabase/private-knowledge-storage.js:6:15)
+        at SupabasePrivateKnowledgeStorage.putOriginal (<worktree>/dist/adapters/storage/supabase/private-knowledge-storage.js:17:22)
+        at TestContext.<anonymous> (<worktree>/dist/adapters/storage/supabase/private-knowledge-storage.test.js:54:38)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1382:25)
+        at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+        at Test.postRun (node:internal/test_runner/test:1522:19)
+        at Test.run (node:internal/test_runner/test:1447:12)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: /CROSS_WORKSPACE_OBJECT_PATH_DENIED/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at dist\composition\knowledge-intake.test.js:164:1
+✖ a busy extractor answers 503 and records nothing, so the same request can be retried (1.2937ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  Error: MALFORMED_FILE
+      at async TestContext.<anonymous> (<worktree>/dist/composition/knowledge-intake.test.js:169:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: MALFORMED_FILE
+        at quarantine (<worktree>/dist/composition/knowledge-intake.js:87:15)
+        at async ingestKnowledgeVersion (<worktree>/dist/composition/knowledge-intake.js:123:24)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (<worktree>/dist/composition/knowledge-intake.test.js:169:5)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at dist\composition\knowledge-intake.test.js:173:1
+✖ a replay that records against an earlier object removes the object it just created (1.0074ms)
+  AssertionError [ERR_ASSERTION]: the record keeps the first path, so the new object would be orphaned
+
+  1 !== 0
+
+      at TestContext.<anonymous> (<worktree>/dist/composition/knowledge-intake.test.js:184:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\knowledge-intake.test.js:195:1
+✖ only named conflict errors become 409; other failures that mention CONFLICT stay 500 (0.6385ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  Error: IDEMPOTENCY_CONFLICT
+      at async TestContext.<anonymous> (<worktree>/dist/composition/knowledge-intake.test.js:199:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: IDEMPOTENCY_CONFLICT
+        at ingestKnowledgeVersion (<worktree>/dist/composition/knowledge-intake.js:177:19)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (<worktree>/dist/composition/knowledge-intake.test.js:199:5)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:69:1
+✖ GET accepts the console's own same-origin fetch and refuses cross-site reads (18.495ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  200 !== 403
+
+      at expectError (<worktree>/dist/composition/merchant-knowledge-routes.test.js:44:12)
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:73:11)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 403,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:147:1
+✖ rate limits answer 429 per identity before reading the request and write nothing (31.6178ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  201 !== 429
+
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:155:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 429,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:169:13
+✖ FAQ upload (16.1303ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  201 !== 403
+
+      at expectError (<worktree>/dist/composition/merchant-knowledge-routes.test.js:44:12)
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:171:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:169:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 403,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:175:13
+✖ quarantine leaves no object behind (7.0344ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  422 !== 403
+
+      at expectError (<worktree>/dist/composition/merchant-knowledge-routes.test.js:44:12)
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:177:15)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:175:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 422,
+    expected: 403,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:183:13
+✖ approval (17.4041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  200 !== 403
+
+      at expectError (<worktree>/dist/composition/merchant-knowledge-routes.test.js:44:12)
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:187:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:183:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 403,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:191:13
+✖ a suspended workspace is refused the same way (15.6755ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  201 !== 403
+
+      at expectError (<worktree>/dist/composition/merchant-knowledge-routes.test.js:44:12)
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:196:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:191:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 403,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\composition\merchant-knowledge-routes.test.js:200:1
+✖ error status comes from known codes, not from what a message or vendor error happens to contain (1.1258ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  400 !== 403
+
+      at expectError (<worktree>/dist/composition/merchant-knowledge-routes.test.js:44:12)
+      at TestContext.<anonymous> (<worktree>/dist/composition/merchant-knowledge-routes.test.js:205:11)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 400,
+    expected: 403,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts\seed-environment.test.mjs:60:1
+✖ the IPv6 loopback form that URL parsing returns counts as local (1.0287ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception.
+  Actual message: "NEXT_PUBLIC_SUPABASE_URL_MUST_TARGET_LOCAL_SUPABASE"
+      at TestContext.<anonymous> (<worktree>/scripts/seed-environment.test.mjs:66:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: Error: NEXT_PUBLIC_SUPABASE_URL_MUST_TARGET_LOCAL_SUPABASE
+        at assertLocalUrl (<worktree>/scripts/seed-environment.mjs:12:52)
+        at seedEnvironment (<worktree>/scripts/seed-environment.mjs:47:5)
+        at <worktree>/scripts/seed-environment.test.mjs:66:29
+        at getActual (node:assert:611:5)
+        at strict.doesNotThrow (node:assert:779:32)
+        at TestContext.<anonymous> (<worktree>/scripts/seed-environment.test.mjs:66:10)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1382:25)
+        at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+        at Test.postRun (node:internal/test_runner/test:1522:19),
+    expected: undefined,
+    operator: 'doesNotThrow',
+    diff: 'simple'
+  }

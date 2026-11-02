@@ -9,14 +9,15 @@ import { knowledgeDatabaseTls, requiredKnowledgeDatabaseUrl } from "./knowledge-
 
 type HostGlobal = typeof globalThis & { __merchantKnowledgeDatabase?: PgPostgresDatabase };
 
-export async function createMerchantKnowledgeHost() {
+/** actorUserId must come from the verified session; every knowledge write re-checks it in its transaction. */
+export async function createMerchantKnowledgeHost(actorUserId: string) {
   const shared = globalThis as HostGlobal;
   const database = shared.__merchantKnowledgeDatabase ?? new PgPostgresDatabase(requiredKnowledgeDatabaseUrl(), undefined, knowledgeDatabaseTls());
   shared.__merchantKnowledgeDatabase = database;
   await database.assertLeastPrivilege();
   return Object.freeze({
-    repository: new PostgresKnowledgeRepository(database),
-    intakeAudit: new PostgresKnowledgeIntakeAudit(database),
+    repository: new PostgresKnowledgeRepository(database, actorUserId),
+    intakeAudit: new PostgresKnowledgeIntakeAudit(database, actorUserId),
     extractor: new LocalKnowledgeDocumentExtractor(),
     storage: new SupabasePrivateKnowledgeStorage(createSupabaseAdminClient()),
   });

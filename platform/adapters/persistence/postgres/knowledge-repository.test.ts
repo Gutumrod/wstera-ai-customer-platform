@@ -5,7 +5,9 @@ import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "./knowledge-repository.js";
 import { PostgresKnowledgeRepository } from "./knowledge-repository.js";
-import { KnowledgeError, createFaqVersion, createImportedKnowledgeVersion } from "../../../modules/knowledge/index.js";
+import type { KnowledgeRepositoryPort } from "../../../contracts/data/knowledge.js";
+import { KnowledgeError, createFaqVersion, createImportedKnowledgeVersion, retrieveKnowledge } from "../../../modules/knowledge/index.js";
+import { InMemoryKnowledgeRepository } from "../../../modules/knowledge/testing/in-memory-repository.js";
 import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
 
 const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
@@ -150,7 +152,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const secondCitationReadIndex = isolationStatements.findIndex((sql, index) => index > firstCitationReadIndex && /SELECT 1 AS current/i.test(sql));
       assert.ok(isolationIndex >= 0 && firstCitationReadIndex > isolationIndex && secondCitationReadIndex > firstCitationReadIndex);
       const approved = eligible[0]!.version;
-      assert.equal(approved.chunks.length, 1);
+      assert.equal(eligible.filter((row) => row.version.versionId === approved.versionId).length, 1);
       const multiChunkDraft = createFaqVersion({
         workspace: shopA, sourceId: "multi-chunk", versionId: "v1", title: "Large FAQ",
         content: `${"ข้อมูล ".repeat(60)}${"รายละเอียด ".repeat(50)}`,
@@ -163,7 +165,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       await repository.approveVersion(shopA, "multi-chunk", "v1", { approvedBy: "staff-1" });
       const multiChunkRows = (await repository.listRetrievableChunks(shopA)).filter((entry) => entry.source.sourceId === "multi-chunk");
       assert.ok(multiChunkRows.length > 1);
-      assert.ok(multiChunkRows.every((entry) => entry.version === multiChunkRows[0]!.version));
+      assert.ok(multiChunkRows.every((entry) => entry.version.versionId === multiChunkRows[0]!.version.versionId));
       await assert.rejects(database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
         await transaction.query("SELECT set_config('app.workspace_id', $1, true)", [shopA.workspaceId]);
@@ -337,6 +339,57 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(persisted.chunks.length, 5_200);
       assert.equal((await repository.getVersion(shopA, csv.sourceId, csv.versionId))?.chunks.length, 5_200);
     });
+  } finally {
+    await database.close();
+  }
+});
+
+test("retrieval candidates are shortlisted and bounded in SQL without carrying version content", async () => {
+  const { database, repository } = await createRepository();
+  try {
+    const memory = new InMemoryKnowledgeRepository();
+    const documents = [
+      ["shipping", "จัดส่งภายใน 2 วันทำการ"],
+      ["sku-dash", "รุ่น AB-12 สีแดง"],
+      ["sku-under", "รุ่น AB_12 สีดำ"],
+      ["sku-solo", "รุ่น XY-99 สีเงิน"],
+      ["wide", "ＦＵＬＬ width รับประกัน"],
+      ["other", "unrelated hello"],
+    ] as const;
+    for (const [sourceId, content] of documents) {
+      const version = createFaqVersion({ workspace: shopA, sourceId, versionId: "v1", title: sourceId, content, createdAt: "2026-10-16T00:00:00.000Z" });
+      for (const target of [repository, memory]) {
+        await target.createSource(shopA, { sourceId, title: sourceId, kind: "faq" });
+        await target.createVersion(shopA, version);
+        for (const next of ["validating", "extracting", "indexed"] as const) await target.transitionVersion(shopA, sourceId, "v1", next);
+        await target.approveVersion(shopA, sourceId, "v1", { approvedBy: "synthetic-owner", approvedAt: "2026-10-16T00:00:00.000Z" });
+      }
+    }
+    const shortlisted = async (terms: string[], skuKeys: string[]) =>
+      (await repository.listRetrievableChunks(shopA, { terms, skuKeys })).map((row) => row.source.sourceId).sort();
+
+    assert.deepEqual(await shortlisted(["จัดส่ง"], []), ["shipping"]);
+    assert.deepEqual(await shortlisted([], ["ab12"]), ["sku-dash", "sku-under"]);
+    assert.deepEqual(await shortlisted(["full"], []), ["wide"]);
+    assert.deepEqual(await shortlisted(["100%"], []), [], "terms match literally, never as LIKE patterns");
+    assert.deepEqual(await shortlisted([], []), []);
+    assert.equal((await repository.listRetrievableChunks(shopA)).length, documents.length);
+    const row = (await repository.listRetrievableChunks(shopA, { terms: ["จัดส่ง"], skuKeys: [] }))[0]!;
+    assert.equal("content" in row.version, false, "a 100,000-character content must not ride on every chunk row");
+
+    const results = async (target: KnowledgeRepositoryPort, query: string) => retrieveKnowledge(target, { workspace: shopA, query, limit: 5 });
+    for (const query of ["จัดส่งกี่วัน", "AB-12", "ab12", "xy99", "ＸＹ-99", "full width", "unrelated", "ไม่มีคำนี้ qqq"]) {
+      assert.deepEqual(await results(repository, query), await results(memory, query), "SQL shortlist changed the answer for: " + query);
+    }
+
+    const segments = Array.from({ length: 2_100 }, (_, index) => ({ text: "สินค้าบรรทัด " + index, locator: { kind: "row" as const, row: index + 1 } }));
+    const csv = createImportedKnowledgeVersion({ workspace: shopA, sourceId: "catalog", versionId: "v1", title: "Catalog", kind: "csv", segments });
+    await repository.createSource(shopA, { sourceId: "catalog", title: "Catalog", kind: "csv" });
+    await repository.createVersion(shopA, csv);
+    for (const next of ["validating", "extracting", "indexed"] as const) await repository.transitionVersion(shopA, "catalog", "v1", next);
+    await repository.approveVersion(shopA, "catalog", "v1", { approvedBy: "synthetic-owner" });
+    assert.equal((await repository.listRetrievableChunks(shopA, { terms: ["สินค้า"], skuKeys: [] })).length, 2_000);
+    assert.equal((await repository.listRetrievableChunks(shopA)).length, 2_000);
   } finally {
     await database.close();
   }

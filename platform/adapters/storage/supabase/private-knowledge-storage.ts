@@ -6,12 +6,12 @@ export type { KnowledgeObjectIdentity, KnowledgeObjectStoragePort } from "../../
 const bucketName = "knowledge-originals";
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 
-function objectPath(workspace: TrustedWorkspaceContext, identity: KnowledgeObjectIdentity): string {
-  if (!idPattern.test(workspace.workspaceId) || !idPattern.test(identity.sourceId) || !idPattern.test(identity.versionId)
-    || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(identity.filename)) {
-    throw new Error("INVALID_KNOWLEDGE_OBJECT_PATH");
-  }
-  return `${workspace.workspaceId}/${identity.sourceId}/${identity.versionId}/${identity.filename}`;
+/** One rule for upload and delete: exactly workspace/source/version/filename, inside this workspace. */
+function isWorkspaceObjectPath(workspace: TrustedWorkspaceContext, path: string): boolean {
+  const parts = path.split("/");
+  return parts.length === 4 && parts[0] === workspace.workspaceId && idPattern.test(workspace.workspaceId)
+    && idPattern.test(parts[1] ?? "") && idPattern.test(parts[2] ?? "")
+    && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(parts[3] ?? "");
 }
 
 /** Server-only Supabase admin client; callers must authorize workspace identity before storage access. */
@@ -24,7 +24,8 @@ export class SupabasePrivateKnowledgeStorage implements KnowledgeObjectStoragePo
     bytes: Uint8Array,
     contentType: string,
   ): Promise<Readonly<{ path: string; created: boolean }>> {
-    const path = objectPath(workspace, identity);
+    const path = `${workspace.workspaceId}/${identity.sourceId}/${identity.versionId}/${identity.filename}`;
+    if (!isWorkspaceObjectPath(workspace, path)) throw new Error("INVALID_KNOWLEDGE_OBJECT_PATH");
     const { error } = await this.client.storage.from(bucketName).upload(path, bytes, {
       contentType,
       cacheControl: "0",
@@ -43,12 +44,7 @@ export class SupabasePrivateKnowledgeStorage implements KnowledgeObjectStoragePo
   }
 
   async removeOriginal(workspace: TrustedWorkspaceContext, path: string): Promise<void> {
-    const parts = path.split("/");
-    if (parts.length !== 4 || parts[0] !== workspace.workspaceId
-      || parts.slice(1, 3).some((part) => !idPattern.test(part))
-      || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(parts[3] ?? "")) {
-      throw new Error("CROSS_WORKSPACE_OBJECT_DELETE_DENIED");
-    }
+    if (!isWorkspaceObjectPath(workspace, path)) throw new Error("CROSS_WORKSPACE_OBJECT_DELETE_DENIED");
     const { error } = await this.client.storage.from(bucketName).remove([path]);
     if (error) throw new Error("KNOWLEDGE_OBJECT_DELETE_FAILED");
   }

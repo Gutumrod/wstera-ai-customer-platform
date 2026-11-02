@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { MerchantIdentityError } from "./identity.js";
+import { MerchantIdentityError } from "../../../modules/tenancy/merchant-identity.js";
+import { KnowledgeIntakeError, knowledgeErrorStatus } from "../../../composition/knowledge-intake.js";
 import { KnowledgeError } from "../../../contracts/data/knowledge.js";
 
 export function assertSameOrigin(request: Request): void {
@@ -11,30 +11,44 @@ export function assertSameOrigin(request: Request): void {
   if (!expectedOrigin || parsed.origin !== new URL(expectedOrigin).origin) throw new HttpError(403, "ORIGIN_DENIED");
 }
 
-export class HttpError extends Error {
-  constructor(readonly status: number, readonly code: string) { super(code); }
+/**
+ * For GET: browsers omit Origin on a same-origin fetch, so Sec-Fetch-Site decides when Origin is absent.
+ * "none" is the user's own navigation. A request with neither header is refused.
+ */
+export function assertSameOriginRead(request: Request): void {
+  if (request.headers.get("origin")) {
+    assertSameOrigin(request);
+    return;
+  }
+  const site = request.headers.get("sec-fetch-site");
+  if (!site) throw new HttpError(403, "ORIGIN_REQUIRED");
+  if (site !== "same-origin" && site !== "none") throw new HttpError(403, "ORIGIN_DENIED");
 }
 
-export function routeErrorResponse(error: unknown): NextResponse {
+export class HttpError extends Error {
+  constructor(readonly status: number, readonly code: string, readonly retryAfterSeconds?: number) { super(code); }
+}
+
+export function routeErrorResponse(error: unknown): Response {
+  const noStore = { "Cache-Control": "no-store" };
   if (error instanceof KnowledgeError) {
-    const status = error.code.includes("NOT_FOUND") ? 404
-      : error.code.includes("CROSS_WORKSPACE") ? 403
-        : error.code.includes("CONFLICT") || error.code.includes("EXISTS") ? 409 : 400;
-    return NextResponse.json({ error: error.code }, { status, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ error: error.code }, { status: knowledgeErrorStatus(error.code), headers: noStore });
   }
   if (error instanceof MerchantIdentityError) {
     const status = error.code === "UNAUTHENTICATED" ? 401 : 403;
-    return NextResponse.json({ error: error.code }, { status, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ error: error.code }, { status, headers: noStore });
+  }
+  if (error instanceof KnowledgeIntakeError) {
+    return Response.json({ error: error.code }, { status: error.status, headers: noStore });
   }
   if (error instanceof HttpError) {
-    return NextResponse.json({ error: error.code }, { status: error.status, headers: { "Cache-Control": "no-store" } });
-  }
-  if (typeof error === "object" && error !== null && "status" in error && "code" in error
-    && typeof error.status === "number" && typeof error.code === "string") {
-    return NextResponse.json({ error: error.code }, { status: error.status, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ error: error.code }, {
+      status: error.status,
+      headers: error.retryAfterSeconds ? { ...noStore, "Retry-After": String(error.retryAfterSeconds) } : noStore,
+    });
   }
   process.stderr.write(`${JSON.stringify({ level: "error", event: "merchant_api.request_failed", name: error instanceof Error ? error.name : "UnknownError" })}\n`);
-  return NextResponse.json({ error: "REQUEST_FAILED" }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  return Response.json({ error: "REQUEST_FAILED" }, { status: 500, headers: { "Cache-Control": "no-store" } });
 }
 
 export async function readBoundedJson(request: Request, maxBytes: number): Promise<unknown> {

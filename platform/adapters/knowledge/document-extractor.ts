@@ -22,6 +22,23 @@ const PDF_WORKER_RESOURCE_LIMITS = Object.freeze({
   stackSizeMb: 4,
 });
 
+// ponytail: per-process cap; each extra instance gets its own slots. Move PDF extraction to a shared job queue
+// before running several instances or when uploads must survive a restart.
+const MAX_PDF_WORKERS = 2;
+const MAX_PDF_QUEUE = 8;
+let activePdfWorkers = 0;
+const pdfWaiters: Array<() => void> = [];
+
+export function pdfWorkerLoad(): Readonly<{ active: number; queued: number }> {
+  return Object.freeze({ active: activePdfWorkers, queued: pdfWaiters.length });
+}
+
+function releasePdfWorker(): void {
+  const next = pdfWaiters.shift();
+  if (next) next();
+  else activePdfWorkers -= 1;
+}
+
 const failure = (code: Extract<KnowledgeDocumentExtractionResult, { kind: "failure" }>["code"]): KnowledgeDocumentExtractionResult =>
   Object.freeze({ kind: "failure", code });
 
@@ -106,23 +123,34 @@ export class LocalKnowledgeDocumentExtractor implements KnowledgeDocumentExtract
   private async extractPdf(bytes: Uint8Array): Promise<KnowledgeDocumentExtractionResult> {
     const header = Buffer.from(bytes.subarray(0, Math.min(bytes.byteLength, 1_024))).includes("%PDF-");
     if (!header) return failure("MALFORMED_FILE");
+    if (activePdfWorkers < MAX_PDF_WORKERS) activePdfWorkers += 1;
+    else if (pdfWaiters.length < MAX_PDF_QUEUE) await new Promise<void>((resume) => { pdfWaiters.push(resume); });
+    else return failure("EXTRACTION_BUSY");
     return new Promise((resolve) => {
       let settled = false;
-      const worker = new Worker(PDF_WORKER_PATH, {
-        workerData: { bytes: bytes.slice() },
-        resourceLimits: PDF_WORKER_RESOURCE_LIMITS,
-      });
-      const timer = setTimeout(() => finish(failure("PROCESSING_LIMIT"), true), PDF_WORKER_TIMEOUT_MS);
-      const finish = (result: KnowledgeDocumentExtractionResult, terminate = false) => {
+      let worker: Worker;
+      try {
+        worker = new Worker(PDF_WORKER_PATH, {
+          workerData: { bytes: bytes.slice() },
+          resourceLimits: PDF_WORKER_RESOURCE_LIMITS,
+        });
+      } catch {
+        releasePdfWorker();
+        resolve(failure("PROCESSING_LIMIT"));
+        return;
+      }
+      const timer = setTimeout(() => finish(failure("PROCESSING_LIMIT")), PDF_WORKER_TIMEOUT_MS);
+      // The slot frees only once the worker is gone, so a timed-out parse still counts until it stops.
+      const finish = (result: KnowledgeDocumentExtractionResult) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        if (terminate) void worker.terminate();
+        void worker.terminate().then(releasePdfWorker, releasePdfWorker);
         resolve(result);
       };
       worker.once("message", (result: unknown) => {
         if (typeof result !== "object" || result === null || !("kind" in result)) {
-          finish(failure("MALFORMED_FILE"), true);
+          finish(failure("MALFORMED_FILE"));
           return;
         }
         finish(result as KnowledgeDocumentExtractionResult);
