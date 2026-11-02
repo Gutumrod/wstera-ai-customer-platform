@@ -50,8 +50,8 @@ The current checkout may be behind `main`; start any follow-up from the latest `
 
 ## Open decisions to lock before the affected task
 
-- Authenticated merchant/staff boundary and initial workspace bootstrap method.
-- Database/storage/hosting selection and data retention/deletion rules.
+- Hosted workspace bootstrap method. Node.js + Next.js + Supabase Auth/Postgres/private Storage is approved for the local synthetic host only (G1-HOST-001).
+- Hosting beyond that local approval and the `wstera-lab` use in `D-20261025-11`, and data retention/deletion rules.
 - PDF/CSV size, type, extraction and quarantine limits.
 - Model/embedding/rerank provider, local-vs-hosted dev path, budget ceilings and data-processing region.
 - Thai corpus construction, baseline metrics, and pass thresholds (set after measurement, not guessed).
@@ -59,8 +59,8 @@ The current checkout may be behind `main`; start any follow-up from the latest `
 
 ## Runtime compatibility evidence (2026-10-23)
 
-- The existing `LocalKnowledgeDocumentExtractor` imports `node:worker_threads`; its PDF worker also resolves PDF.js font/CMap assets from the Node package filesystem. [Cloudflare Workers documents `node:worker_threads` as a non-functional stub](https://developers.cloudflare.com/workers/runtime-apis/nodejs/), so the existing PDF path cannot run in a Worker as-is. The current recommendation is a Node.js runtime for the first upload/extraction host; this is not locked until Owner approval. Alternatively, the extractor would need a separate compatible execution service or a verified runtime-neutral implementation.
+- The existing `LocalKnowledgeDocumentExtractor` imports `node:worker_threads`; its PDF worker also resolves PDF.js font/CMap assets from the Node package filesystem. [Cloudflare Workers documents `node:worker_threads` as a non-functional stub](https://developers.cloudflare.com/workers/runtime-apis/nodejs/), so the existing PDF path cannot run in a Worker as-is. The Owner approved a Node.js runtime for the local synthetic host (G1-HOST-001); any hosted runtime is not locked until Owner approval. Alternatively, the extractor would need a separate compatible execution service or a verified runtime-neutral implementation.
 - [Supabase's current database guidance](https://supabase.com/docs/guides/database/connecting-to-postgres) recommends transaction-mode pooling for serverless Postgres clients and disabling prepared statements; the repository's host adapter must keep `SET LOCAL app.workspace_id` inside its transaction and use a non-superuser, non-`BYPASSRLS` runtime role.
 - [Supabase SSR auth helpers](https://supabase.com/docs/guides/auth/server-side) are currently documented as beta. Pin package versions only after the chosen framework/auth flow is approved and checked against current official docs; do not use [deprecated `@supabase/server` framework adapters](https://supabase.com/changelog/supabase-server-adapters-deprecated).
 
-The G1 implementation remains blocked until these decisions are resolved at the task boundaries and each scoped task is approved. Avoid locking every later-stage decision up front; approve only what the next vertical slice needs.
+Each remaining G1 task stays blocked until the decisions it depends on are resolved and that scoped task is approved. Avoid locking every later-stage decision up front; approve only what the next vertical slice needs.
