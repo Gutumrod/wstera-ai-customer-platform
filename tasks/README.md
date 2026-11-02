@@ -14,10 +14,10 @@ Read [AGENTS.md](../AGENTS.md) and [Master Brief](../BRIEF.md) before editing.
 - [TASK-007A-POSTGRES-KNOWLEDGE-REPOSITORY.md](TASK-007A-POSTGRES-KNOWLEDGE-REPOSITORY.md) — in progress; workspace-scoped PostgreSQL knowledge persistence with local RLS/transaction integration tests; no hosted database or upload authorization.
 - [TASK-CI-001-CROSS-BRANCH-PR-CHECKS.md](TASK-CI-001-CROSS-BRANCH-PR-CHECKS.md) — CI runs on pull requests targeting any branch.
 - [TASK-ARCH-001-MODULAR-BOUNDARIES.md](TASK-ARCH-001-MODULAR-BOUNDARIES.md) — approved I1/single-boundary I2 migration is implemented in the candidate; later increments remain gated.
+- HOST-004 — PROPOSED, no brief yet; make `APP_ENV=lab` start and stop setup docs requiring Docker, on top of branch `codex/aicp-schema-isolation-20261025`.
 - [TASK-HOST-002-HOST-HARDENING.md](TASK-HOST-002-HOST-HARDENING.md) — PLANNED; route tests, rate limiting, transactional membership revalidation and fresh CI. Runs before Web Chat.
 - [TASK-WEBCHAT-001-VISITOR-CHAT.md](TASK-WEBCHAT-001-VISITOR-CHAT.md) — PLANNED; visitor chat with extractive cited answers and the model path behind an off-by-default flag.
 - [TASK-HANDOFF-002-DURABLE-HANDOFF.md](TASK-HANDOFF-002-DURABLE-HANDOFF.md) — PLANNED; durable pause/resume, staff authorization and atomic send.
-- HOST-004 — PROPOSED, no brief yet; make `APP_ENV=lab` start and stop setup docs requiring Docker, on top of branch `codex/aicp-schema-isolation-20261025`.
 - [TASK-G1-ACCEPT-001-ACCEPTANCE-TRACE.md](TASK-G1-ACCEPT-001-ACCEPTANCE-TRACE.md) — PLANNED; one-shop trace on `wstera-lab` and cross-workspace negative cases.
 
 Current PR status and merge gates: [Execution Status](../plans/EXECUTION-STATUS.md). Earlier PR references in task histories describe their original checkpoints.

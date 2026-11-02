@@ -1,6 +1,6 @@
 # Work Queue
 
-Updated: 2026-11-02 against `main` at `9b4f997`. Merged code and product acceptance are tracked separately.
+Updated: 2026-11-02 against `main` at `e47bb57`. Merged code and product acceptance are tracked separately.
 
 ## Done on main
 
@@ -11,6 +11,7 @@ Updated: 2026-11-02 against `main` at `9b4f997`. Merged code and product accepta
 - PR #19 merged a pure PromptPay payload builder; no real bank-app QR scan or payment wiring.
 - PR #20 merged typed business-action contracts and lifecycle reducer; no executor or business writes.
 - PR #21 merged source-import provenance and pilot-gate documents.
+- PR #24 merged Merchant Brain discovery documents only; no code change.
 
 ## Current G1 work
 

@@ -1,6 +1,6 @@
 # Blockers and Owner Gates
 
-Updated: 2026-11-02, after PRs #18–#21 merged; latest observed `main` is `9b4f997`.
+Updated: 2026-11-02, after PRs #18–#21 and docs-only PR #24 merged; latest observed `main` is `e47bb57`.
 
 | ID | Gate | Evidence / next action |
 |---|---|---|
