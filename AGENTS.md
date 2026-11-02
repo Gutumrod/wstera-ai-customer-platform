@@ -36,7 +36,7 @@ Read in this order:
 - Work in a task-specific branch and open a PR with summary, touched paths, fresh test output, security impact, cost impact and remaining blockers. Do not self-merge.
 - If a task conflicts with a security rule, stop and document the conflict rather than bypassing gates.
 
-## Branches and worktrees (Owner order 2026-10-25, register D-20261025-12)
+## Branches and worktrees (Owner order 2026-10-22, register D-20261022-13)
 
 Every branch and worktree for this product stays inside the product folder. Do not create
 worktrees anywhere else — scattered checkouts are what this rule exists to prevent.

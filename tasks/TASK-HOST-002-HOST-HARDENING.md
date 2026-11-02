@@ -33,7 +33,7 @@ Web Chat, model/provider calls, hosted deployment, hosted migration, changes to 
 ## Stop conditions
 
 - If the revalidation fix requires changing `TrustedWorkspaceContext` in a way that also changes LINE adapter contracts, stop and report instead of editing contracts broadly.
-- If Docker/Supabase is unavailable, this task is not blocked; do not substitute mocks for the separate E2E task.
+- If `wstera-lab` is unavailable, this task is not blocked; do not substitute mocks for the separate E2E task.
 
 ## Evidence
 
