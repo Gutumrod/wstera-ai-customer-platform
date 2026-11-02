@@ -42,3 +42,22 @@ real phone number, account number or customer data was imported.
 
 `BUILD_PASS` only: `npm run check` passes locally (typecheck + full test list). No LINE round-trip,
 no hosted deployment and no real-bank QR scan has been performed for any imported item.
+
+## Merchant Brain documents (2026-11-02)
+
+Owner order: 2026-11-02 (`D-20261102-23` in the house decisions register). Source repository:
+`Gutumrod/merchant-brain` at commit `fa1784d` (branch `main`), private. All four files are unmodified copies.
+
+| Imported file | Source path |
+|---|---|
+| `architecture/merchant-brain/Merchant-Brain-Core-Platform-2026-10-29.txt` | `source/Merchant-Brain-Core-Platform-2026-10-29.txt` |
+| `architecture/merchant-brain/Merchant-Brain-Workflow.md` | `docs/Merchant-Brain-Workflow.md` |
+| `architecture/merchant-brain/Merchant Brain — Workflow.tldraw` | `board/Merchant Brain — Workflow.tldraw` |
+| `architecture/merchant-brain/Merchant-Brain-Workflow.jpg` | `board/Merchant-Brain-Workflow.jpg` |
+
+Not imported: `source/KMO-Merchant-Brain-2026-10-29.txt` (pilot-shop business rules, kept in the private vault),
+`scripts/merchant-brain-continuation-v02.js` and `scripts/merchant-brain-board.js` (board tooling), and the two tldraw setup notes
+(local machine paths). The Core Platform document names the pilot shop only as a generic example.
+
+Scan: the text files and the files extracted from the `.tldraw` archive were searched for token, key and private-key patterns,
+email addresses, Thai phone numbers and local paths, with no matches. The JPEG was reviewed by eye. `BUILD_PASS` scope only: these are documents and establish no readiness.
