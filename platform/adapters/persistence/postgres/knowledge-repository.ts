@@ -375,7 +375,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     const safeInput = snapshotSourceInput(input);
     return this.scoped(workspace, async (query) => {
       const inserted = await query.query<SourceRow>(
-        `INSERT INTO knowledge_sources (workspace_id, source_id, kind, title, created_at)
+        `INSERT INTO aicp.knowledge_sources (workspace_id, source_id, kind, title, created_at)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (workspace_id, source_id) DO NOTHING
          RETURNING workspace_id, source_id, kind, title, status, created_at`,
@@ -383,7 +383,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       );
       if (inserted.rows[0]) return mapSource(inserted.rows[0]);
       const existing = await query.query<SourceRow>(
-        `SELECT workspace_id, source_id, kind, title, status, created_at FROM knowledge_sources
+        `SELECT workspace_id, source_id, kind, title, status, created_at FROM aicp.knowledge_sources
          WHERE workspace_id = $1 AND source_id = $2 FOR UPDATE`,
         [workspace.workspaceId, safeInput.sourceId],
       );
@@ -397,7 +397,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
   async getSource(workspace: TrustedWorkspaceContext, sourceId: string): Promise<KnowledgeSource | null> {
     return this.scoped(workspace, async (query) => {
       const result = await query.query<SourceRow>(
-        `SELECT workspace_id, source_id, kind, title, status, created_at FROM knowledge_sources
+        `SELECT workspace_id, source_id, kind, title, status, created_at FROM aicp.knowledge_sources
          WHERE workspace_id = $1 AND source_id = $2`,
         [workspace.workspaceId, sourceId],
       );
@@ -409,7 +409,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     return this.scoped(workspace, async (query) => {
       const result = await query.query<SourceRow>(
         `SELECT workspace_id, source_id, kind, title, status, created_at
-         FROM knowledge_sources WHERE workspace_id = $1 ORDER BY created_at DESC, source_id LIMIT 100`,
+         FROM aicp.knowledge_sources WHERE workspace_id = $1 ORDER BY created_at DESC, source_id LIMIT 100`,
         [workspace.workspaceId],
       );
       return Object.freeze(result.rows.map(mapSource));
@@ -419,7 +419,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
   async archiveSource(workspace: TrustedWorkspaceContext, sourceId: string): Promise<KnowledgeSource> {
     return this.scoped(workspace, async (query) => {
       const result = await query.query<SourceRow>(
-        `UPDATE knowledge_sources SET status = 'archived'
+        `UPDATE aicp.knowledge_sources SET status = 'archived'
          WHERE workspace_id = $1 AND source_id = $2
          RETURNING workspace_id, source_id, kind, title, status, created_at`,
         [workspace.workspaceId, sourceId],
@@ -433,7 +433,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     const safeVersion = snapshotVersionDraft(workspace, version);
     return this.scoped(workspace, async (query) => {
       const sourceResult = await query.query<SourceRow>(
-        `SELECT workspace_id, source_id, kind, title, status, created_at FROM knowledge_sources
+        `SELECT workspace_id, source_id, kind, title, status, created_at FROM aicp.knowledge_sources
          WHERE workspace_id = $1 AND source_id = $2 FOR UPDATE`,
         [workspace.workspaceId, safeVersion.sourceId],
       );
@@ -449,7 +449,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       }
 
       const inserted = await query.query<VersionRow>(
-        `INSERT INTO knowledge_versions
+        `INSERT INTO aicp.knowledge_versions
          (workspace_id, source_id, version_id, kind, title, content, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
@@ -480,7 +480,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
           return `(${rowValues.map((_, index) => `$${first + index}`).join(", ")})`;
         });
         await query.query(
-          `INSERT INTO knowledge_chunks
+          `INSERT INTO aicp.knowledge_chunks
            (workspace_id, source_id, version_id, chunk_id, chunk_index, text, locator_kind,
             locator_chunk_index, locator_position, start_offset, end_offset)
            VALUES ${tuples.join(", ")}`,
@@ -500,7 +500,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       const result = await query.query<VersionRow>(
         `SELECT workspace_id, source_id, version_id, kind, title, content, status, created_at,
                 approved_at, approved_by, revoked_at, revoked_by, revocation_reason
-         FROM knowledge_versions WHERE workspace_id = $1 AND source_id = $2
+         FROM aicp.knowledge_versions WHERE workspace_id = $1 AND source_id = $2
          ORDER BY created_at DESC, version_id LIMIT 50`,
         [workspace.workspaceId, sourceId],
       );
@@ -520,7 +520,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     if (!allowedFrom) throw new KnowledgeError("INVALID_VERSION_TRANSITION");
     return this.scoped(workspace, async (query) => {
       const updated = await query.query<VersionRow>(
-        `UPDATE knowledge_versions SET status = $4
+        `UPDATE aicp.knowledge_versions SET status = $4
          WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 AND status = ANY($5::text[])
          RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
                    approved_at, approved_by, revoked_at, revoked_by, revocation_reason`,
@@ -546,7 +546,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     return this.scoped(workspace, async (query) => {
       const approvedAt = input.approvedAt ?? new Date().toISOString();
       const sourceResult = await query.query<SourceRow>(
-        `SELECT workspace_id, source_id, kind, title, status, created_at FROM knowledge_sources
+        `SELECT workspace_id, source_id, kind, title, status, created_at FROM aicp.knowledge_sources
          WHERE workspace_id = $1 AND source_id = $2 FOR UPDATE`,
         [workspace.workspaceId, sourceId],
       );
@@ -554,9 +554,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       if (!source) throw new KnowledgeError("SOURCE_NOT_FOUND");
       if (source.status !== "active") throw new KnowledgeError("APPROVAL_NOT_ELIGIBLE");
       const updated = await query.query<VersionRow>(
-        `UPDATE knowledge_versions AS version SET status = 'approved', approved_at = $4, approved_by = $5
+        `UPDATE aicp.knowledge_versions AS version SET status = 'approved', approved_at = $4, approved_by = $5
          WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 AND status = 'indexed'
-           AND EXISTS (SELECT 1 FROM knowledge_chunks AS chunk
+           AND EXISTS (SELECT 1 FROM aicp.knowledge_chunks AS chunk
                        WHERE chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
                          AND chunk.version_id = version.version_id)
          RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
@@ -583,7 +583,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     }
     return this.scoped(workspace, async (query) => {
       const updated = await query.query<VersionRow>(
-        `UPDATE knowledge_versions SET status = 'revoked', revoked_at = $4, revoked_by = $5, revocation_reason = $6
+        `UPDATE aicp.knowledge_versions SET status = 'revoked', revoked_at = $4, revoked_by = $5, revocation_reason = $6
          WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 AND status = 'approved'
          RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
                    approved_at, approved_by, revoked_at, revoked_by, revocation_reason`,
@@ -626,9 +626,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     const end = locator.kind === "span" ? locator.end : null;
     const result = await query.query<PostgresRow>(
         `SELECT 1 AS current
-         FROM knowledge_sources AS source
-         JOIN knowledge_versions AS version ON version.workspace_id = source.workspace_id AND version.source_id = source.source_id
-         JOIN knowledge_chunks AS chunk ON chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
+         FROM aicp.knowledge_sources AS source
+         JOIN aicp.knowledge_versions AS version ON version.workspace_id = source.workspace_id AND version.source_id = source.source_id
+         JOIN aicp.knowledge_chunks AS chunk ON chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
            AND chunk.version_id = version.version_id
          WHERE source.workspace_id = $1 AND source.source_id = $2 AND source.status = 'active'
            AND version.version_id = $3 AND version.status = 'approved' AND chunk.chunk_id = $4
@@ -655,9 +655,9 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
                 version.approved_at, version.approved_by, version.revoked_at, version.revoked_by, version.revocation_reason,
                 chunk.chunk_id, chunk.chunk_index, chunk.text, chunk.locator_kind, chunk.locator_chunk_index,
                 chunk.locator_position, chunk.start_offset, chunk.end_offset
-         FROM knowledge_sources AS source
-         JOIN knowledge_versions AS version ON version.workspace_id = source.workspace_id AND version.source_id = source.source_id
-         JOIN knowledge_chunks AS chunk ON chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
+         FROM aicp.knowledge_sources AS source
+         JOIN aicp.knowledge_versions AS version ON version.workspace_id = source.workspace_id AND version.source_id = source.source_id
+         JOIN aicp.knowledge_chunks AS chunk ON chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
            AND chunk.version_id = version.version_id
          WHERE source.workspace_id = $1 AND source.status = 'active' AND version.status = 'approved'
          ORDER BY source.source_id, version.version_id, chunk.chunk_index`,
@@ -718,7 +718,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     const result = await query.query<VersionRow>(
       `SELECT workspace_id, source_id, version_id, kind, title, content, status, created_at,
               approved_at, approved_by, revoked_at, revoked_by, revocation_reason
-       FROM knowledge_versions WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3`,
+       FROM aicp.knowledge_versions WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3`,
       [workspaceId, sourceId, versionId],
     );
     const row = result.rows[0];
@@ -729,7 +729,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     const result = await query.query<ChunkRow>(
       `SELECT workspace_id, source_id, version_id, chunk_id, chunk_index, text, locator_kind,
               locator_chunk_index, locator_position, start_offset, end_offset
-       FROM knowledge_chunks WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 ORDER BY chunk_index`,
+       FROM aicp.knowledge_chunks WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 ORDER BY chunk_index`,
       [workspaceId, sourceId, versionId],
     );
     return Object.freeze(result.rows.map(mapChunk));

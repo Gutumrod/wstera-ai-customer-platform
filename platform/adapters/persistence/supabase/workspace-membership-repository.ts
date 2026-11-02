@@ -6,7 +6,8 @@ export class SupabaseWorkspaceMembershipRepository implements MerchantMembership
   constructor(private readonly client: SupabaseClient) {}
 
   async listActiveBindings(userId: string): Promise<readonly ActiveMerchantBinding[]> {
-    const membershipsResponse = await this.client.from("workspace_memberships")
+    const schema = this.client.schema("aicp");
+    const membershipsResponse = await schema.from("workspace_memberships")
       .select("workspace_id, role, workspaces!inner(status)")
       .eq("user_id", userId)
       .eq("status", "active")
@@ -15,7 +16,7 @@ export class SupabaseWorkspaceMembershipRepository implements MerchantMembership
     const memberships = membershipsResponse.data as unknown as Array<{ workspace_id: string; role: MerchantRole }> | null;
     const bindings: ActiveMerchantBinding[] = [];
     for (const membership of memberships ?? []) {
-      const connectionsResponse = await this.client.from("workspace_connections")
+      const connectionsResponse = await schema.from("workspace_connections")
         .select("connection_id, channel")
         .eq("workspace_id", membership.workspace_id)
         .eq("channel", "web")

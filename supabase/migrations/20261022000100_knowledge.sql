@@ -1,4 +1,6 @@
-CREATE TABLE knowledge_sources (
+CREATE SCHEMA IF NOT EXISTS aicp;
+
+CREATE TABLE aicp.knowledge_sources (
   workspace_id text NOT NULL,
   source_id text NOT NULL,
   kind text NOT NULL CHECK (kind IN ('faq', 'pdf', 'csv')),
@@ -8,7 +10,7 @@ CREATE TABLE knowledge_sources (
   PRIMARY KEY (workspace_id, source_id)
 );
 
-CREATE TABLE knowledge_versions (
+CREATE TABLE aicp.knowledge_versions (
   workspace_id text NOT NULL,
   source_id text NOT NULL,
   version_id text NOT NULL,
@@ -23,7 +25,7 @@ CREATE TABLE knowledge_versions (
   revoked_by text,
   revocation_reason text,
   PRIMARY KEY (workspace_id, source_id, version_id),
-  FOREIGN KEY (workspace_id, source_id) REFERENCES knowledge_sources (workspace_id, source_id),
+  FOREIGN KEY (workspace_id, source_id) REFERENCES aicp.knowledge_sources (workspace_id, source_id),
   CHECK (
     (status IN ('approved', 'revoked') AND approved_at IS NOT NULL AND approved_by IS NOT NULL)
     OR (status NOT IN ('approved', 'revoked') AND approved_at IS NULL AND approved_by IS NULL)
@@ -35,10 +37,10 @@ CREATE TABLE knowledge_versions (
 );
 
 CREATE UNIQUE INDEX knowledge_one_approved_version_per_source
-  ON knowledge_versions (workspace_id, source_id)
+  ON aicp.knowledge_versions (workspace_id, source_id)
   WHERE status = 'approved';
 
-CREATE TABLE knowledge_chunks (
+CREATE TABLE aicp.knowledge_chunks (
   workspace_id text NOT NULL,
   source_id text NOT NULL,
   version_id text NOT NULL,
@@ -53,14 +55,14 @@ CREATE TABLE knowledge_chunks (
   PRIMARY KEY (workspace_id, source_id, version_id, chunk_id),
   UNIQUE (workspace_id, source_id, version_id, chunk_index),
   FOREIGN KEY (workspace_id, source_id, version_id)
-    REFERENCES knowledge_versions (workspace_id, source_id, version_id) ON DELETE CASCADE,
+    REFERENCES aicp.knowledge_versions (workspace_id, source_id, version_id) ON DELETE CASCADE,
   CHECK (
     (locator_kind IN ('page', 'row') AND locator_position >= 1)
     OR (locator_kind IN ('span', 'chunk') AND locator_position IS NULL)
   )
 );
 
-CREATE FUNCTION protect_knowledge_version_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION aicp.protect_knowledge_version_identity() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF ROW(NEW.workspace_id, NEW.source_id, NEW.version_id, NEW.kind, NEW.title, NEW.content, NEW.created_at)
       IS DISTINCT FROM
@@ -78,7 +80,7 @@ BEGIN
     RAISE EXCEPTION 'approval metadata is immutable' USING ERRCODE = '23514';
   END IF;
   IF OLD.status = 'indexed' AND NEW.status = 'approved' AND NOT EXISTS (
-    SELECT 1 FROM knowledge_chunks AS chunk
+    SELECT 1 FROM aicp.knowledge_chunks AS chunk
     WHERE chunk.workspace_id = OLD.workspace_id AND chunk.source_id = OLD.source_id AND chunk.version_id = OLD.version_id
   ) THEN
     RAISE EXCEPTION 'knowledge version needs chunks before approval' USING ERRCODE = '23514';
@@ -98,10 +100,10 @@ END;
 $$;
 
 CREATE TRIGGER knowledge_version_identity_guard
-  BEFORE UPDATE ON knowledge_versions
-  FOR EACH ROW EXECUTE FUNCTION protect_knowledge_version_identity();
+  BEFORE UPDATE ON aicp.knowledge_versions
+  FOR EACH ROW EXECUTE FUNCTION aicp.protect_knowledge_version_identity();
 
-CREATE FUNCTION guard_knowledge_chunk_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION aicp.guard_knowledge_chunk_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   parent_status text;
 BEGIN
@@ -109,7 +111,7 @@ BEGIN
   -- A plain RLS EXISTS check is not sufficient: its statement snapshot can
   -- observe `indexed` while a concurrent approval commits first.
   SELECT status INTO parent_status
-  FROM knowledge_versions
+  FROM aicp.knowledge_versions
   WHERE workspace_id = NEW.workspace_id
     AND source_id = NEW.source_id
     AND version_id = NEW.version_id
@@ -123,29 +125,29 @@ END;
 $$;
 
 CREATE TRIGGER knowledge_chunk_insert_guard
-  BEFORE INSERT ON knowledge_chunks
-  FOR EACH ROW EXECUTE FUNCTION guard_knowledge_chunk_insert();
+  BEFORE INSERT ON aicp.knowledge_chunks
+  FOR EACH ROW EXECUTE FUNCTION aicp.guard_knowledge_chunk_insert();
 
-ALTER TABLE knowledge_sources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE knowledge_sources FORCE ROW LEVEL SECURITY;
-CREATE POLICY knowledge_sources_workspace_policy ON knowledge_sources
+ALTER TABLE aicp.knowledge_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aicp.knowledge_sources FORCE ROW LEVEL SECURITY;
+CREATE POLICY knowledge_sources_workspace_policy ON aicp.knowledge_sources
   USING (workspace_id = current_setting('app.workspace_id', true))
   WITH CHECK (workspace_id = current_setting('app.workspace_id', true));
 
-ALTER TABLE knowledge_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE knowledge_versions FORCE ROW LEVEL SECURITY;
-CREATE POLICY knowledge_versions_workspace_policy ON knowledge_versions
+ALTER TABLE aicp.knowledge_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aicp.knowledge_versions FORCE ROW LEVEL SECURITY;
+CREATE POLICY knowledge_versions_workspace_policy ON aicp.knowledge_versions
   USING (workspace_id = current_setting('app.workspace_id', true))
   WITH CHECK (workspace_id = current_setting('app.workspace_id', true));
 
-ALTER TABLE knowledge_chunks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE knowledge_chunks FORCE ROW LEVEL SECURITY;
-CREATE POLICY knowledge_chunks_workspace_policy ON knowledge_chunks
+ALTER TABLE aicp.knowledge_chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aicp.knowledge_chunks FORCE ROW LEVEL SECURITY;
+CREATE POLICY knowledge_chunks_workspace_policy ON aicp.knowledge_chunks
   USING (workspace_id = current_setting('app.workspace_id', true))
   WITH CHECK (
     workspace_id = current_setting('app.workspace_id', true)
     AND EXISTS (
-      SELECT 1 FROM knowledge_versions AS version
+      SELECT 1 FROM aicp.knowledge_versions AS version
       WHERE version.workspace_id = knowledge_chunks.workspace_id
         AND version.source_id = knowledge_chunks.source_id
         AND version.version_id = knowledge_chunks.version_id
@@ -154,6 +156,6 @@ CREATE POLICY knowledge_chunks_workspace_policy ON knowledge_chunks
   );
 
 CREATE INDEX knowledge_retrievable_versions
-  ON knowledge_versions (workspace_id, source_id, status, version_id);
+  ON aicp.knowledge_versions (workspace_id, source_id, status, version_id);
 CREATE INDEX knowledge_chunks_order
-  ON knowledge_chunks (workspace_id, source_id, version_id, chunk_index);
+  ON aicp.knowledge_chunks (workspace_id, source_id, version_id, chunk_index);

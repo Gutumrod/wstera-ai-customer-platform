@@ -49,7 +49,7 @@ export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [workspace.workspaceId]);
       const values = [workspace.workspaceId, input.sourceId, input.versionId, input.objectPath, input.filename, input.contentType, input.byteSize];
       const result = await query.query<OriginalReferenceRow>(
-        "INSERT INTO public.knowledge_original_objects " +
+        "INSERT INTO aicp.knowledge_original_objects " +
         "(workspace_id, source_id, version_id, object_path, filename, content_type, byte_size) " +
         "VALUES ($1, $2, $3, $4, $5, $6, $7) " +
         "ON CONFLICT (workspace_id, source_id, version_id) DO NOTHING RETURNING workspace_id",
@@ -57,7 +57,7 @@ export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
       );
       if (result.rows[0]) return;
       const existing = await query.query<PostgresRow & { object_path: string; filename: string; content_type: string; byte_size: number | string }>(
-        "SELECT object_path, filename, content_type, byte_size FROM public.knowledge_original_objects " +
+        "SELECT object_path, filename, content_type, byte_size FROM aicp.knowledge_original_objects " +
         "WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3",
         values.slice(0, 3),
       );
@@ -73,13 +73,13 @@ export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
     return this.database.transaction(async (query) => {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [workspace.workspaceId]);
       const inserted = await query.query<QuarantineRow>(
-        `INSERT INTO public.knowledge_quarantine_records
+        `INSERT INTO aicp.knowledge_quarantine_records
            (workspace_id, attempt_id, idempotency_key, request_hash, kind, title, filename, content_type,
             byte_size, object_path, failure_code, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
          ON CONFLICT (workspace_id, idempotency_key) DO UPDATE
-           SET object_path = COALESCE(public.knowledge_quarantine_records.object_path, EXCLUDED.object_path)
-           WHERE public.knowledge_quarantine_records.request_hash = EXCLUDED.request_hash
+           SET object_path = COALESCE(aicp.knowledge_quarantine_records.object_path, EXCLUDED.object_path)
+           WHERE aicp.knowledge_quarantine_records.request_hash = EXCLUDED.request_hash
          RETURNING workspace_id, attempt_id, idempotency_key, request_hash, kind, title, filename,
                    content_type, byte_size, object_path, failure_code, created_at`,
         [workspace.workspaceId, input.attemptId, input.idempotencyKey, input.requestHash, input.kind, input.title,
@@ -100,7 +100,7 @@ export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
       const result = await query.query<QuarantineRow>(
         `SELECT workspace_id, attempt_id, idempotency_key, request_hash, kind, title, filename,
                 content_type, byte_size, object_path, failure_code, created_at
-         FROM public.knowledge_quarantine_records
+         FROM aicp.knowledge_quarantine_records
          WHERE workspace_id = $1 ORDER BY created_at DESC, attempt_id LIMIT 100`,
         [workspace.workspaceId],
       );

@@ -5,23 +5,13 @@ import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/kn
 import { PostgresKnowledgeIntakeAudit } from "../adapters/persistence/postgres/knowledge-intake-audit.js";
 import { SupabasePrivateKnowledgeStorage } from "../adapters/storage/supabase/private-knowledge-storage.js";
 import { createSupabaseAdminClient } from "../apps/merchant-console/lib/supabase/admin.js";
+import { requiredKnowledgeDatabaseUrl } from "./knowledge-database-url.js";
 
 type HostGlobal = typeof globalThis & { __merchantKnowledgeDatabase?: PgPostgresDatabase };
 
-function requiredDatabaseUrl(): string {
-  const value = process.env.DATABASE_URL;
-  if (process.env.APP_ENV !== "local" || !value) throw new Error("LOCAL_DATABASE_URL_REQUIRED");
-  const parsed = new URL(value);
-  if (!["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname) || parsed.port !== "54322"
-    || decodeURIComponent(parsed.username) !== "knowledge_runtime") {
-    throw new Error("LOCAL_KNOWLEDGE_DATABASE_URL_REQUIRED");
-  }
-  return value;
-}
-
 export async function createMerchantKnowledgeHost() {
   const shared = globalThis as HostGlobal;
-  const database = shared.__merchantKnowledgeDatabase ?? new PgPostgresDatabase(requiredDatabaseUrl());
+  const database = shared.__merchantKnowledgeDatabase ?? new PgPostgresDatabase(requiredKnowledgeDatabaseUrl());
   shared.__merchantKnowledgeDatabase = database;
   await database.assertLeastPrivilege();
   return Object.freeze({
