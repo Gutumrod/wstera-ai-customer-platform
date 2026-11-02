@@ -18,7 +18,9 @@ export type KnowledgeErrorCode =
   | "INVALID_RETRIEVAL_QUERY"
   | "UNTRUSTED_WORKSPACE_SELECTOR"
   | "INVALID_EXTRACTION_RESULT"
-  | "DOCUMENT_TOO_LARGE";
+  | "DOCUMENT_TOO_LARGE"
+  | "MEMBERSHIP_REQUIRED"
+  | "OWNER_ROLE_REQUIRED";
 
 /** Safe domain error shared by the knowledge core and replaceable repositories. */
 export class KnowledgeError extends Error {
@@ -116,7 +118,8 @@ export type KnowledgeExtractionFailureCode =
   | "TOO_MANY_COLUMNS"
   | "RECORD_TOO_LARGE"
   | "OUTPUT_TOO_LARGE"
-  | "PROCESSING_LIMIT";
+  | "PROCESSING_LIMIT"
+  | "EXTRACTION_BUSY";
 
 export type KnowledgeDocumentExtractionResult =
   | Readonly<{ kind: "success"; segments: readonly KnowledgeExtractedSegment[] }>
@@ -153,6 +156,9 @@ export type KnowledgeRetrievalResult =
  */
 export type Awaitable<T> = T | Promise<T>;
 
+/** Narrows retrieval candidates; an adapter may return a superset, and matching rows must all stay eligible. */
+export type KnowledgeRetrievalShortlist = Readonly<{ terms: readonly string[]; skuKeys: readonly string[] }>;
+
 export interface KnowledgeRepositoryPort {
   createSource(
     workspace: TrustedWorkspaceContext,
@@ -175,11 +181,17 @@ export interface KnowledgeRepositoryPort {
   isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Awaitable<boolean>;
   /** Check every citation within one consistent repository snapshot. */
   areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Awaitable<boolean>;
-  listRetrievableChunks(workspace: TrustedWorkspaceContext): Awaitable<readonly Readonly<{
+  /** Bounded and without version content: retrieval needs identity and status, not the whole document per row. */
+  listRetrievableChunks(workspace: TrustedWorkspaceContext, shortlist?: KnowledgeRetrievalShortlist): Awaitable<readonly Readonly<{
     source: KnowledgeSource;
-    version: KnowledgeVersion;
+    version: Pick<KnowledgeVersion, "workspaceId" | "sourceId" | "versionId" | "status">;
     chunk: KnowledgeChunk;
   }>[]>;
+}
+
+/** Owner approval runs apart from ingest, as the verified signed-in user; failures are KnowledgeError codes. */
+export interface KnowledgeApprovalPort {
+  approve(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string): Promise<void>;
 }
 
 export interface KnowledgeRetrievalPort {

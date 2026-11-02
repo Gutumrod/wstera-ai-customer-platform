@@ -29,9 +29,10 @@ const MAX_IMPORTED_SEGMENTS = 5_000;
 const MAX_CHUNK_CHARS = 320;
 const MAX_QUERY_CHARS = MAX_KNOWLEDGE_QUERY_CHARS;
 const MAX_RETRIEVAL_LIMIT = 20;
+const MAX_SHORTLIST_TERMS = 64;
 const extractionFailureCodes = new Set<KnowledgeExtractionFailureCode>([
   "UNSUPPORTED_FORMAT", "FILE_TOO_LARGE", "MALFORMED_FILE", "INVALID_ENCODING", "NO_TEXT_CONTENT",
-  "TOO_MANY_PAGES", "TOO_MANY_ROWS", "TOO_MANY_COLUMNS", "RECORD_TOO_LARGE", "OUTPUT_TOO_LARGE", "PROCESSING_LIMIT",
+  "TOO_MANY_PAGES", "TOO_MANY_ROWS", "TOO_MANY_COLUMNS", "RECORD_TOO_LARGE", "OUTPUT_TOO_LARGE", "PROCESSING_LIMIT", "EXTRACTION_BUSY",
 ]);
 
 function assertId(value: string): void {
@@ -474,7 +475,11 @@ export async function retrieveKnowledge(
   }
   const queryAnalysis = analyzeText(query.query);
   const candidates: KnowledgeRetrievalHit[] = [];
-  const retrievableItems = await repository.listRetrievableChunks(query.workspace);
+  // Longest terms first: past the cap only the weakest Thai bigrams of a long query stop widening the shortlist.
+  const retrievableItems = await repository.listRetrievableChunks(query.workspace, {
+    terms: [...queryAnalysis.terms].sort((a, b) => b.length - a.length).slice(0, MAX_SHORTLIST_TERMS),
+    skuKeys: queryAnalysis.skuCodes.map(compactSku),
+  });
   const eligibleItems: Array<Readonly<{
     item: typeof retrievableItems[number];
     terms: ReadonlySet<string>;

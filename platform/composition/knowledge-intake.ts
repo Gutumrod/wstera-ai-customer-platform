@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import type { KnowledgeIntakeAuditPort } from "../contracts/data/knowledge-intake.js";
-import type { KnowledgeRepositoryPort, KnowledgeSourceKind, KnowledgeVersion } from "../contracts/data/knowledge.js";
+import type { KnowledgeErrorCode, KnowledgeRepositoryPort, KnowledgeSourceKind, KnowledgeVersion } from "../contracts/data/knowledge.js";
 import { KnowledgeError, createFaqVersion, prepareKnowledgeDocumentVersion } from "../modules/knowledge/index.js";
 import type { KnowledgeDocumentExtractorPort } from "../contracts/data/knowledge.js";
 import type { KnowledgeObjectStoragePort } from "../contracts/data/knowledge-storage.js";
@@ -26,8 +26,22 @@ function digest(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function errorMessage(error: unknown): string | undefined {
-  return error instanceof Error ? error.message : undefined;
+const conflictErrors = new Set(["KNOWLEDGE_OBJECT_CONFLICT", "KNOWLEDGE_ORIGINAL_REFERENCE_CONFLICT", "KNOWLEDGE_QUARANTINE_IDEMPOTENCY_CONFLICT"]);
+const isConflict = (error: unknown) => error instanceof Error && conflictErrors.has(error.message);
+
+const statusByKnowledgeCode: Partial<Record<KnowledgeErrorCode, number>> = {
+  SOURCE_NOT_FOUND: 404,
+  VERSION_NOT_FOUND: 404,
+  CROSS_WORKSPACE_ACCESS_DENIED: 403,
+  MEMBERSHIP_REQUIRED: 403,
+  OWNER_ROLE_REQUIRED: 403,
+  SOURCE_CONFLICT: 409,
+  VERSION_CONFLICT: 409,
+  APPROVED_VERSION_EXISTS: 409,
+};
+
+export function knowledgeErrorStatus(code: KnowledgeErrorCode): number {
+  return statusByKnowledgeCode[code] ?? 400;
 }
 
 function safeOriginalFilename(filename: string, kind: "pdf" | "csv"): string {
@@ -78,7 +92,7 @@ export async function ingestKnowledgeVersion(
           filename: attemptId + (input.kind === "pdf" ? ".pdf" : ".csv"),
         }, bytes, input.contentType!);
       }
-      await dependencies.intakeAudit.quarantine(input.workspace, {
+      const record = await dependencies.intakeAudit.quarantine(input.workspace, {
         attemptId,
         idempotencyKey: input.idempotencyKey,
         requestHash,
@@ -90,11 +104,16 @@ export async function ingestKnowledgeVersion(
         ...(quarantineObject ? { objectPath: quarantineObject.path } : {}),
         failureCode: code,
       });
+      // A replay keeps the record's first path, so an object this attempt created under another path has no owner.
+      if (quarantineObject?.created && record.objectPath !== quarantineObject.path) {
+        try { await dependencies.storage.removeOriginal(input.workspace, quarantineObject.path); } catch { /* the request still fails below */ }
+      }
     } catch (error: unknown) {
       if (quarantineObject?.created) {
         try { await dependencies.storage.removeOriginal(input.workspace, quarantineObject.path); } catch { /* fail closed below */ }
       }
-      if (errorMessage(error)?.includes("CONFLICT")) throw new KnowledgeIntakeError("IDEMPOTENCY_CONFLICT", 409);
+      if (error instanceof KnowledgeError) throw new KnowledgeIntakeError(error.code, knowledgeErrorStatus(error.code));
+      if (isConflict(error)) throw new KnowledgeIntakeError("IDEMPOTENCY_CONFLICT", 409);
       throw new KnowledgeIntakeError("QUARANTINE_RECORD_FAILED", 500);
     }
     throw new KnowledgeIntakeError(code, status);
@@ -132,7 +151,10 @@ export async function ingestKnowledgeVersion(
         kind: input.kind,
         bytes: input.bytes,
       });
-      if (prepared.kind === "failure") return await quarantine(input, prepared.code, 422);
+      if (prepared.kind === "failure") {
+        if (prepared.code === "EXTRACTION_BUSY") throw new KnowledgeIntakeError(prepared.code, 503);
+        return await quarantine(input, prepared.code, 422);
+      }
       version = prepared.version;
     }
 
@@ -175,11 +197,8 @@ export async function ingestKnowledgeVersion(
       }
     }
     if (error instanceof KnowledgeIntakeError) throw error;
-    if (error instanceof KnowledgeError) {
-      const status = error.code === "VERSION_CONFLICT" || error.code === "SOURCE_CONFLICT" ? 409 : 400;
-      throw new KnowledgeIntakeError(error.code, status);
-    }
-    if (errorMessage(error)?.includes("CONFLICT")) throw new KnowledgeIntakeError("IDEMPOTENCY_CONFLICT", 409);
+    if (error instanceof KnowledgeError) throw new KnowledgeIntakeError(error.code, knowledgeErrorStatus(error.code));
+    if (isConflict(error)) throw new KnowledgeIntakeError("IDEMPOTENCY_CONFLICT", 409);
     throw new KnowledgeIntakeError("KNOWLEDGE_INGESTION_FAILED", 500);
   }
 }

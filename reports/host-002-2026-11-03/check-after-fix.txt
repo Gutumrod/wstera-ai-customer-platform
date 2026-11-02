@@ -1,0 +1,293 @@
+
+> wstera-ai-customer-platform@0.1.0 check
+> npm run typecheck && npm test && npm run build:console
+
+
+> wstera-ai-customer-platform@0.1.0 typecheck
+> tsc --noEmit
+
+
+> wstera-ai-customer-platform@0.1.0 test
+> npm run build && node --test dist/src/tests/core.test.js dist/modules/knowledge/knowledge.test.js dist/modules/knowledge/evaluation/evaluation.test.js dist/modules/handoff/handoff.test.js dist/modules/ai-engine/citation-integrity.test.js dist/modules/ai-engine/support-orchestrator.test.js dist/adapters/models/openai-compatible/chat-completions.test.js dist/adapters/persistence/postgres/knowledge-repository.test.js dist/adapters/persistence/supabase/workspace-host-migration.test.js dist/composition/knowledge-database-url.test.js dist/modules/payments/payments.test.js dist/modules/business-actions/business-actions.test.js dist/modules/tenancy/merchant-identity.test.js dist/composition/knowledge-intake.test.js dist/composition/merchant-knowledge-routes.test.js dist/adapters/persistence/supabase/host-hardening-migration.test.js dist/adapters/knowledge/document-extractor.test.js dist/adapters/storage/supabase/private-knowledge-storage.test.js scripts/seed-environment.test.mjs
+
+
+> wstera-ai-customer-platform@0.1.0 build
+> tsc
+
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+Warning: Indexing all PDF objects
+✔ PDF extraction caps workers and queue, refuses the overflow, then frees every slot (2285.6708ms)
+✔ CSV extraction spawns no worker and never waits on the PDF cap (3.5417ms)
+✔ answerability sends bounded JSON-mode request and records per-workspace token usage (31.3021ms)
+✔ grounded answer returns only bounded text and evidence references (1.4645ms)
+✔ configuration rejects missing credentials, unsafe URLs and invalid HTTP endpoints (1.5577ms)
+✔ invalid input and oversized request do not call the transport (0.855ms)
+✔ configuration is snapshotted and inherited usage recorder methods remain supported (1.1484ms)
+✔ provider errors are normalized and never include response bodies or credentials (1.0876ms)
+✔ timeouts abort the request and return a normalized error (6.1321ms)
+✔ timeout settles even when the host transport ignores AbortSignal (5.3995ms)
+✔ timeout cancels and settles a stalled response body (13.7508ms)
+▶ oversized, malformed, and usage-free responses fail closed
+  ✔ oversized body (0.8059ms)
+  ✔ invalid JSON (0.7266ms)
+  ✔ missing token usage (0.8321ms)
+  ✔ usage persistence failure (0.8862ms)
+  ✔ usage persistence is included in the operation timeout (7.7765ms)
+✔ oversized, malformed, and usage-free responses fail closed (12.2578ms)
+▶ malformed assessment and fabricated citation references never reach callers
+  ✔ assessment schema (0.8063ms)
+  ✔ fabricated citation (0.6044ms)
+  ✔ empty answer (0.4697ms)
+✔ malformed assessment and fabricated citation references never reach callers (2.3772ms)
+▶ PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators
+  ✔ workspace RLS is default-deny and transaction-local scope does not leak (27.9173ms)
+  ✔ approval is atomic, one approved version is enforced, and revoke removes retrieval eligibility (117.9147ms)
+  ✔ archived source cannot approve an indexed version (16.3266ms)
+  ✔ FAQ, PDF page and CSV row citations round-trip exactly (41.5468ms)
+  ✔ PostgreSQL infers omitted continuation indexes for page and row locators (13.4038ms)
+  ✔ PostgreSQL accepts explicit repeated page and row segments like the canonicalizer (12.7548ms)
+  ✔ failed chunk persistence rolls back its version row (5.6989ms)
+  ✔ invalid tenant-bound drafts fail before touching SQL (1.2835ms)
+  ✔ rejects noncanonical chunk segmentation for FAQ and imported sources (5.1465ms)
+  ✔ persists a canonical CSV draft whose segment boundaries create more than 5,000 chunks (331.9599ms)
+✔ PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and citation locators (2542.3584ms)
+✔ retrieval candidates are shortlisted and bounded in SQL without carrying version content (1270.0021ms)
+✔ M1: the ingest role cannot approve by any path (1998.8401ms)
+✔ M1: approval takes the approver from auth.uid() and checks ownership in SQL (77.225ms)
+✔ revalidation: every repository and audit write re-checks membership in its own transaction (33.2903ms)
+✔ revalidation function locks the rows it reads and stays out of reach of request-facing roles (3.3603ms)
+✔ M3: members read only web connections, so LINE channel ids stay hidden (5.3463ms)
+✔ a workspace can hold only one active web connection (2.4893ms)
+✔ hardening objects stay in aicp, owned by the product migrator (2.793ms)
+✔ Supabase local migrations stay in sync and enforce workspace membership/storage RLS (2026.5033ms)
+✔ private storage builds immutable workspace paths and reuses only byte-identical retries (4.7149ms)
+✔ private storage rejects malformed object identity before contacting the provider (0.3403ms)
+✔ upload and delete enforce the same workspace path rule (0.5437ms)
+✔ local database URL policy is unchanged (1.4825ms)
+✔ lab database URL accepts only knowledge_runtime on the pinned project (1.1095ms)
+✔ lab database URL fails closed without a matching project ref (1.3331ms)
+✔ lab database connections verify TLS and local ones stay plain (1.2461ms)
+✔ Supabase environment guard accepts only local loopback and the pinned lab project (0.4859ms)
+✔ admin client starts only on an accepted environment (151.4874ms)
+✔ knowledge intake is workspace-scoped, idempotent, and exposes citation-ready indexed knowledge (6.126ms)
+✔ reusing an idempotency key with different knowledge fails closed (1.048ms)
+✔ bounded document intake stores the original and keeps exact page citations (1.1562ms)
+✔ database failure before version persistence does not create an orphan original (0.5481ms)
+✔ document retry with a different display filename reuses one immutable object path (0.9515ms)
+✔ unsupported and oversized uploads are rejected before storage (4.3657ms)
+✔ malformed documents are retained in workspace-scoped quarantine and never become retrievable (0.8623ms)
+✔ a busy extractor answers 503 and records nothing, so the same request can be retried (0.3868ms)
+✔ a replay that records against an earlier object removes the object it just created (0.4945ms)
+✔ a replay reusing its own existing object keeps that object (0.5565ms)
+✔ only named conflict errors become 409; other failures that mention CONFLICT stay 500 (0.9547ms)
+✔ every route answers 401 without a session and writes nothing (1994.5738ms)
+✔ state-changing routes refuse a missing or foreign origin (3.9853ms)
+✔ GET accepts the console's own same-origin fetch and refuses cross-site reads (17.4577ms)
+✔ upload rejects oversized, wrong content type and unknown fields before writing (19.0531ms)
+✔ search rejects oversized, malformed, wrong content type and unknown fields (13.3084ms)
+✔ a rejected file is quarantined apart from knowledge and stays inside its workspace (27.4488ms)
+✔ only the signed-in owner of the workspace can approve, and the approver comes from the session (41.5177ms)
+✔ search returns approved evidence for its own workspace only, whatever the request claims (37.6136ms)
+✔ rate limits answer 429 per identity before reading the request and write nothing (40.4441ms)
+▶ a membership revoked after identity resolution cannot write
+  ✔ FAQ upload (6.5054ms)
+  ✔ quarantine leaves no object behind (6.8551ms)
+  ✔ approval (16.5739ms)
+{"level":"error","event":"merchant_api.request_failed","name":"Error"}
+  ✔ a suspended workspace is refused the same way (8.2308ms)
+✔ a membership revoked after identity resolution cannot write (41.0763ms)
+✔ error status comes from known codes, not from what a message or vendor error happens to contain (0.901ms)
+✔ the rate limiter reopens after its window and keeps its key table bounded (0.5747ms)
+✔ accepts canonical FAQ, PDF page, and CSV row citations from retrieved evidence (3.9031ms)
+✔ deduplicates repeated citations and returns the canonical evidence reference (0.43ms)
+✔ normalizes omitted page and row chunk indexes to zero (0.4741ms)
+✔ hands off when evidence or citations are absent (0.2836ms)
+✔ hands off for malformed draft and empty answer text (0.2885ms)
+✔ fails closed on foreign evidence and cross-workspace citations (0.3105ms)
+✔ fails closed when retrieval hit metadata does not match its citation identity (0.2842ms)
+✔ rejects fabricated evidence identities and malformed locators (0.2913ms)
+✔ returns only a cited answer mapped from opaque evidence references (3.9101ms)
+✔ no approved evidence requests handoff without invoking assessment or model (0.5356ms)
+▶ insufficient, conflicting, and uncertain evidence fail closed to handoff
+  ✔ insufficient_evidence (0.4779ms)
+  ✔ conflicting_evidence (0.3684ms)
+  ✔ uncertain (0.3932ms)
+✔ insufficient, conflicting, and uncertain evidence fail closed to handoff (1.9694ms)
+▶ malformed assessment, provider errors, and bad citations never produce an answer
+  ✔ assessment shape (1.4496ms)
+  ✔ assessment getter throws (0.5952ms)
+  ✔ assessment failure (0.398ms)
+  ✔ generation failure (0.4517ms)
+  ✔ foreign evidence reference (0.4037ms)
+  ✔ empty answer (0.3109ms)
+  ✔ oversized answer (0.2266ms)
+  ✔ too many citation references (0.2243ms)
+  ✔ extra model field (0.2109ms)
+  ✔ generated getter throws (0.2352ms)
+✔ malformed assessment, provider errors, and bad citations never produce an answer (6.1141ms)
+✔ retrieval and handoff failures are surfaced without leaking adapter errors (0.6688ms)
+✔ invalid request is rejected before any port is called (0.2294ms)
+✔ over-retrieval-limit customer messages hand off instead of being silently rejected (0.1816ms)
+✔ support query accepts the 500-character retrieval boundary and routes the 5000-character ceiling (0.3449ms)
+✔ freshness revalidates every chunk shown to the model, including uncited evidence (0.4111ms)
+▶ paused conversations stop before retrieval and a handoff during generation suppresses the answer
+  ✔ already paused (0.1583ms)
+  ✔ handoff starts and is released while generating (0.2629ms)
+  ✔ knowledge is revoked during generation (0.3486ms)
+  ✔ freshness check failure fails closed (0.3954ms)
+  ✔ conversation takeover before a failure handoff returns paused without alerting an already-owned conversation (0.3781ms)
+  ✔ conversation version change before failure handoff returns changed without requesting handoff (0.4032ms)
+  ✔ malformed freshness result fails closed (0.4033ms)
+  ✔ handoff starts while generating (0.2593ms)
+  ✔ conversation state unavailable (0.3064ms)
+  ✔ stateful conversation getter is rejected before retrieval (0.1669ms)
+  ✔ stateful evidence getter is rejected before model use (0.2432ms)
+  ✔ conversation Proxy uses its captured descriptor value (0.2282ms)
+  ✔ generated reference Proxy validates and uses the same descriptor value (0.3104ms)
+✔ paused conversations stop before retrieval and a handoff during generation suppresses the answer (5.3189ms)
+✔ risk is derived from the action kind, not from caller data (1.5016ms)
+✔ an unknown or inherited property name is refused instead of resolving (0.5767ms)
+✔ a tampered risk field on the record cannot unlock execution (0.3932ms)
+✔ an action that changes state cannot execute before confirmation (0.1868ms)
+✔ confirmation cannot skip authorisation (0.1818ms)
+✔ a read-only action may execute after authorization without confirmation (0.2345ms)
+✔ full confirmation cycle reaches verified state (0.2032ms)
+✔ re-confirming with the same confirmation id is idempotent (0.2115ms)
+✔ confirming twice with a different id is refused (0.2302ms)
+✔ any event naming another workspace is denied (0.3203ms)
+✔ terminal records accept no further events (0.2447ms)
+✔ an executed record cannot be rejected or failed afterwards (0.2228ms)
+✔ missing, unexpected or non-scalar arguments are refused (0.2308ms)
+✔ argument values are copied, not shared with the caller (0.1048ms)
+✔ malformed identifiers and short idempotency keys are refused (0.1917ms)
+✔ new conversation starts with AI enabled and tenant-scoped identity (2.3281ms)
+✔ handoff request pauses AI before operator claim and staff reply keeps it paused (0.9914ms)
+✔ replaying the latest delivery returns the post-transition repository snapshot (0.5441ms)
+✔ customer-facing calls cannot release handoff and unauthorized staff cannot release it (0.7841ms)
+✔ authorized staff release is the only transition that resumes AI (0.3132ms)
+✔ handoff commands reject a forged workspace and an active conversation cannot be claimed (0.4024ms)
+✔ handoff failures are explicit and invalid transition requests fail closed (0.3648ms)
+✔ repository compare-and-append rejects a stale transition version (0.3614ms)
+✔ evaluation summary reports recall, precision, citation validity, abstention, and latency separately (2.0248ms)
+✔ empty evaluation returns null rates and zero latency instead of NaN (0.2048ms)
+✔ evaluation rejects invalid latency observations instead of recording zero (0.3815ms)
+✔ Precision@k divides relevant returned evidence by k, including when fewer than k hits return (0.1764ms)
+✔ a wrong page from the correct source and version is not relevant evidence (0.1053ms)
+✔ synthetic baseline covers 30 FAQ, PDF, CSV and negative cases with verifiable citations (35.239ms)
+✔ synthetic corpus manifest enforces unique cases, outcomes, source kinds, and locators (0.6223ms)
+✔ approved FAQ retrieval returns exact version and deterministic span citation (6.0296ms)
+✔ Thai lexical query and punctuation variants of mixed-language SKUs retrieve approved knowledge (1.1379ms)
+✔ SKU punctuation normalization abstains when distinct identifiers collide (0.6489ms)
+✔ inactive SKU variants do not make active punctuation matches ambiguous (0.6229ms)
+✔ unapproved and revoked versions never appear in retrieval (0.4781ms)
+✔ citation freshness becomes false after source archive or version revocation (1.0089ms)
+✔ canonicalizes page and row version drafts when optional chunkIndex is omitted (1.245ms)
+✔ archived source cannot approve an indexed version (0.6004ms)
+✔ repository refuses a caller-supplied approved status at version creation (0.3217ms)
+✔ repository rejects an imported version whose kind differs from its source (0.3925ms)
+✔ retrieval locator order is deterministic when repository rows are reversed (9.1976ms)
+✔ repository derives tenant scope from trusted context and rejects forged or mismatched workspace data (0.6872ms)
+✔ version conflicts fail closed and approved version content is immutable (0.3342ms)
+✔ archived source is excluded even when its version remains approved (0.2566ms)
+✔ a source cannot have two approved versions and does not resurrect older content (0.4268ms)
+✔ no match yields no evidence and malformed or oversized FAQ content is rejected (0.5683ms)
+✔ instruction-like document text remains inert retrieved data and cannot change source state (0.5449ms)
+✔ imported page and row segments retain exact content offsets and source locators (0.3622ms)
+✔ document version builder rejects locators that do not match the source format (0.2206ms)
+✔ retrieval citations preserve the extracted PDF page locator (0.4178ms)
+✔ CSV extractor handles UTF-8 BOM, Thai, quoted commas and maps the data row (34.0107ms)
+✔ PDF extractor returns per-page text and rejects image-only PDFs without OCR claims (772.6308ms)
+✔ PDF extractor fails closed on highly-compressible page output (594.131ms)
+✔ PDF text consumer cancels the stream as soon as the extraction cap is crossed (167.8978ms)
+✔ PDF text consumer ignores trailing whitespace when no output budget remains (0.7926ms)
+✔ PDF page budgets do not reject an empty trailing page at the extraction ceiling (0.255ms)
+✔ document extractor fails closed for invalid UTF-8, malformed files and oversized input (2.9777ms)
+✔ document preparation carries extracted CSV row citations into approved retrieval (3.3755ms)
+✔ document preparation converts thrown or malformed extractor results to safe failures (0.6806ms)
+✔ TLV encoding writes tag, two-digit length and value (1.7502ms)
+✔ CRC matches the published CRC-16/CCITT-FALSE check value (0.2577ms)
+✔ CRC suffix matches a recomputation over the payload prefix (0.5989ms)
+✔ payload without an amount is static and carries no amount tag (0.4408ms)
+✔ payload with an amount is dynamic and carries tag 54 at two decimals (0.2944ms)
+✔ mobile target is normalised to 0066 form under tag 01 (0.9403ms)
+✔ eleven-digit target already in 66 form gains the 00 prefix (0.2223ms)
+✔ thirteen-digit target is used unchanged under tag 02 (0.2344ms)
+✔ thirteen-digit target already in 0066 form stays a mobile target (0.1541ms)
+✔ a plus-prefixed international mobile is accepted, other punctuation is not (0.6794ms)
+✔ fifteen-digit target is used unchanged under tag 03 (0.2184ms)
+✔ non-positive, over-precise or oversized amounts are rejected (0.3539ms)
+✔ malformed targets are rejected instead of guessed (0.2327ms)
+✔ payload matches a pinned vector computed outside this module (0.1407ms)
+✔ same input yields identical payload (0.1376ms)
+✔ merchant workspace identity is derived from active membership and owned web connection (1.1186ms)
+▶ workspace selection fails closed when membership or web connection is missing or ambiguous
+  ✔ no membership (0.6277ms)
+  ✔ multiple workspaces (0.3286ms)
+  ✔ no web connection (0.2742ms)
+  ✔ repository errors fail closed (0.2577ms)
+✔ workspace selection fails closed when membership or web connection is missing or ambiguous (3.4739ms)
+✔ trusted workspace enforces a strict, immutable context (1.4633ms)
+✔ tenancy contract and legacy workspace APIs preserve constructor and enforcement parity (1.166ms)
+✔ shared channel contracts keep message identity connection-scoped and errors normalized (0.4992ms)
+✔ LINE HMAC verifies raw bytes and rejects modifications/missing secret (6.9983ms)
+✔ signed LINE ingress is bound to server-owned destination and filters group messages (1.7059ms)
+✔ empty signed LINE verification event is accepted and invalid destination is rejected before lookup (1.3572ms)
+✔ LINE ingress fails closed for malformed signed payloads and bounds input (3.1864ms)
+✔ same LINE user in two connections resolves to separate workspace identities (0.906ms)
+✔ dedupe lease contract recovers a failed first event before redelivery (0.7556ms)
+✔ source gate filters scope and approval while preserving excerpt text as untrusted data (0.5386ms)
+✔ reply client rejects missing creds and surfaces provider failure (21.4549ms)
+✔ local seed target stays loopback only and uses no TLS option (1.5192ms)
+✔ lab seed target needs the confirmed project, verified TLS and a synthetic owner (0.7975ms)
+✔ any other app environment is refused (0.9116ms)
+✔ the IPv6 loopback form that URL parsing returns counts as local (0.332ms)
+ℹ tests 216
+ℹ suites 0
+ℹ pass 216
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3976.3484
+
+> wstera-ai-customer-platform@0.1.0 build:console
+> npm run build && next build --webpack platform/apps/merchant-console
+
+
+> wstera-ai-customer-platform@0.1.0 build
+> tsc
+
+▲ Next.js 16.4.2 (webpack)
+✓ Running next.config.ts took 23ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1168ms
+  Running TypeScript ...
+  Finished TypeScript in 1614ms ...
+  Collecting page data using 8 workers ...
+  Generating static pages using 8 workers (0/2) ...
+✓ Generating static pages using 8 workers (2/2) in 601ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /api/knowledge/search
+├ ƒ /api/knowledge/sources
+├ ƒ /api/knowledge/sources/[sourceId]/versions/[versionId]/approve
+└ ƒ /login
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

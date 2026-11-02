@@ -170,3 +170,67 @@ test("malformed documents are retained in workspace-scoped quarantine and never 
   const result = await retrieveKnowledge(deps.repository, { workspace: shopA, query: "broken pdf", limit: 5 });
   assert.equal(result.kind, "no_answer");
 });
+
+const badPdf = (idempotencyKey: string) => ({
+  ...baseInput(), idempotencyKey, kind: "pdf" as const, content: undefined,
+  bytes: new Uint8Array([37, 80, 68, 70]), filename: "broken.pdf", contentType: "application/pdf",
+});
+const failingExtractor: KnowledgeDocumentExtractorPort = {
+  async extract() { return Object.freeze({ kind: "failure", code: "MALFORMED_FILE" }); },
+};
+const intakeError = (code: string, status: number) => (error: unknown) =>
+  error instanceof KnowledgeIntakeError && error.code === code && error.status === status;
+
+test("a busy extractor answers 503 and records nothing, so the same request can be retried", async () => {
+  const deps = dependencies();
+  const busyExtractor: KnowledgeDocumentExtractorPort = {
+    async extract() { return Object.freeze({ kind: "failure", code: "EXTRACTION_BUSY" }); },
+  };
+  await assert.rejects(ingestKnowledgeVersion({ ...deps, extractor: busyExtractor }, badPdf("synthetic-busy-request-1")), intakeError("EXTRACTION_BUSY", 503));
+  assert.equal(deps.quarantineRecords.length, 0);
+  assert.equal(deps.objects.size, 0);
+});
+
+test("a replay that records against an earlier object removes the object it just created", async () => {
+  const deps = dependencies();
+  const first: KnowledgeQuarantineRecord = Object.freeze({
+    workspaceId: "shop-a", attemptId: "qat-first", idempotencyKey: "synthetic-replay-request", requestHash: "a".repeat(64),
+    kind: "pdf", title: "First", byteSize: 4, objectPath: "shop-a/quarantine/qat-first/qat-first.pdf", failureCode: "MALFORMED_FILE", createdAt: new Date().toISOString(),
+  });
+  await assert.rejects(ingestKnowledgeVersion({
+    ...deps,
+    extractor: failingExtractor,
+    intakeAudit: { ...deps.intakeAudit, async quarantine() { return first; } },
+  }, badPdf("synthetic-replay-request")), intakeError("MALFORMED_FILE", 422));
+  assert.equal(deps.objects.size, 0, "the record keeps the first path, so the new object would be orphaned");
+  assert.equal(deps.removed.length, 1);
+});
+
+test("a replay reusing its own existing object keeps that object", async () => {
+  const deps = dependencies();
+  const input = { ...deps, extractor: failingExtractor };
+  await assert.rejects(ingestKnowledgeVersion(input, badPdf("synthetic-replay-same-01")), intakeError("MALFORMED_FILE", 422));
+  await assert.rejects(ingestKnowledgeVersion(input, badPdf("synthetic-replay-same-01")), intakeError("MALFORMED_FILE", 422));
+  assert.equal(deps.objects.size, 1);
+  assert.equal(deps.removed.length, 0);
+});
+
+test("only named conflict errors become 409; other failures that mention CONFLICT stay 500", async () => {
+  const providerFailure = dependencies();
+  providerFailure.storage.putOriginal = async () => { throw new Error("UPSTREAM_PROXY_CONFLICT_TIMEOUT"); };
+  const documentInput = { ...badPdf("synthetic-conflict-text-1"), filename: "terms.pdf" };
+  await assert.rejects(ingestKnowledgeVersion(providerFailure, documentInput), intakeError("KNOWLEDGE_INGESTION_FAILED", 500));
+
+  const objectConflict = dependencies();
+  objectConflict.storage.putOriginal = async () => { throw new Error("KNOWLEDGE_OBJECT_CONFLICT"); };
+  await assert.rejects(ingestKnowledgeVersion(objectConflict, { ...documentInput, idempotencyKey: "synthetic-conflict-text-2" }), intakeError("IDEMPOTENCY_CONFLICT", 409));
+
+  const quarantineFailure = dependencies();
+  quarantineFailure.intakeAudit.quarantine = async () => { throw new Error("DATABASE_CONFLICT_UNRELATED"); };
+  await assert.rejects(ingestKnowledgeVersion({ ...quarantineFailure, extractor: failingExtractor }, badPdf("synthetic-conflict-text-3")), intakeError("QUARANTINE_RECORD_FAILED", 500));
+  assert.equal(quarantineFailure.objects.size, 0);
+
+  const quarantineConflict = dependencies();
+  quarantineConflict.intakeAudit.quarantine = async () => { throw new Error("KNOWLEDGE_QUARANTINE_IDEMPOTENCY_CONFLICT"); };
+  await assert.rejects(ingestKnowledgeVersion({ ...quarantineConflict, extractor: failingExtractor }, badPdf("synthetic-conflict-text-4")), intakeError("IDEMPOTENCY_CONFLICT", 409));
+});

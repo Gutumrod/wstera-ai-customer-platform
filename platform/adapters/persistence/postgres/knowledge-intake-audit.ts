@@ -1,6 +1,6 @@
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import type { KnowledgeQuarantineRecord, KnowledgeIntakeAuditPort } from "../../../contracts/data/knowledge-intake.js";
-import type { PostgresDatabasePort, PostgresRow } from "./knowledge-repository.js";
+import { assertActiveWriter, type PostgresDatabasePort, type PostgresRow } from "./knowledge-repository.js";
 
 type QuarantineRow = PostgresRow & {
   workspace_id: string;
@@ -39,7 +39,7 @@ function mapRecord(row: QuarantineRow): KnowledgeQuarantineRecord {
 
 /** Persists rejected uploads separately from retrievable knowledge versions. */
 export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
-  constructor(private readonly database: PostgresDatabasePort) {}
+  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId?: string) {}
 
   async recordOriginal(
     workspace: TrustedWorkspaceContext,
@@ -47,6 +47,7 @@ export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
   ): Promise<void> {
     await this.database.transaction(async (query) => {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [workspace.workspaceId]);
+      await assertActiveWriter(query, workspace, this.actorUserId);
       const values = [workspace.workspaceId, input.sourceId, input.versionId, input.objectPath, input.filename, input.contentType, input.byteSize];
       const result = await query.query<OriginalReferenceRow>(
         "INSERT INTO aicp.knowledge_original_objects " +
@@ -72,6 +73,7 @@ export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
   async quarantine(workspace: TrustedWorkspaceContext, input: Omit<KnowledgeQuarantineRecord, "workspaceId" | "createdAt">): Promise<KnowledgeQuarantineRecord> {
     return this.database.transaction(async (query) => {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [workspace.workspaceId]);
+      await assertActiveWriter(query, workspace, this.actorUserId);
       const inserted = await query.query<QuarantineRow>(
         `INSERT INTO aicp.knowledge_quarantine_records
            (workspace_id, attempt_id, idempotency_key, request_hash, kind, title, filename, content_type,

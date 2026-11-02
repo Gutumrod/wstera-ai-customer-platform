@@ -65,7 +65,7 @@ Set these in ignored `.env.local`; `APP_ENV` and `NEXT_PUBLIC_APP_ENV` must both
 - `SUPABASE_PROJECT_REF` and `NEXT_PUBLIC_SUPABASE_PROJECT_REF`: the same exact 20-character project ref. Both are required.
 - `NEXT_PUBLIC_SUPABASE_URL`: exactly `https://<project-ref>.supabase.co`.
 - `DATABASE_URL`: the pooler URL with username `knowledge_runtime.<project-ref>`. Other roles, other hosts, query strings and fragments are rejected.
-- `SUPABASE_DB_CA_CERT`: the project's CA certificate in PEM form. Lab database connections verify it; without it the host refuses to start.
+- `SUPABASE_DB_CA_CERT`: the project's CA certificate in PEM form. Lab database connections verify it. Without it the console and login still open, but every route that creates the knowledge host fails.
 
 Owner dashboard steps: expose schema `aicp` in the Data API settings and download the CA certificate. To seed, also set `SUPABASE_DB_ADMIN_URL` to the pooler URL with username `postgres.<project-ref>`, `LAB_SEED_CONFIRM_PROJECT_REF` to the project ref, and an `@example.test` value for `LOCAL_OWNER_EMAIL`, then run `npm run seed:local`. This path has not been run against a hosted project yet.
 
