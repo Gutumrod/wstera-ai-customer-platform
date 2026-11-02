@@ -8,6 +8,8 @@ Close the three gaps PR #18 left open — route-level tests, request rate limiti
 
 ## Scope
 
+Object names below and the EVIDENCE lines are pinned to `9b4f997` schema `public`. If PR #23 merges first, the same objects live in schema `aicp`; re-read the migrations and use those names.
+
 - **Route tests** for `GET/POST /api/knowledge/sources`, `POST /api/knowledge/sources/[sourceId]/versions/[versionId]/approve`, `POST /api/knowledge/search`: unauthenticated, cross-workspace, oversized body, malformed JSON, wrong content type, unknown fields, quarantined file. Tests must assert status code, error code and that no row/object was written.
 - **Rate limiting**: bounded in-memory per-identity limiter on upload and search. No new dependency. Mark the multi-instance ceiling with a `ponytail:` comment naming the upgrade path (shared store) and document that it resets per process.
 - **Membership revalidation**: an active-membership check must run inside the same database transaction as every knowledge write, so a membership revoked after identity resolution cannot still write. Actor identity comes from the verified session only — never from request body or query. Add the required grant (`SELECT ON public.workspace_memberships TO knowledge_runtime`) in a new migration; do not widen RLS policies to trust request data.

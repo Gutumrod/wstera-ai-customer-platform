@@ -25,4 +25,4 @@ G1-HOST-001 adds a local-only authenticated upload/approval host, private origin
 
 ## Next executable slice
 
-Next add route-level tests and perform Docker-backed local Supabase authenticated upload/approval/search E2E, then compose the shared engine into Web Chat. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Handoff domain state exists separately, but no production delivery path is integrated.
+Next add route-level tests and perform authenticated upload/approval/search E2E on `wstera-lab` (register `D-20261025-11`), then compose the shared engine into Web Chat. Keep retrieval behind `KnowledgeRetrievalPort`; use the synthetic G1-C baseline as diagnostic evidence, then get Owner review before setting thresholds or selecting pgvector/tokenizer/reranking. Handoff domain state exists separately, but no production delivery path is integrated.

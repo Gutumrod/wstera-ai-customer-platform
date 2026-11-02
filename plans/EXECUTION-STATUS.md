@@ -1,15 +1,15 @@
 # Execution Status
 
-Updated: 2026-10-25 against `main` at `9b4f997dc3783c253461a52f70e240d325ff05ec`. This records merged repository state, not product or release approval.
+Updated: 2026-11-02 against `main` at `e47bb57a68e68c69e0093b5b3eff85eeed843194`. This records merged repository state, not product or release approval.
 
 ## Current milestone
 
-PR #16 merged the consolidated Phase 0C and G1 foundation work. On 2026-10-25, PR #18 merged the local-only authenticated knowledge host, PR #19 merged a pure PromptPay payload builder, PR #20 merged the typed business-action lifecycle contract/reducer, and PR #21 merged source-import provenance and pilot-gate documentation. Latest observed `main` is merge commit `9b4f997dc3783c253461a52f70e240d325ff05ec`. PR #18 reports 145 tests, typecheck and optimized Next.js build passing, zero audit findings, and a second-pass review with no actionable High/Medium findings on the reviewed candidate. The authenticated browser-to-Supabase E2E was not run. GitHub returned no combined-status records for the latest merge commit in this status check, so a fresh unified CI result for `9b4f997` is not asserted. These merges do not mean G1 product acceptance or release readiness.
+PR #16 merged the consolidated Phase 0C and G1 foundation work. On 2026-10-25, PR #18 merged the local-only authenticated knowledge host, PR #19 merged a pure PromptPay payload builder, PR #20 merged the typed business-action lifecycle contract/reducer, and PR #21 merged source-import provenance and pilot-gate documentation. PR #24 later added Merchant Brain documents only, at `e47bb57`; the host evidence below was recorded at `9b4f997dc3783c253461a52f70e240d325ff05ec`. PR #18 reports 145 tests, typecheck and optimized Next.js build passing, zero audit findings, and a second-pass review with no actionable High/Medium findings on the reviewed candidate. The authenticated browser-to-Supabase E2E was not run. GitHub returned no combined-status records for the latest merge commit in this status check, so a fresh unified CI result for `9b4f997` is not asserted. These merges do not mean G1 product acceptance or release readiness.
 
 | Area | Merged evidence | Still required for G1 / release |
 |---|---|---|
 | Phase 0C | Shared tenancy/channel contracts, compatibility exports, and CI trigger update | Remaining modular increments only when separately scoped |
-| Knowledge | FAQ lifecycle, bounded local PDF/CSV extraction, deterministic Thai/SKU retrieval, citations, PostgreSQL adapter and PGlite tests; PR #18 adds local synthetic authenticated upload/review/approval and citation search | Docker-backed browser-to-local-Supabase E2E, route-level tests/rate limiting, membership-revalidation race resolution, production connection/role wiring, answer quality evidence |
+| Knowledge | FAQ lifecycle, bounded local PDF/CSV extraction, deterministic Thai/SKU retrieval, citations, PostgreSQL adapter and PGlite tests; PR #18 adds local synthetic authenticated upload/review/approval and citation search | browser-to-`wstera-lab` E2E, route-level tests/rate limiting, membership-revalidation race resolution, production connection/role wiring, answer quality evidence |
 | Handoff | Local state machine, authorization/repository ports, response orchestration | Durable staff state and atomic channel dispatch/compare-and-send |
 | AI | Citation provenance validator and metered OpenAI-compatible adapter with mocked transport | Approved live provider/model, semantic answer evaluation, durable usage and spend control |
 | PostgreSQL | PGlite RLS/lifecycle tests; historical two-session PostgreSQL evidence from 2026-10-18 | Hosted connection pool/runtime role, host threat review for custom-GUC RLS |
@@ -19,7 +19,7 @@ PR #19 provides a pure PromptPay EMVCo payload builder; it is not wired to a pay
 
 ## Owner decisions 2026-10-25
 
-Docker Desktop is withdrawn from this machine; the host E2E runs against schema `aicp` on `wstera-lab`, and applying the migration needs a separate Owner GO (register `D-20261025-11`). The G1 answer path is extractive citations by default with the model-backed path behind an off-by-default flag; turning the flag on needs separate Owner approval, a budget ceiling, a usage ledger and a data-region choice. Work order is HOST-004 and PR #23 → host hardening → Web Chat → durable handoff → G1 acceptance.
+Docker Desktop is withdrawn from this machine; the host E2E runs against schema `aicp` on `wstera-lab`, and applying the migration needs a separate Owner GO (register `D-20261025-11`). The G1 answer path is extractive citations by default with the model-backed path behind an off-by-default flag; turning the flag on needs separate Owner approval, a budget ceiling, a usage ledger and a data-region choice. Owner work order (`D-20261025-09`) is host hardening → Web Chat → durable handoff → G1 acceptance. Proposed before it, not an Owner decision: HOST-004, then the Owner GO and PR #23 merge decision.
 
 ## Remaining G1 work
 

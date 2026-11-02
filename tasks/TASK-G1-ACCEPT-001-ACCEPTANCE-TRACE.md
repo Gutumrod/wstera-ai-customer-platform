@@ -1,6 +1,6 @@
 # Task G1-ACCEPT-001 — One-shop acceptance trace
 
-**Status: PLANNED — last G1 task; starts only after HOST-002, WEBCHAT-001 and HANDOFF-002 are merged.** Base: `main` @ `9b4f997`. Runs on schema `aicp` in `wstera-lab`; Docker Desktop was withdrawn by `D-20261025-11`.
+**Status: PLANNED — last G1 task; starts only after HOST-004, PR #23, HOST-002, WEBCHAT-001 and HANDOFF-002 are merged and the Owner has given the `wstera-lab` write GO.** Base: `main` @ `9b4f997`. Runs on schema `aicp` in `wstera-lab`; Docker Desktop was withdrawn by `D-20261025-11`.
 
 ## Goal
 
@@ -8,7 +8,7 @@ Produce one reproducible browser/E2E trace from authenticated knowledge upload t
 
 ## Scope
 
-- Use the approved `wstera-lab` setup with `APP_ENV=lab`; seed only synthetic data.
+- Use `wstera-lab` with `APP_ENV=lab` once HOST-004 makes lab mode start and the Owner GO exists; seed only synthetic data. `scripts/seed-local.mjs` is local-only at `9b4f997`, so HOST-004 or this task must provide a guarded lab seed.
 - **Second workspace fixture**: extend the seed (or add a test-only script) with a second synthetic workspace, owner and web connection so cross-workspace denial is testable for real. Do not weaken the single-owner default for normal local use.
 - Run the full flow and capture evidence: upload FAQ/PDF/CSV → review → approve → Thai question → cited extractive answer → handoff request → staff claim → staff reply → authorized resume.
 - Negative cases: visitor from workspace B cannot read workspace A; forged connection id; revoked membership mid-session; provider-flag-off assertion.

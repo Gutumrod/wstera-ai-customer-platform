@@ -1,6 +1,6 @@
 # Proposed Execution Plan — G1 One-Shop Web/RAG MVP
 
-**Status: PROPOSED execution plan, updated 2026-10-25 against `main` at `9b4f997`.** PRs #16 and #18–#21 are merged. The local synthetic knowledge host is implemented and merged, but G1 end-to-end acceptance remains open. Product goals remain those locked in `BRIEF.md`; this plan does not invent evaluation thresholds or authorize hosted/production work.
+**Status: PROPOSED execution plan, updated 2026-11-02 against `main` at `e47bb57`.** PRs #16, #18–#21 and #24 are merged; #24 only added Merchant Brain documents. The local synthetic knowledge host is implemented and merged, but G1 end-to-end acceptance remains open. Product goals remain those locked in `BRIEF.md`; this plan does not invent evaluation thresholds or authorize hosted/production work.
 
 ## Problem and user
 
@@ -24,12 +24,12 @@ Excluded: live LINE integration, self-service multi-shop onboarding, billing, pr
 
 - **E2E runtime (step 2, register `D-20261025-11`, supersedes the Docker approval in `D-20261025-09`):** the trace runs against schema `aicp` with `aicp_migrator` and `knowledge_runtime` on `wstera-lab`, not schema `public` and not Docker Desktop. Applying the migration is a write and needs a separate Owner GO. Other hosted resources and provider spend remain unauthorized.
 - **G1 answer path (steps 4–6):** build both an extractive cited-answer path (default, no provider call) and the model-backed path behind an off-by-default flag. G1 acceptance runs the extractive path; enabling the flag needs separate Owner approval plus a budget ceiling, usage ledger and data-region choice.
-- **Work order:** HOST-004 and PR #23 (step 2) → harden the host boundary (step 3) → Web Chat (step 4) → durable handoff (step 5) → G1 acceptance (step 6). Do not start Web Chat before the host hardening task is merged.
+- **Work order:** harden the host boundary (step 3) → Web Chat (step 4) → durable handoff (step 5) → G1 acceptance (step 6). Do not start Web Chat before the host hardening task is merged.
 
 ## Proposed work order
 
 1. **Reconcile status documents.** Update execution status, blockers and work queue to reflect PRs #18–#21 merged on 2026-10-25; do not inherit stale pending-merge statements.
-2. **Close the host evidence gap.** Finish HOST-004 so `APP_ENV=lab` can start, obtain the Owner GO to apply the migration, merge PR #23, then run the synthetic Supabase sign-in → upload → review/approve → citation-search flow on `wstera-lab`. The PR #18 automated checks and review do not replace this E2E trace. If the flow cannot run, stop and report rather than substituting mocks.
+2. **Close the host evidence gap.** Proposed prerequisite, not an Owner decision: finish HOST-004 so `APP_ENV=lab` can start and setup docs stop requiring Docker, ask for the Owner GO to apply the migration and the Owner merge decision on PR #23, then run the synthetic Supabase sign-in → upload → review/approve → citation-search flow on `wstera-lab`. The PR #18 automated checks and review do not replace this E2E trace. If the flow cannot run, stop and report rather than substituting mocks.
 3. **Harden the host boundary.** Add route-level tests and rate limiting, resolve the documented membership-revalidation race, then obtain independent security review against the final candidate.
 4. **Build the Web Chat vertical slice.** Add origin/session binding and visitor UI on the shared support engine; return approved-source citations and fail closed on unknown, conflicting or insufficient evidence. Ship the extractive cited-answer path as the default and keep the model-backed path behind an off-by-default flag. No live model/provider call without separate Owner approval and budget.
 5. **Make human takeover durable.** Add persistent staff authorization, pause/resume state and send-time compare-and-send/outbox enforcement; test retries, provider failures and tenant crossover.
