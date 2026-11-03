@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "./knowledge-repository.js";
-import { PostgresKnowledgeRepository } from "./knowledge-repository.js";
+import { NO_ACTOR_FOR_SCHEMA_TESTS, PostgresKnowledgeRepository } from "./knowledge-repository.js";
 import type { KnowledgeRepositoryPort } from "../../../contracts/data/knowledge.js";
 import { KnowledgeError, createFaqVersion, createImportedKnowledgeVersion, retrieveKnowledge } from "../../../modules/knowledge/index.js";
 import { InMemoryKnowledgeRepository } from "../../../modules/knowledge/testing/in-memory-repository.js";
@@ -50,7 +50,7 @@ async function createRepository() {
     GRANT UPDATE (status, approved_at, approved_by, revoked_at, revoked_by, revocation_reason) ON aicp.knowledge_versions TO knowledge_runtime;
     GRANT SELECT, INSERT ON aicp.knowledge_chunks TO knowledge_runtime;
   `);
-  return { database, repository: new PostgresKnowledgeRepository(databasePort(database)) };
+  return { database, repository: new PostgresKnowledgeRepository(databasePort(database), NO_ACTOR_FOR_SCHEMA_TESTS) };
 }
 
 async function addIndexedFaq(repository: PostgresKnowledgeRepository, workspace = shopA, sourceId = "faq", versionId = "v1") {
@@ -141,7 +141,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, currentCitation]), true);
       assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, { ...currentCitation, chunkId: "missing" }]), false);
       const isolationStatements: string[] = [];
-      const isolationRepository = new PostgresKnowledgeRepository(databasePort(database, false, isolationStatements));
+      const isolationRepository = new PostgresKnowledgeRepository(databasePort(database, false, isolationStatements), NO_ACTOR_FOR_SCHEMA_TESTS);
       assert.equal(await isolationRepository.isCurrentCitation(shopA, currentCitation), true);
       assert.equal(isolationStatements.some((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)), false);
       isolationStatements.length = 0;
@@ -286,7 +286,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
     await t.test("failed chunk persistence rolls back its version row", async () => {
       await repository.createSource(shopA, { sourceId: "rollback", title: "Rollback", kind: "faq" });
       const draft = createFaqVersion({ workspace: shopA, sourceId: "rollback", versionId: "v1", title: "Rollback", content: "A short answer" });
-      const failingRepository = new PostgresKnowledgeRepository(databasePort(database, true));
+      const failingRepository = new PostgresKnowledgeRepository(databasePort(database, true), NO_ACTOR_FOR_SCHEMA_TESTS);
       await assert.rejects(failingRepository.createVersion(shopA, draft), { code: "INVALID_KNOWLEDGE_INPUT" });
       assert.equal(await repository.getVersion(shopA, "rollback", "v1"), null);
     });

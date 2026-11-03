@@ -1,7 +1,6 @@
 import { ingestKnowledgeVersion } from "../../../composition/knowledge-intake.js";
 import type { KnowledgeIntakeAuditPort } from "../../../contracts/data/knowledge-intake.js";
 import type { KnowledgeObjectStoragePort } from "../../../contracts/data/knowledge-storage.js";
-import { KnowledgeError } from "../../../contracts/data/knowledge.js";
 import type {
   KnowledgeApprovalPort,
   KnowledgeDocumentExtractorPort,
@@ -138,8 +137,14 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(sourceId)
           || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(versionId)) throw new HttpError(404, "VERSION_NOT_FOUND");
         await approval.approve(identity.workspace, sourceId, versionId);
-        const version = await repository.getVersion(identity.workspace, sourceId, versionId);
-        if (!version) throw new KnowledgeError("VERSION_NOT_FOUND");
+        // The approval has committed; a failed read-back must not turn it into an error the client would retry.
+        let version: Awaited<ReturnType<typeof repository.getVersion>> = null;
+        try {
+          version = await repository.getVersion(identity.workspace, sourceId, versionId);
+        } catch {
+          // fall through to the minimal answer below
+        }
+        if (!version) return Response.json({ data: { sourceId, versionId, status: "approved" } }, { headers: noStore });
         return Response.json({ data: versionSummary(version) }, { headers: noStore });
       } catch (error: unknown) {
         return routeErrorResponse(error);

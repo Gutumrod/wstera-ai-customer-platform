@@ -5,6 +5,7 @@ import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "../postgres/knowledge-repository.js";
 import { PostgresKnowledgeIntakeAudit } from "../postgres/knowledge-intake-audit.js";
+import { NO_ACTOR_FOR_SCHEMA_TESTS } from "../postgres/knowledge-repository.js";
 import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
 
 const basePath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
@@ -150,7 +151,7 @@ test("Supabase local migrations stay in sync and enforce workspace membership/st
 
     const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
     const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
-    const audit = new PostgresKnowledgeIntakeAudit(runtimePort(database));
+    const audit = new PostgresKnowledgeIntakeAudit(runtimePort(database), NO_ACTOR_FOR_SCHEMA_TESTS);
     await database.exec("INSERT INTO aicp.knowledge_sources (workspace_id, source_id, kind, title, created_at) " +
       "VALUES ('shop-a', 'source-original', 'pdf', 'Original', now())");
     await database.exec("INSERT INTO aicp.knowledge_versions " +
