@@ -1,6 +1,7 @@
 import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
 import { KnowledgeError, MAX_KNOWLEDGE_QUERY_CHARS } from "../../contracts/data/knowledge.js";
 import type {
+  KnowledgeAudience,
   KnowledgeChunk,
   KnowledgeCitation,
   KnowledgeCitationLocator,
@@ -18,6 +19,7 @@ import type {
   KnowledgeVersionDraft,
   KnowledgeVersionTransition,
   KnowledgeVersionStatus,
+  KnowledgeVisibility,
 } from "../../contracts/data/knowledge.js";
 
 export * from "../../contracts/data/knowledge.js";
@@ -41,6 +43,24 @@ function assertId(value: string): void {
 
 function assertWorkspace(workspace: TrustedWorkspaceContext, workspaceId: string): void {
   if (workspace.workspaceId !== workspaceId) throw new KnowledgeError("CROSS_WORKSPACE_ACCESS_DENIED");
+}
+
+/**
+ * Resolve the stored visibility once, at version creation. An omitted value is
+ * "internal"; an explicit unknown value is a caller bug and is rejected.
+ */
+export function resolveKnowledgeVisibility(value: unknown): KnowledgeVisibility {
+  if (value === undefined) return "internal";
+  if (value === "internal" || value === "customer") return value;
+  throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+}
+
+/**
+ * Resolve who is asking. Fail closed: only an exact "staff" grants internal
+ * access, so a missing, malformed or future value is treated as "customer".
+ */
+export function resolveKnowledgeAudience(value: unknown): KnowledgeAudience {
+  return value === "staff" ? "staff" : "customer";
 }
 
 function validText(value: string, max: number): boolean {
@@ -164,6 +184,7 @@ export function createFaqVersion(input: Readonly<{
   title: string;
   content: string;
   createdAt?: string;
+  visibility?: KnowledgeVisibility;
 }>): KnowledgeVersion {
   assertId(input.sourceId);
   assertId(input.versionId);
@@ -180,6 +201,7 @@ export function createFaqVersion(input: Readonly<{
     title: input.title.trim(),
     content: input.content,
     status: "uploaded",
+    visibility: resolveKnowledgeVisibility(input.visibility),
     chunks: splitIntoChunks(input.workspace.workspaceId, input.sourceId, input.versionId, input.content),
     createdAt,
   });
@@ -193,6 +215,7 @@ export function createImportedKnowledgeVersion(input: Readonly<{
   kind: "pdf" | "csv";
   segments: readonly KnowledgeExtractedSegment[];
   createdAt?: string;
+  visibility?: KnowledgeVisibility;
 }>): KnowledgeVersion {
   assertId(input.sourceId);
   assertId(input.versionId);
@@ -225,6 +248,7 @@ export function createImportedKnowledgeVersion(input: Readonly<{
     title: input.title.trim(),
     content,
     status: "uploaded",
+    visibility: resolveKnowledgeVisibility(input.visibility),
     chunks,
     createdAt,
   });
@@ -244,6 +268,7 @@ export function canonicalizeKnowledgeVersionDraft(
       title: version.title,
       content: version.content,
       createdAt: version.createdAt,
+      visibility: version.visibility,
     })
     : (() => {
       if (version.kind !== "pdf" && version.kind !== "csv") throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
@@ -282,6 +307,7 @@ export function canonicalizeKnowledgeVersionDraft(
         kind: version.kind,
         segments,
         createdAt: version.createdAt,
+        visibility: version.visibility,
       });
     })();
 
@@ -467,19 +493,21 @@ export async function retrieveKnowledge(
   query: KnowledgeRetrievalQuery,
 ): Promise<KnowledgeRetrievalResult> {
   const keys = Object.keys(query as object);
-  if (keys.some((key) => key !== "workspace" && key !== "query" && key !== "limit")) {
+  if (keys.some((key) => key !== "workspace" && key !== "query" && key !== "limit" && key !== "audience")) {
     throw new KnowledgeError("UNTRUSTED_WORKSPACE_SELECTOR");
   }
   if (!validText(query.query, MAX_QUERY_CHARS) || !Number.isInteger(query.limit) || query.limit < 1 || query.limit > MAX_RETRIEVAL_LIMIT) {
     throw new KnowledgeError("INVALID_RETRIEVAL_QUERY");
   }
+  // The caller's typing is not a security boundary: resolve at runtime and fail closed.
+  const audience = resolveKnowledgeAudience((query as { audience?: unknown }).audience);
   const queryAnalysis = analyzeText(query.query);
   const candidates: KnowledgeRetrievalHit[] = [];
   // Longest terms first: past the cap only the weakest Thai bigrams of a long query stop widening the shortlist.
   const retrievableItems = await repository.listRetrievableChunks(query.workspace, {
     terms: [...queryAnalysis.terms].sort((a, b) => b.length - a.length).slice(0, MAX_SHORTLIST_TERMS),
     skuKeys: queryAnalysis.skuCodes.map(compactSku),
-  });
+  }, audience);
   const eligibleItems: Array<Readonly<{
     item: typeof retrievableItems[number];
     terms: ReadonlySet<string>;
@@ -491,6 +519,9 @@ export async function retrieveKnowledge(
     assertWorkspace(query.workspace, item.version.workspaceId);
     assertWorkspace(query.workspace, item.chunk.workspaceId);
     if (item.source.status !== "active" || item.version.status !== "approved") continue;
+    // Defence in depth: the adapter must already filter, and the core drops any
+    // over-returned internal row unless the resolved audience is exactly "staff".
+    if (audience !== "staff" && item.version.visibility !== "customer") continue;
     const analysis = analyzeText(item.chunk.text);
     eligibleItems.push({ item, terms: analysis.terms, skuCodes: analysis.skuCodes });
     for (const code of analysis.skuCodes) {
@@ -537,10 +568,11 @@ export async function areKnowledgeCitationsCurrent(
   repository: KnowledgeRepositoryPort,
   workspace: TrustedWorkspaceContext,
   citations: readonly KnowledgeCitation[],
+  audience: KnowledgeAudience,
 ): Promise<boolean> {
   try {
     if (citations.length === 0) return false;
-    return await repository.areCurrentCitations(workspace, citations) === true;
+    return await repository.areCurrentCitations(workspace, citations, resolveKnowledgeAudience(audience)) === true;
   } catch {
     return false;
   }

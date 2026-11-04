@@ -161,9 +161,11 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
           || Object.keys(body).length !== 1 || !("query" in body) || typeof body.query !== "string") {
           throw new HttpError(400, "INVALID_RETRIEVAL_QUERY");
         }
-        const result = await retrieveKnowledge(repository, { workspace: identity.workspace, query: body.query, limit: 5 });
+        const result = await retrieveKnowledge(repository, {
+          workspace: identity.workspace, query: body.query, limit: 5, audience: "staff",
+        });
         if (result.kind !== "evidence") return Response.json({ data: result }, { headers: noStore });
-        const current = await areKnowledgeCitationsCurrent(repository, identity.workspace, result.hits.map((hit) => hit.citation));
+        const current = await areKnowledgeCitationsCurrent(repository, identity.workspace, result.hits.map((hit) => hit.citation), "staff");
         if (!current) throw new Error("CITATION_REVALIDATION_FAILED");
         return Response.json({ data: {
           kind: "evidence",
