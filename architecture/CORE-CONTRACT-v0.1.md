@@ -12,7 +12,7 @@
 |---|---|
 | D-20261025-01 | repo นี้รับส่วนที่ใช้ซ้ำได้ของผลิตภัณฑ์ LINE เดิม (ดู ADR-007 ใน `architecture/DECISIONS.md`) |
 | D-20261025-09 | คำตอบแบบ extractive + citation เป็นค่าเริ่มต้น เส้น model ปิดด้วย flag; ลำดับ host → Web Chat → durable handoff → G1 acceptance |
-| D-20261025-11 | schema `aicp`, ไม่ใช้ `public`, ไม่ใช้ Docker Desktop; การ apply ลง `wstera-lab` ต้องมี GO แยก |
+| D-20261025-11 | schema `aicp`, ไม่ใช้ `public`, ไม่ใช้ Docker Desktop; การ apply ลง `wstera-lab` ต้องมี GO แยก (เป้าถูก supersede โดย D-20261103-31 แต่กฎ GO ยังใช้) |
 | D-20261102-23 | AICP คือแกนเดียว; Merchant Brain เป็นชั้นผลิตภัณฑ์บนแกนนี้ |
 | D-20261102-24 | เริ่มแบบ instance แยกต่อร้าน และคง SaaS (G3) ไว้ในแผนระยะยาว |
 | D-20261103-29 | สาย LINE ทำแบบ offline ขนานกับ G1 ได้ (fake transport, ไม่มี LINE OA จริง, ไม่มี credential) |
@@ -66,8 +66,8 @@
 
 ```ts
 // ภาพประกอบเท่านั้น
-interface OutboundRecord { workspaceId; connectionId; threadId; text; idempotencyKey; status: "pending"|"sent"|"failed" }
-interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<OutboundRecord,"status"|"workspaceId"|"connectionId">): Promise<OutboundRecord> } // workspaceId/connectionId derive จาก ctx เท่านั้น
+interface OutboundRecord { id; workspaceId; connectionId; threadId; text; idempotencyKey; status: "pending"|"sent"|"failed" }
+interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<OutboundRecord,"status"|"workspaceId"|"connectionId">): Promise<OutboundRecord> } // workspaceId/connectionId derive จาก ctx เท่านั้น · enqueue ต้องโหลด conversation ด้วย ctx (workspaceId + connectionId) และปฏิเสธถ้าไม่ตรง/ไม่มี ก่อนสร้างแถว (เทสต์: enqueue ด้วย thread ของ workspace อื่นต้องถูกปฏิเสธ) · `outboundRecordId` (= `id`) เป็น guard หลักของ `send`; `idempotencyKey` ส่งต่อให้ provider
 ```
 
 **เจ้าของ:** A · **ผู้ใช้:** B (LINE adapter) และ Web Chat
@@ -106,7 +106,7 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 
 **Contract v0.1 ที่เสนอ:**
 - คง state machine 3 สถานะและ event 4 ชนิดตามเดิม (`handoff_requested`, `operator_claimed`, `staff_reply_delivered`, `handoff_released`)
-- กติกาที่ล็อก: pause ต้อง durable; **ไม่มี event ใดที่ผู้เยี่ยมชมหรือลูกค้าปล่อย pause ได้**; resume ต้องผ่าน `StaffAuthorizationPort` ที่ resolve จาก session + membership ที่ active และต้องบังคับที่ **ชั้นเก็บข้อมูล** ไม่ใช่แค่ชั้นเรียก: ปัจจุบัน `assertCanRelease` กับ `repository.append` เป็นสองคำสั่งแยก (`platform/modules/conversation/index.ts:176-177`) และ `withEvent` ตรวจแค่ `assertId(event.staffId)` (`:77-85`) จึงเปิด TOCTOU และเขียน `handoff_released` ด้วย `staffId` ที่ผู้เรียกส่งมาได้ · ข้อกำหนด v0.1: ห้ามรับ `staffId` จากผู้เรียก ให้ derive จาก session และตรวจสิทธิ์ใน transaction/ฟังก์ชันฝั่งฐานข้อมูลเดียวกับการเขียน (แบบเดียวกับ `aicp.approve_knowledge_version` ที่ใช้ `auth.uid()` ใน SECURITY DEFINER) หรือให้ `append` รับ handle ของ transaction เดียวกับการ assert
+- กติกาที่ล็อก: pause ต้อง durable; **ไม่มี event ใดที่ผู้เยี่ยมชมหรือลูกค้าปล่อย pause ได้**; resume ต้องผ่าน `StaffAuthorizationPort` ที่ resolve จาก session + membership ที่ active และต้องบังคับที่ **ชั้นเก็บข้อมูล** ไม่ใช่แค่ชั้นเรียก: ปัจจุบัน `assertCanRelease` กับ `repository.append` เป็นสองคำสั่งแยก (`platform/modules/conversation/index.ts:176-177`) และ `withEvent` ตรวจแค่ `assertId(event.staffId)` (`:77-85`) จึงเปิด TOCTOU และเขียน `handoff_released` ด้วย `staffId` ที่ผู้เรียกส่งมาได้ · ข้อกำหนด v0.1: ห้ามรับ `staffId` จากผู้เรียก ให้ derive จาก session · กฎนี้ใช้กับ **ทุก event ที่มี `staffId`** ไม่ใช่เฉพาะ release: `claimHandoff` (`index.ts:123-138`) และ `recordStaffReplyDelivery` (`index.ts:142-159`) มีรูปแบบ load → assert → append แยกกันเหมือนกัน และตรวจสิทธิ์ใน transaction/ฟังก์ชันฝั่งฐานข้อมูลเดียวกับการเขียน (แบบเดียวกับ `aicp.approve_knowledge_version` ที่ใช้ `auth.uid()` ใน SECURITY DEFINER) หรือให้ `append` รับ handle ของ transaction เดียวกับการ assert
 - การส่งต้อง atomic (compare-and-send หรือ outbox guard ตามข้อ 3.1) กันส่งซ้ำ/ส่งคำตอบ AI ขณะ pause
 - ช่อง "ใครเป็นผู้ส่ง" (ai / staff / customer) และ thread identity ที่ใช้ร่วมกันทั้ง web และ line ให้ใช้ `conversationId` เดียวกันเป็นกุญแจ ไม่ให้มีรูปแบบ id เฉพาะ channel ใน contract · `conversationId` ต้องออกโดย server, สุ่มพอ และผูกกับ `(workspaceId, connectionId, principal)` โดยตรวจซ้ำทุกครั้งที่ load/append (ปัจจุบัน `support-orchestrator.ts:384` โหลดด้วย workspace + conversationId โดยไม่ตรวจเจ้าของ)
 
@@ -126,7 +126,7 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 
 **Contract v0.1 ที่เสนอ (ขึ้นกับคำตัดสินข้อ 4.1):**
 - เพิ่ม `visibility: "internal" | "customer"` ที่ระดับ **version** (หรือ source; ดูข้อ 4.1) ค่าเริ่มต้นเมื่อไม่ระบุ = `internal` (fail closed)
-- `KnowledgeRetrievalQuery` เพิ่มฟิลด์ **audience** (`"customer" | "staff"`) ที่ server กำหนดจาก **ชนิด principal ที่ยืนยันแล้ว** ไม่ใช่จาก `ChannelId` และไม่รับจาก request (console ร้านกับแชตผู้เยี่ยมชมมี `channel = "web"` เหมือนกัน: `platform/modules/tenancy/merchant-identity.ts:46`): session สมาชิกร้านที่ active = `staff` เห็นได้ทั้งสอง; ผู้เยี่ยมชมแบบไม่ระบุตัวและ LINE ลูกค้า = `customer` เห็นเฉพาะ chunk ที่ `visibility = customer` · ฟิลด์นี้ไม่มีค่าเริ่มต้น ถ้าไม่ระบุหรือตัดสินไม่ได้ = `customer` (fail closed) · ต้องมีเทสต์ว่าการปลอม audience จากฝั่งลูกค้าถูกปฏิเสธ
+- `KnowledgeRetrievalQuery` เพิ่มฟิลด์ **audience** (`"customer" | "staff"`) ที่ server กำหนดจาก **ชนิด principal ที่ยืนยันแล้ว** ไม่ใช่จาก `ChannelId` และไม่รับจาก request (console ร้านกับแชตผู้เยี่ยมชมมี `channel = "web"` เหมือนกัน: `platform/modules/tenancy/merchant-identity.ts:46`): session สมาชิกร้านที่ active = `staff` เห็นได้ทั้งสอง; ผู้เยี่ยมชมแบบไม่ระบุตัวและ LINE ลูกค้า = `customer` เห็นเฉพาะ chunk ที่ `visibility = customer` · ฟิลด์นี้ไม่มีค่าเริ่มต้น ถ้าไม่ระบุหรือตัดสินไม่ได้ = `customer` (fail closed) · ที่ชั้นชนิดข้อมูล retrieval ควรรับ principal ที่ยืนยันแล้ว (branded type) หรือ derive audience ภายใน port เอง ไม่ใช่ฟิลด์ที่ caller ใน process เติมได้ (รายละเอียดตัดสินที่ WEBCHAT-001) · ต้องมีเทสต์ว่าการปลอม audience จากฝั่งลูกค้าถูกปฏิเสธ
 - กฎ: การตรวจ freshness ต้องตรวจ visibility ซ้ำด้วย กัน visibility เปลี่ยนระหว่างสร้างคำตอบ · มีสองชื่อในโค้ด: `areCurrentCitations` (`platform/contracts/data/knowledge.ts:183`) และ `EvidenceFreshnessPort.areCurrentAndApproved(workspace, citations)` (`support-orchestrator.ts:30`) ซึ่ง **ไม่มีพารามิเตอร์ audience** และ `KnowledgeCitation` (`knowledge.ts:97-103`) ไม่มีฟิลด์ visibility = ต้องเพิ่ม `audience` ใน port นี้ เป็น breaking delta ที่ต้องรายงานก่อนแก้ (ดู UNVERIFIED ข้อ 8)
 - การเปลี่ยน visibility ของ version ที่ approve แล้ว ถือเป็น event ที่ต้อง audit และต้องไม่ย้อนให้ citation เก่าอ้างได้ · ใช้แบบอย่างเดียวกับ `aicp.revoke_knowledge_version` / `archive_knowledge_source` ใน `supabase/migrations/20261103000200_host_hardening_revoke.sql`
 
@@ -216,7 +216,7 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 
 ## 5. สาย LINE แบบ offline (B0-B1) ใช้อะไรจาก contract ได้บ้าง
 
-ตาม D-20261103-29 (ขนานกับ G1 ได้ ทำได้ก็ทำ ทำไม่ได้ก็รอ): fake transport, ไม่มี LINE OA จริง, ไม่มี credential · B0-B1 เดินต่อได้ทันทีด้วย contract ที่มีอยู่ในโค้ดปัจจุบัน ไม่ต้องรอล็อกเอกสารนี้ · เฉพาะส่วนที่เอกสารนี้ **เพิ่มใหม่** (idempotencyKey/outbox, visibility/audience) ต้องรอ Owner ล็อกก่อนจึงจะใช้เป็นฐาน
+ตาม D-20261103-29 (ขนานกับ G1 ได้ ทำได้ก็ทำ ทำไม่ได้ก็รอ): fake transport, ไม่มี LINE OA จริง, ไม่มี credential · B0-B1 เดินต่อได้ทันทีด้วย contract ที่มีอยู่ในโค้ดปัจจุบัน ไม่ต้องรอล็อกเอกสารนี้ · เฉพาะส่วนที่เอกสารนี้ **เพิ่มใหม่** ทุกข้อที่ระบุว่า "v0.1 ที่เสนอ" ใน §3.1, §3.3, §3.4 (idempotencyKey/outbox, expectedConversationVersion, outboundRecordId, audience/visibility รวม audience ใน EvidenceFreshnessPort, conversationId↔principal) ต้องรอ Owner ล็อกก่อนจึงจะใช้เป็นฐาน · ยกเว้นข้อกำหนดความปลอดภัยของ LINE ใน §3.2 (ไม่เปิดเผยความต่าง error ของ lookup ก่อน HMAC ผ่าน, rate limit ของ lookup) ให้ B0-B1 ทำตามทันที เพราะไม่ต้องใช้ schema ใหม่ · `platform/src/line/ingress.ts:94-97` ปัจจุบันยังไม่ผ่านข้อนี้ (โยน `UNKNOWN_LINE_CONNECTION` ก่อน `verifyLineSignature` และไม่มี rate limit)
 
 **ใช้ได้ (อ่านและ implement ฝั่ง adapter):**
 - `InboundMessage`, `ChannelPort`, `ChannelError`/`ChannelErrorCode` (ข้อ 3.1) เป็น DTO/port ที่ adapter ต้อง normalize เข้าและส่งออก
@@ -254,5 +254,6 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 5. ข้อความ "ไม่มี" (visibility, outbox, Business Configuration, extractive ในโค้ด, ตาราง conversation, ที่เก็บ channel secret) มาจากการค้นข้อความใน `platform/` และ `supabase/` ไม่ใช่การพิสูจน์ว่าไม่มีในทุกที่
 6. `platform/modules/*/README.md` อื่นและ `platform/src/core` ไม่ได้เปิดอ่านครบ สถานะ "partial/มีแล้ว" ของ module อ้างจากฟังก์ชันที่เปิดดูเท่านั้น
 7. ความเข้ากันได้ของโค้ดปัจจุบันกับ instance แยกต่อร้านและ SaaS พร้อมกัน ยังไม่เคยทดลอง
+8b. การผูก `conversationId` กับ principal (ข้อ 3.3) ต้องเพิ่ม principal binding ใน `ConversationRepositoryPort` และ `ConversationSnapshot` (`platform/contracts/data/conversation.ts:6-16, 26-33` ปัจจุบันไม่มี principal) = breaking delta ที่ต้องรายงานก่อนแก้
 8. ข้อเสนอการเพิ่ม audience ใน `KnowledgeRetrievalQuery` และใน `EvidenceFreshnessPort` ยังไม่ได้ตรวจว่า breaking หรือ additive กับผู้เรียกทุกราย
 9. ระดับ readiness: ไม่มีการรันเทสต์ในรอบนี้ ไม่มีการยกระดับเกิน BUILD_PASS
