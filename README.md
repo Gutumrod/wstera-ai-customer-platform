@@ -54,7 +54,7 @@ No secrets, external services or paid APIs are required for baseline checks.
 
 ## Database operator note
 
-Product knowledge and workspace objects live in schema `aicp`; the product migrator is `aicp_migrator` and the application runtime role is `knowledge_runtime`. The product migrations leave the `public` schema empty. Local Supabase exposes `aicp` through `supabase/config.toml`; for any separately approved hosted project, an operator must also add `aicp` to the project's exposed API schemas in the Supabase dashboard before the membership API can use it. Hosted database access and migrations are outside this prototype's current approval.
+Product knowledge and workspace objects live in schema `aicp`; the product migrator is `aicp_migrator` and the application runtime role is `knowledge_runtime`. The product migrations leave the `public` schema empty. Local Supabase exposes `aicp` through `supabase/config.toml`; for any separately approved hosted project, an operator must also add `aicp` to the project's exposed API schemas in the Supabase dashboard before the membership API can use it. Hosted database access and migrations are outside this prototype's current approval. Before any approved apply of `20261103000100_host_hardening.sql`, run the read-only `scripts/check-web-connection-duplicates.sql`; the migration's unique web-connection index fails as a whole if it returns rows.
 
 ## Lab merchant console (synthetic data only)
 

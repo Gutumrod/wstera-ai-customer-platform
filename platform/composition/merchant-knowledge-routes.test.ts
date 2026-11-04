@@ -253,3 +253,20 @@ test("the rate limiter reopens after its window and keeps its key table bounded"
   assert.equal(limiter.retryAfterSeconds("a"), 0, "the evicted key starts over instead of the table growing");
   assert.equal(limiter.retryAfterSeconds("c"), 1, "live keys keep their count");
 });
+
+test("F6: an approval that committed answers 200 even when the read-back fails", async () => {
+  const version = await uploadFaq();
+  const failingReadBack = createKnowledgeRoutes(async () => {
+    const host = await harness.requireHost();
+    return { ...host, repository: new Proxy(host.repository, {
+      get: (target, property, receiver) => property === "getVersion"
+        ? async () => { throw new Error("read-back failed"); }
+        : Reflect.get(target, property, receiver),
+    }) };
+  });
+  const response = await failingReadBack.approveVersion(approveRequest(), params(version.sourceId, version.versionId));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), { data: { sourceId: version.sourceId, versionId: version.versionId, status: "approved" } });
+  assert.deepEqual(await versionRow(version.versionId), { status: "approved", approved_by: OWNER_A });
+});

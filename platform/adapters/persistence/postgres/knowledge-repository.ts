@@ -344,9 +344,17 @@ function mapDatabaseError(error: unknown): never {
   throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
 }
 
-/** Re-checks the verified actor inside the caller's write transaction. No actor means no signed-in user exists, as in the base-schema tests. */
-export async function assertActiveWriter(query: PostgresQueryPort, workspace: TrustedWorkspaceContext, actorUserId: string | undefined): Promise<void> {
-  if (actorUserId === undefined) return;
+/**
+ * Explicit opt-out for base-schema tests that run without a signed-in user. Production wiring must pass a
+ * verified user id; a missing or empty actor fails closed.
+ */
+export const NO_ACTOR_FOR_SCHEMA_TESTS = Symbol("NO_ACTOR_FOR_SCHEMA_TESTS");
+export type KnowledgeWriterActor = string | typeof NO_ACTOR_FOR_SCHEMA_TESTS;
+
+/** Re-checks the verified actor inside the caller's write transaction. */
+export async function assertActiveWriter(query: PostgresQueryPort, workspace: TrustedWorkspaceContext, actorUserId: KnowledgeWriterActor): Promise<void> {
+  if (actorUserId === NO_ACTOR_FOR_SCHEMA_TESTS) return;
+  if (typeof actorUserId !== "string" || actorUserId.length === 0) throw new KnowledgeError("MEMBERSHIP_REQUIRED");
   try {
     await query.query("SELECT aicp.assert_active_knowledge_writer($1, $2)", [workspace.workspaceId, actorUserId]);
   } catch (error) {
@@ -362,7 +370,7 @@ export async function assertActiveWriter(query: PostgresQueryPort, workspace: Tr
  * approval columns); the merchant host approves through KnowledgeApprovalPort instead.
  */
 export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
-  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId?: string) {}
+  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId: KnowledgeWriterActor) {}
 
   private scopedWrite<T>(workspace: TrustedWorkspaceContext, operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
     return this.scoped(workspace, async (query) => {

@@ -1,6 +1,6 @@
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import type { KnowledgeQuarantineRecord, KnowledgeIntakeAuditPort } from "../../../contracts/data/knowledge-intake.js";
-import { assertActiveWriter, type PostgresDatabasePort, type PostgresRow } from "./knowledge-repository.js";
+import { assertActiveWriter, type KnowledgeWriterActor, type PostgresDatabasePort, type PostgresRow } from "./knowledge-repository.js";
 
 type QuarantineRow = PostgresRow & {
   workspace_id: string;
@@ -39,7 +39,7 @@ function mapRecord(row: QuarantineRow): KnowledgeQuarantineRecord {
 
 /** Persists rejected uploads separately from retrievable knowledge versions. */
 export class PostgresKnowledgeIntakeAudit implements KnowledgeIntakeAuditPort {
-  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId?: string) {}
+  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId: KnowledgeWriterActor) {}
 
   async recordOriginal(
     workspace: TrustedWorkspaceContext,

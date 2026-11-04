@@ -68,7 +68,7 @@ test("M1: approval takes the approver from auth.uid() and checks ownership in SQ
   await assert.rejects(approveAs(OWNER_A, "shop-a", sourceId, "second"), message("APPROVED_VERSION_EXISTS"));
 
   const archived = await indexedVersion();
-  await repository.archiveSource(shopA, archived.sourceId);
+  await asAuthenticated(database, OWNER_A, (query) => query("SELECT aicp.archive_knowledge_source($1, $2)", ["shop-a", archived.sourceId]));
   await assert.rejects(approveAs(OWNER_A, "shop-a", archived.sourceId, archived.versionId), message("APPROVAL_NOT_ELIGIBLE"));
 });
 

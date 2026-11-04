@@ -79,9 +79,14 @@ export function authenticatedRpcClient(database: PGlite, userId: string | null):
     schema: () => ({
       async rpc(name: string, args: Record<string, unknown>) {
         try {
+          const parameters = name === "revoke_knowledge_version"
+            ? [args.target_workspace_id, args.target_source_id, args.target_version_id, args.reason]
+            : name === "archive_knowledge_source"
+              ? [args.target_workspace_id, args.target_source_id]
+              : [args.target_workspace_id, args.target_source_id, args.target_version_id];
           await asAuthenticated(database, userId, (query) => query(
-            `SELECT aicp.${name}($1, $2, $3)`,
-            [args.target_workspace_id, args.target_source_id, args.target_version_id],
+            `SELECT aicp.${name}(${parameters.map((_, index) => `$${index + 1}`).join(", ")})`,
+            parameters,
           ));
           return { data: null, error: null };
         } catch (error: unknown) {
