@@ -1,15 +1,20 @@
 # Web AI Chat Widget
 
-**Status:** FOLDER CONTRACT ONLY - not implemented. **Planned phase:** Phase 1.
+**Status:** PARTIAL IMPLEMENTATION (WEBCHAT-001 Chunk 2; awaiting Chunk 1 merge for live SupportOrchestrator wiring). **Planned phase:** Phase 1.
 
 ## Responsibility
 
-Customer chat iframe/loader, safe origin binding, streaming presentation and accessibility.
+Customer web chat UI rendering, safe origin binding, signed session management, client/session rate limiting, and extractive source citation display.
 
-## Dependency and security rule
+## Implemented in Chunk 2
 
-Use shared engine through host/API contracts. Do not embed model keys or merchant credentials in browser.
+- `render-chat-page.ts`: Accessible Thai chat UI renderer (`renderChatPage({ connectionId, nonce })`) with keyboard navigation, ARIA live region, citation chips (title, version, position), and handoff action button ("ขอคุยกับพนักงาน"). Dynamic DOM insertion relies strictly on `textContent` (no `innerHTML`).
+- `platform/composition/web-chat-session.ts`: HMAC-SHA256 signed HttpOnly SameSite=Strict session cookie bound to resolved connection ID with random server-generated `conversationId` (`crypto.randomUUID()`) and constant-time signature verification (`timingSafeEqual`).
+- `platform/composition/web-chat-routes.ts`: Standard `Request`/`Response` route handlers (`page`, `message`) enforcing strict verification ordering: client rate limit (429) -> session verification (401) -> server-side connection resolution (404) -> origin validation (403) -> Content-Type check (415) -> session rate limit (429) -> bounded body parsing (413/400) -> connection matching (401).
+- `platform/adapters/answers/extractive/extractive-answer-port.ts`: Default `GroundedAnswerPort` returning verbatim excerpt text from approved evidence chunks (up to 2 items, bounded total character limit). Evidence text is strictly handled as untrusted data.
+- `platform/adapters/answers/answer-port-factory.ts`: Closed-by-default answer port factory; `createModelPort` is never invoked unless `modelEnabled === true`.
 
-Do not add vendor SDK calls to core modules. Follow [the master brief](../../../BRIEF.md), [repository structure](../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
+## Pending
 
-No runtime code exists in this folder until a separately reviewed implementation task.
+- End-to-end wiring to live `SupportOrchestrator` after Chunk 1 (`audience` support in orchestrator) merges.
+- Cross-origin iframe embed packaging (Phase 1 currently enforces `frame-ancestors 'none'`).
