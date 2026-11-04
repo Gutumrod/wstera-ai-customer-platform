@@ -75,7 +75,7 @@ test("knowledge intake is workspace-scoped, idempotent, and exposes citation-rea
   assert.equal((await deps.repository.listSources(shopB)).length, 0);
 
   await deps.repository.approveVersion(shopA, first.sourceId, first.versionId, { approvedBy: "synthetic-owner" });
-  const result = await retrieveKnowledge(deps.repository, { workspace: shopA, query: "คืนสินค้าได้กี่วัน", limit: 3 });
+  const result = await retrieveKnowledge(deps.repository, { workspace: shopA, query: "คืนสินค้าได้กี่วัน", limit: 3, audience: "staff" });
   assert.equal(result.kind, "evidence");
   if (result.kind === "evidence") {
     assert.equal(result.hits[0]?.citation.workspaceId, "shop-a");
@@ -167,7 +167,7 @@ test("malformed documents are retained in workspace-scoped quarantine and never 
   assert.equal(deps.quarantineRecords.length, 1);
   assert.equal((await deps.repository.listSources(shopA)).length, 0);
   assert.equal((await deps.intakeAudit.listQuarantine(shopB)).length, 0);
-  const result = await retrieveKnowledge(deps.repository, { workspace: shopA, query: "broken pdf", limit: 5 });
+  const result = await retrieveKnowledge(deps.repository, { workspace: shopA, query: "broken pdf", limit: 5, audience: "staff" });
   assert.equal(result.kind, "no_answer");
 });
 
