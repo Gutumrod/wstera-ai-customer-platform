@@ -1,12 +1,12 @@
 # Core Contract v0.1 (ร่าง รอผู้ตรวจอิสระ; Owner ตัดสิน 2 ข้อใน §4 แล้ว)
 
-**สถานะ:** DRAFT · docs-only · Owner ตัดสินข้อ 4.1 และ 4.2 แล้ว (D-20261104-06, 4 พ.ย. 2026) แต่ยังไม่มีผู้ตรวจอิสระ และ Owner ยังไม่ล็อกทั้งฉบับ · ระดับที่อ้างได้สูงสุด **BUILD_PASS** (เอกสารนี้ไม่ได้รันเทสต์ใดเพิ่ม) · ฐานที่ตรวจ: `origin/main` = `7de2649`
+**สถานะ:** DRAFT · docs-only · Owner ตัดสินข้อ 4.1 และ 4.2 แล้ว (D-20261104-06, 4 พ.ย. 2026) แต่ยังไม่มีผู้ตรวจอิสระ และ Owner ยังไม่ล็อกทั้งฉบับ · ระดับที่อ้างได้สูงสุด **BUILD_PASS** (เอกสารนี้ไม่ได้รันเทสต์ใดเพิ่ม) · ฐานที่ตรวจ: `origin/main` = `87906b4`
 
 เอกสารนี้ยังไม่ใช่ contract ที่ล็อก ข้อเสนอใน "contract v0.1 ที่เสนอ" ของแต่ละข้อจะมีผลเมื่อ Owner ล็อกเท่านั้น ตัวอย่าง TypeScript เป็นภาพประกอบ ไม่ใช่โค้ดที่จะ commit ตามไฟล์นี้ repo นี้ยัง public: ห้ามใส่ secret, project ref จริง, กฎร้านจริง หรือข้อมูลลูกค้า
 
 ## 0. ที่มาและคำตัดสินที่อ้าง
 
-อ้างได้เฉพาะรายการนี้ (ผู้เขียนไม่ได้เปิด DECISIONS-REGISTER ใน vault เอง เลขที่และเนื้อหามาจาก repo, `AGENTS.md`, แผน 3 สาย และ handoff ที่ยังเป็น draft PR #27 จึงถือเป็น **UNVERIFIED** ในแง่ว่ายังไม่ได้เทียบกับทะเบียนต้นฉบับ):
+อ้างได้เฉพาะรายการนี้ (ผู้เขียนไม่ได้เปิด DECISIONS-REGISTER ใน vault เอง (ยกเว้น D-20261104-06 ที่ผู้คุมเขียนลงทะเบียนเองเมื่อ 4 พ.ย.) เลขที่และเนื้อหามาจาก repo, `AGENTS.md`, แผน 3 สาย และ handoff ที่ยังเป็น draft PR #27 จึงถือเป็น **UNVERIFIED** ในแง่ว่ายังไม่ได้เทียบกับทะเบียนต้นฉบับ):
 
 | เลข | ใจความที่ใช้ในเอกสารนี้ |
 |---|---|
@@ -57,15 +57,17 @@
 - outbound/outbox: ค้นคำว่า `outbox` ใน `platform/` และ `supabase/` (ไฟล์ .ts/.sql) ไม่พบ จึงสรุปว่ายังไม่มี (ผลค้นหา ไม่ใช่การรับรอง)
 
 **Contract v0.1 ที่เสนอ:**
-- คง `InboundMessage` เป็น DTO ที่ "ไม่ให้สิทธิ์ใด ๆ" (ตามคอมเมนต์ `channels/index.ts:2-3`) ผู้ใช้ต้อง resolve workspace จาก `connectionId` ผ่าน contract ข้อ 3.2 เท่านั้น
+- คง `InboundMessage` เป็น DTO ที่ "ไม่ให้สิทธิ์ใด ๆ" (ตามคอมเมนต์ `channels/index.ts:2-3`) ผู้ใช้ต้อง resolve workspace ผ่าน contract ข้อ 3.2 เท่านั้น โดยคีย์ tenancy คือ **(`connectionId`, `channel`)** (schema: `PRIMARY KEY (workspace_id, connection_id)` + `UNIQUE (connection_id, channel)` ที่ `20261023000100_g1_workspace_host.sql:27-28`) ห้าม resolver ใดค้นด้วย `connectionId` เดี่ยว
 - เพิ่มแนวคิด **outbound record** แยกจาก `ChannelPort.send`: ก่อนส่งทุกครั้งต้องมีแถวบันทึก (outbox) ที่มี idempotency key เพื่อให้ retry/ส่งซ้ำไม่ส่งสองครั้ง (ที่มาของข้อกำหนด: HANDOFF-002 "Duplicate send attempts produce exactly one outbound record")
+- `enqueue` ต้องรับ `expectedConversationVersion` (guard token) และ outbox worker ต้องตรวจสถานะ conversation ใน transaction เดียวกับการ mark `sent` เพื่อให้กฎ "ห้ามส่งคำตอบ AI ขณะ pause" (ข้อ 3.3) ทำได้จริง
 - `ChannelPort.send` ต้องรับ `idempotencyKey` และ reject ด้วย `ChannelError` ที่ `retryable` ถูกต้อง; ข้อความ error จาก provider ห้ามหลุดออกมา (ตามคอมเมนต์ `channels/index.ts:39`)
-- กฎ inbound: dedupe ระดับ `(connectionId, externalMessageId)` เป็น at-least-once + side effect ต้อง idempotent (ตาม semantics ของ lease ใน `ingress.ts` ที่มีอยู่แล้ว)
+- เฉพาะ outbox worker/dispatcher เท่านั้นที่ถือ `ChannelPort` ได้ ผู้เรียกอื่นห้ามเรียก `send` ตรง และ `send` ต้องรับ `outboundRecordId` ที่มีอยู่จริง การเรียกโดยไม่มี record ต้องถูกปฏิเสธ (มีเทสต์)
+- กฎ inbound: dedupe ระดับ `(workspaceId, connectionId, externalMessageId)` (คง `workspaceId` ตาม `LineEventKey` ที่ `platform/src/line/ingress.ts:32-36`) เป็น at-least-once + side effect ต้อง idempotent (ตาม semantics ของ lease ใน `ingress.ts` ที่มีอยู่แล้ว)
 
 ```ts
 // ภาพประกอบเท่านั้น
 interface OutboundRecord { workspaceId; connectionId; threadId; text; idempotencyKey; status: "pending"|"sent"|"failed" }
-interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<OutboundRecord,"status">): Promise<OutboundRecord> }
+interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<OutboundRecord,"status"|"workspaceId"|"connectionId">): Promise<OutboundRecord> } // workspaceId/connectionId derive จาก ctx เท่านั้น
 ```
 
 **เจ้าของ:** A · **ผู้ใช้:** B (LINE adapter) และ Web Chat
@@ -80,11 +82,11 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 - `platform/contracts/tenancy/merchant.ts:12` `export interface MerchantMembershipRepositoryPort {`
 - ตาราง `supabase/migrations/20261023000100_g1_workspace_host.sql:24` `  channel text NOT NULL CHECK (channel IN ('web', 'line')),` (ตาราง `workspace_connections`, `UNIQUE (connection_id, channel)`)
 - `supabase/migrations/20261103000100_host_hardening.sql:100` `  USING (channel = 'web' AND aicp.is_active_workspace_member(workspace_id));` นโยบายอ่านจำกัดเฉพาะ `web` (M3 ตาม handoff)
-- LINE ฝั่งเดิมเก็บ secret ใน `platform/src/line/ingress.ts:13` `  channelSecret: string;` ผ่าน `LineConnectionLookup` (ingress.ts:21) ที่ inject เข้ามา; ที่เก็บ channel secret แบบ durable ยังไม่มีใน schema (ค้นไม่พบคอลัมน์/ตาราง secret ใน 3 migration)
+- LINE ฝั่งเดิมเก็บ secret ใน `platform/src/line/ingress.ts:13` `  channelSecret: string;` ผ่าน `LineConnectionLookup` (ingress.ts:21) ที่ inject เข้ามา; ที่เก็บ channel secret แบบ durable ยังไม่มีใน schema (ค้นไม่พบคอลัมน์/ตาราง secret ใน 4 migration ณ `87906b4` (รวม `20261103000200_host_hardening_revoke.sql`))
 
 **Contract v0.1 ที่เสนอ:**
 - `TrustedWorkspaceContext` คงรูปเดิม เป็นค่าเดียวที่ module ในแกนกลางรับ
-- connection เป็น "ของ" workspace หนึ่งเดียว resolve ฝั่ง server; ฝั่ง LINE resolve จาก `destination` ที่ผ่านการตรวจลายเซ็นแล้วเท่านั้น (ไม่ใช่ก่อน)
+- connection เป็น "ของ" workspace หนึ่งเดียว resolve ฝั่ง server; ฝั่ง LINE: `destination` ใช้เป็น lookup key เพื่อหา channel secret ได้ก่อนตรวจลายเซ็น แต่ workspace จะ **เชื่อถือได้หลัง HMAC ผ่านเท่านั้น** และห้าม emit event หรือเปิดเผยความต่างของ error ของ lookup ก่อนผ่าน · lookup ก่อนตรวจต้องมี rate limit
 - **ที่เก็บ channel secret ต้องแยกจากตารางที่ผู้ใช้ authenticated อ่านได้** และไม่อยู่ในคอลัมน์ธรรมดาของ `workspace_connections`; ตำแหน่งจริง (vault/secret store/ตารางจำกัดสิทธิ์) เป็นเรื่องของสาย A ตัดสินร่วมกับ Owner ภายหลัง
 - สาย B ขอ migration ผ่าน contract นี้ ไม่เขียนเอง (ข้อ 9)
 
@@ -100,13 +102,13 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 - `platform/contracts/data/conversation.ts:24` คอมเมนต์ระบุว่า durable replay protection ต้องมี "adapter-owned unique delivery ledger"
 - `platform/modules/conversation/index.ts:90-91` `export function canSendAiReply(conversation: ConversationSnapshot): boolean {` / `  return conversation.status === "ai_active";`
 - `SupportOrchestrator` ตรวจสถานะสองครั้ง: `support-orchestrator.ts:269` และ `:370` `if (... .snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });`
-- ที่เก็บ durable: ไม่พบตาราง conversation ใน `supabase/migrations/*.sql` (ค้น `create table` แล้วมีเฉพาะ knowledge, workspace, membership, connection, intake) เทียบกับ `tasks/TASK-HANDOFF-002-DURABLE-HANDOFF.md` ที่ยังเป็น PLANNED; `platform/modules/handoff/README.md` อ้างใน task ว่า PARTIAL (ผู้เขียนไม่ได้เปิดไฟล์นั้นเอง = UNVERIFIED)
+- ที่เก็บ durable: ไม่พบตาราง conversation ใน `supabase/migrations/*.sql` (ค้น `create table` แล้วมีเฉพาะ knowledge, workspace, membership, connection, `knowledge_quarantine_records`, `knowledge_original_objects`) เทียบกับ `tasks/TASK-HANDOFF-002-DURABLE-HANDOFF.md` ที่ยังเป็น PLANNED; `platform/modules/handoff/README.md` อ้างใน task ว่า PARTIAL (ผู้เขียนไม่ได้เปิดไฟล์นั้นเอง = UNVERIFIED)
 
 **Contract v0.1 ที่เสนอ:**
 - คง state machine 3 สถานะและ event 4 ชนิดตามเดิม (`handoff_requested`, `operator_claimed`, `staff_reply_delivered`, `handoff_released`)
-- กติกาที่ล็อก: pause ต้อง durable; **ไม่มี event ใดที่ผู้เยี่ยมชมหรือลูกค้าปล่อย pause ได้**; resume ต้องผ่าน `StaffAuthorizationPort` ที่ resolve จาก session + membership ที่ active ใน transaction เดียวกับการเขียน
+- กติกาที่ล็อก: pause ต้อง durable; **ไม่มี event ใดที่ผู้เยี่ยมชมหรือลูกค้าปล่อย pause ได้**; resume ต้องผ่าน `StaffAuthorizationPort` ที่ resolve จาก session + membership ที่ active และต้องบังคับที่ **ชั้นเก็บข้อมูล** ไม่ใช่แค่ชั้นเรียก: ปัจจุบัน `assertCanRelease` กับ `repository.append` เป็นสองคำสั่งแยก (`platform/modules/conversation/index.ts:176-177`) และ `withEvent` ตรวจแค่ `assertId(event.staffId)` (`:77-85`) จึงเปิด TOCTOU และเขียน `handoff_released` ด้วย `staffId` ที่ผู้เรียกส่งมาได้ · ข้อกำหนด v0.1: ห้ามรับ `staffId` จากผู้เรียก ให้ derive จาก session และตรวจสิทธิ์ใน transaction/ฟังก์ชันฝั่งฐานข้อมูลเดียวกับการเขียน (แบบเดียวกับ `aicp.approve_knowledge_version` ที่ใช้ `auth.uid()` ใน SECURITY DEFINER) หรือให้ `append` รับ handle ของ transaction เดียวกับการ assert
 - การส่งต้อง atomic (compare-and-send หรือ outbox guard ตามข้อ 3.1) กันส่งซ้ำ/ส่งคำตอบ AI ขณะ pause
-- ช่อง "ใครเป็นผู้ส่ง" (ai / staff / customer) และ thread identity ที่ใช้ร่วมกันทั้ง web และ line ให้ใช้ `conversationId` เดียวกันเป็นกุญแจ ไม่ให้มีรูปแบบ id เฉพาะ channel ใน contract
+- ช่อง "ใครเป็นผู้ส่ง" (ai / staff / customer) และ thread identity ที่ใช้ร่วมกันทั้ง web และ line ให้ใช้ `conversationId` เดียวกันเป็นกุญแจ ไม่ให้มีรูปแบบ id เฉพาะ channel ใน contract · `conversationId` ต้องออกโดย server, สุ่มพอ และผูกกับ `(workspaceId, connectionId, principal)` โดยตรวจซ้ำทุกครั้งที่ load/append (ปัจจุบัน `support-orchestrator.ts:384` โหลดด้วย workspace + conversationId โดยไม่ตรวจเจ้าของ)
 
 **เจ้าของ:** A (งาน HANDOFF-002) · **ผู้ใช้:** B
 
@@ -124,9 +126,9 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 
 **Contract v0.1 ที่เสนอ (ขึ้นกับคำตัดสินข้อ 4.1):**
 - เพิ่ม `visibility: "internal" | "customer"` ที่ระดับ **version** (หรือ source; ดูข้อ 4.1) ค่าเริ่มต้นเมื่อไม่ระบุ = `internal` (fail closed)
-- `KnowledgeRetrievalQuery` เพิ่มฟิลด์ **audience** (`"customer" | "staff"`) ที่ server กำหนดจากช่องทางที่ถาม ไม่รับจาก request: คำถามจากผู้เยี่ยมชม/LINE ลูกค้า = `customer` เห็นเฉพาะ chunk ที่ `visibility = customer`; หน้า console ของร้าน = `staff` เห็นได้ทั้งสอง
-- กฎ: การตรวจ freshness (`areCurrentCitations`) ต้องตรวจ visibility ซ้ำด้วย กัน visibility เปลี่ยนระหว่างสร้างคำตอบ
-- การเปลี่ยน visibility ของ version ที่ approve แล้ว ถือเป็น event ที่ต้อง audit และต้องไม่ย้อนให้ citation เก่าอ้างได้
+- `KnowledgeRetrievalQuery` เพิ่มฟิลด์ **audience** (`"customer" | "staff"`) ที่ server กำหนดจาก **ชนิด principal ที่ยืนยันแล้ว** ไม่ใช่จาก `ChannelId` และไม่รับจาก request (console ร้านกับแชตผู้เยี่ยมชมมี `channel = "web"` เหมือนกัน: `platform/modules/tenancy/merchant-identity.ts:46`): session สมาชิกร้านที่ active = `staff` เห็นได้ทั้งสอง; ผู้เยี่ยมชมแบบไม่ระบุตัวและ LINE ลูกค้า = `customer` เห็นเฉพาะ chunk ที่ `visibility = customer` · ฟิลด์นี้ไม่มีค่าเริ่มต้น ถ้าไม่ระบุหรือตัดสินไม่ได้ = `customer` (fail closed) · ต้องมีเทสต์ว่าการปลอม audience จากฝั่งลูกค้าถูกปฏิเสธ
+- กฎ: การตรวจ freshness ต้องตรวจ visibility ซ้ำด้วย กัน visibility เปลี่ยนระหว่างสร้างคำตอบ · มีสองชื่อในโค้ด: `areCurrentCitations` (`platform/contracts/data/knowledge.ts:183`) และ `EvidenceFreshnessPort.areCurrentAndApproved(workspace, citations)` (`support-orchestrator.ts:30`) ซึ่ง **ไม่มีพารามิเตอร์ audience** และ `KnowledgeCitation` (`knowledge.ts:97-103`) ไม่มีฟิลด์ visibility = ต้องเพิ่ม `audience` ใน port นี้ เป็น breaking delta ที่ต้องรายงานก่อนแก้ (ดู UNVERIFIED ข้อ 8)
+- การเปลี่ยน visibility ของ version ที่ approve แล้ว ถือเป็น event ที่ต้อง audit และต้องไม่ย้อนให้ citation เก่าอ้างได้ · ใช้แบบอย่างเดียวกับ `aicp.revoke_knowledge_version` / `archive_knowledge_source` ใน `supabase/migrations/20261103000200_host_hardening_revoke.sql`
 
 ```ts
 // ภาพประกอบเท่านั้น
@@ -214,7 +216,7 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 
 ## 5. สาย LINE แบบ offline (B0-B1) ใช้อะไรจาก contract ได้บ้าง
 
-ตาม D-20261103-29: fake transport, ไม่มี LINE OA จริง, ไม่มี credential, หลัง contract นี้ถูกล็อก
+ตาม D-20261103-29 (ขนานกับ G1 ได้ ทำได้ก็ทำ ทำไม่ได้ก็รอ): fake transport, ไม่มี LINE OA จริง, ไม่มี credential · B0-B1 เดินต่อได้ทันทีด้วย contract ที่มีอยู่ในโค้ดปัจจุบัน ไม่ต้องรอล็อกเอกสารนี้ · เฉพาะส่วนที่เอกสารนี้ **เพิ่มใหม่** (idempotencyKey/outbox, visibility/audience) ต้องรอ Owner ล็อกก่อนจึงจะใช้เป็นฐาน
 
 **ใช้ได้ (อ่านและ implement ฝั่ง adapter):**
 - `InboundMessage`, `ChannelPort`, `ChannelError`/`ChannelErrorCode` (ข้อ 3.1) เป็น DTO/port ที่ adapter ต้อง normalize เข้าและส่งออก
@@ -240,7 +242,7 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 2. **module และ contract ที่ใช้ร่วม** (`platform/contracts/*`, `platform/modules/knowledge`, `platform/modules/ai-engine`, `platform/modules/conversation`) แก้ได้ผ่าน PR ที่ระบุ "Core Contract v0.1" (หรือเวอร์ชันที่ล็อก) และข้อที่แก้ในคำอธิบาย PR
 3. การเปลี่ยนที่ breaking ต่อ port ที่ล็อก ต้องหยุดและรายงาน delta ก่อนแก้ (ตรงกับ stop condition ใน WEBCHAT-001 / HANDOFF-002) และปรับเลขเวอร์ชัน contract (v0.2) ไม่แก้ v0.1 ย้อนหลัง
 4. เปลี่ยนแบบ additive (ฟิลด์ optional ที่มีค่าเริ่มต้น fail closed) ยังต้องผ่าน PR + reviewer
-5. ทุก PR: เทสต์สดแนบ, security impact, cost impact, ระดับไม่เกิน BUILD_PASS, ไม่ self-merge, worktree อยู่ใน `.worktrees/<task>/` (`AGENTS.md`)
+5. ทุก PR ที่เปลี่ยน contract: เทสต์เชิงลบขั้นต่ำตาม `AGENTS.md` (visibility bypass, audience spoof, cross-workspace citation, duplicate outbound, ลูกค้าปล่อย pause, timeout ก่อน handoff, malicious input) · เทสต์สดแนบ, security impact, cost impact, ระดับไม่เกิน BUILD_PASS, ไม่ self-merge, worktree อยู่ใน `.worktrees/<task>/` (`AGENTS.md`)
 6. การ apply migration ลง Supabase และการแตะระบบจริงต้องมี Owner GO ของงานนั้น เอกสารนี้ไม่ให้สิทธิ์ดังกล่าว
 
 ## 7. รายการ UNVERIFIED
@@ -252,5 +254,5 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 5. ข้อความ "ไม่มี" (visibility, outbox, Business Configuration, extractive ในโค้ด, ตาราง conversation, ที่เก็บ channel secret) มาจากการค้นข้อความใน `platform/` และ `supabase/` ไม่ใช่การพิสูจน์ว่าไม่มีในทุกที่
 6. `platform/modules/*/README.md` อื่นและ `platform/src/core` ไม่ได้เปิดอ่านครบ สถานะ "partial/มีแล้ว" ของ module อ้างจากฟังก์ชันที่เปิดดูเท่านั้น
 7. ความเข้ากันได้ของโค้ดปัจจุบันกับ instance แยกต่อร้านและ SaaS พร้อมกัน ยังไม่เคยทดลอง
-8. ข้อเสนอการเพิ่ม audience ใน `KnowledgeRetrievalQuery` ยังไม่ได้ตรวจว่า breaking หรือ additive กับผู้เรียกทุกราย
+8. ข้อเสนอการเพิ่ม audience ใน `KnowledgeRetrievalQuery` และใน `EvidenceFreshnessPort` ยังไม่ได้ตรวจว่า breaking หรือ additive กับผู้เรียกทุกราย
 9. ระดับ readiness: ไม่มีการรันเทสต์ในรอบนี้ ไม่มีการยกระดับเกิน BUILD_PASS
