@@ -186,11 +186,14 @@ async function readBoundedBody(
   }
 }
 
+const SAME_ORIGIN_PATH = /^\/(?![/\\])[^\s\u0000-\u001F\\]*$/u;
+
 export function createWebChatRoutes(deps: WebChatRoutesDeps) {
   if (
     typeof deps.messageEndpoint !== "string" ||
     deps.messageEndpoint.trim().length === 0 ||
-    !deps.messageEndpoint.startsWith("/")
+    // Same-origin path only: "//host" and "/\host" read as another origin; spaces and control chars are never valid.
+    !SAME_ORIGIN_PATH.test(deps.messageEndpoint)
   ) {
     throw new Error(`messageEndpoint must be a non-empty absolute path starting with "/": got ${JSON.stringify(deps.messageEndpoint)}`);
   }
