@@ -1,6 +1,6 @@
-# Core Contract v0.1 (ร่าง รอ Owner ตรวจและล็อก)
+# Core Contract v0.1 (ร่าง รอผู้ตรวจอิสระ; Owner ตัดสิน 2 ข้อใน §4 แล้ว)
 
-**สถานะ:** DRAFT · docs-only · ยังไม่มีผู้ตรวจ ยังไม่ได้รับอนุมัติ · ระดับที่อ้างได้สูงสุด **BUILD_PASS** (เอกสารนี้ไม่ได้รันเทสต์ใดเพิ่ม) · ฐานที่ตรวจ: `origin/main` = `7de2649`
+**สถานะ:** DRAFT · docs-only · Owner ตัดสินข้อ 4.1 และ 4.2 แล้ว (D-20261104-06, 4 พ.ย. 2026) แต่ยังไม่มีผู้ตรวจอิสระ และ Owner ยังไม่ล็อกทั้งฉบับ · ระดับที่อ้างได้สูงสุด **BUILD_PASS** (เอกสารนี้ไม่ได้รันเทสต์ใดเพิ่ม) · ฐานที่ตรวจ: `origin/main` = `7de2649`
 
 เอกสารนี้ยังไม่ใช่ contract ที่ล็อก ข้อเสนอใน "contract v0.1 ที่เสนอ" ของแต่ละข้อจะมีผลเมื่อ Owner ล็อกเท่านั้น ตัวอย่าง TypeScript เป็นภาพประกอบ ไม่ใช่โค้ดที่จะ commit ตามไฟล์นี้ repo นี้ยัง public: ห้ามใส่ secret, project ref จริง, กฎร้านจริง หรือข้อมูลลูกค้า
 
@@ -17,6 +17,7 @@
 | D-20261102-24 | เริ่มแบบ instance แยกต่อร้าน และคง SaaS (G3) ไว้ในแผนระยะยาว |
 | D-20261103-29 | สาย LINE ทำแบบ offline ขนานกับ G1 ได้ (fake transport, ไม่มี LINE OA จริง, ไม่มี credential) |
 | D-20261103-31 | เป้า E2E เปลี่ยนเป็นโปรเจกต์ Supabase ทดสอบแยก |
+| D-20261104-06 | Owner ตอบ "ตามที่แนะนำเลย": ใส่ visibility + Business Configuration ใน v0.1 (ระดับรูปทรงและกฎ) และคง `workspace_id` (ตรวจแล้วในทะเบียน vault) |
 
 (D-20261103-29 และ -31 ได้รับมอบหมายให้อ้างโดยผู้สั่งงาน; handoff draft เขียนเนื้อหาไว้แต่ไม่เห็นเลขกำกับ จึง UNVERIFIED)
 
@@ -194,6 +195,7 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 
 ### 4.1 ใส่ visibility (internal/customer) และ Business Configuration schema ใน v0.1 หรือไม่
 
+- **คำตัดสิน Owner: ใส่** (D-20261104-06)
 - **คำแนะนำ: ใส่** (ใส่ใน v0.1 ในระดับ "รูปทรงและกฎ" ไม่ใช่ฟิลด์ครบ)
 - **ข้อดี:** visibility เป็นด่านความปลอดภัย (กันข้อมูลภายในหลุดถึงลูกค้า) การเติมทีหลังต้องแก้ port, retrieval และ migration ที่ทุกสายใช้ร่วมกัน; ล็อกก่อนทำให้สาย B/C ออกแบบบนฐานเดียว ค่าเริ่มต้น `internal` เป็น fail closed
 - **ข้อเสีย/ความเสี่ยง:** เพิ่มขอบเขตให้ contract รอบแรก; ระดับที่ผูก visibility (source/version/chunk) อาจตัดสินพลาด; Business Configuration ยังไม่รู้ฟิลด์จริงจนกว่า C0 จะเสร็จ จึงควรล็อกแค่โครง (versioned, validate, ไม่ยกระดับสิทธิ์)
@@ -201,6 +203,7 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 
 ### 4.2 คง `workspace_id` ในโค้ดสำหรับ instance แยกต่อร้านหรือไม่
 
+- **คำตัดสิน Owner: คง** (D-20261104-06)
 - **คำแนะนำ: คง** (สอดคล้อง D-20261102-24)
 - **ข้อดี:** ไม่ปิดทาง SaaS (G3); RLS, `TrustedWorkspaceContext` และเทสต์ cross-tenant ที่มีอยู่ใช้ต่อได้; instance แยกต่อร้านก็แค่มี workspace เดียว
 - **ข้อเสีย:** มี overhead ของ tenancy ที่ instance เดี่ยวไม่ได้ใช้ และเสี่ยงให้คนเข้าใจผิดว่าข้ามการตรวจ tenant ได้เพราะมีร้านเดียว (กฎข้อ 1.2 ยังบังคับ)
