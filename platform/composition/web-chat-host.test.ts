@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ConversationRepositoryPort } from "../contracts/data/conversation.js";
-import type { KnowledgeRetrievalQuery, KnowledgeRetrievalResult } from "../contracts/data/knowledge.js";
+import type { KnowledgeRetrievalHit, KnowledgeRetrievalQuery, KnowledgeRetrievalResult } from "../contracts/data/knowledge.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import type { SupportHandoffReason } from "../modules/ai-engine/support-orchestrator.js";
 import {
@@ -86,6 +86,7 @@ type Harness = Readonly<{
   conversations: InMemoryConversationRepository;
   routes: ReturnType<typeof createWebChatRoutes>;
   createCalls: () => number;
+  createdConversations: () => number;
   handoffReasons: readonly SupportHandoffReason[];
   host: ReturnType<typeof createWebChatHost>;
   openSession: (connectionId: string) => Readonly<{ cookie: string; conversationId: string }>;
@@ -97,18 +98,28 @@ type Harness = Readonly<{
 type HarnessOptions = Readonly<{
   hostOverrides?: Partial<WebChatHostDeps>;
   retrieval?: WebChatHostDeps["retrieval"];
+  /** Synthetic documents added to this harness only. */
+  extraDocuments?: readonly SyntheticDocument[];
+  /** Delays conversation creation so two concurrent first messages really race. */
+  createDelayMs?: number;
 }>;
 
 function createHarness(options: HarnessOptions = {}): Harness {
   const repository = new InMemoryKnowledgeRepository();
-  for (const document of documents) addApprovedDocument(repository, document);
+  for (const document of [...documents, ...(options.extraDocuments ?? [])]) addApprovedDocument(repository, document);
 
   const baseConversations = new InMemoryConversationRepository();
   let createCalls = 0;
+  let createdConversations = 0;
   const conversations: ConversationRepositoryPort = Object.freeze({
     async create(workspace: TrustedWorkspaceContext, conversationId: string, now?: string) {
       createCalls += 1;
-      return baseConversations.create(workspace, conversationId, now);
+      if (options.createDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.createDelayMs));
+      }
+      const snapshot = await baseConversations.create(workspace, conversationId, now);
+      createdConversations += 1;
+      return snapshot;
     },
     load: (workspace: TrustedWorkspaceContext, conversationId: string) =>
       baseConversations.load(workspace, conversationId),
@@ -183,6 +194,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     conversations: baseConversations,
     routes,
     createCalls: () => createCalls,
+    createdConversations: () => createdConversations,
     handoffReasons,
     host,
     openSession,
@@ -404,4 +416,107 @@ test("a caller cannot downgrade or spoof the audience: the host always answers a
   assert.equal(result.kind, "answer");
   assert.equal(captured.length, 1);
   assert.equal(captured[0]!.audience, "customer");
+});
+
+/**
+ * FIX1 (H1) fixture: three retrieved documents in an order where the first two
+ * share vocabulary with the question but do not answer it.
+ */
+const GROUNDING_DOCUMENTS: readonly SyntheticDocument[] = Object.freeze([
+  { sourceId: "faq-vip-refund", title: "นโยบายคืนเงิน VIP", text: "ลูกค้า VIP คืนเงินได้ภายใน 30 วัน" },
+  { sourceId: "faq-closed", title: "วันหยุดร้าน", text: "ร้านปิดวันอาทิตย์" },
+  { sourceId: "faq-shipping-fee", title: "ค่าจัดส่ง", text: "ค่าจัดส่งเริ่มต้น 50 บาท" },
+]);
+
+function retrievalHits(
+  repository: InMemoryKnowledgeRepository,
+  workspace: TrustedWorkspaceContext,
+  sourceIds: readonly string[],
+): readonly KnowledgeRetrievalHit[] {
+  return Object.freeze(sourceIds.map((sourceId, index) => {
+    const source = repository.getSource(workspace, sourceId);
+    const version = repository.getVersion(workspace, sourceId, "v1");
+    assert.ok(source, `missing source ${sourceId}`);
+    assert.ok(version, `missing version ${sourceId}`);
+    const chunk = version.chunks[0]!;
+    return Object.freeze({
+      sourceId,
+      versionId: "v1",
+      title: source.title,
+      text: chunk.text,
+      score: 1 - index * 0.01,
+      citation: Object.freeze({
+        workspaceId: workspace.workspaceId,
+        sourceId,
+        sourceVersionId: "v1",
+        chunkId: chunk.chunkId,
+        locator: chunk.locator,
+      }),
+    });
+  }));
+}
+
+test("end-to-end: the answer quotes only the evidence that supports the question", async () => {
+  const workspace = workspaceFor("conn-grounding");
+  let harness: Harness | null = null;
+  harness = createHarness({
+    extraDocuments: GROUNDING_DOCUMENTS,
+    // Deliberately unhelpful order: the supporting document is retrieved last.
+    retrieval: {
+      async search(): Promise<KnowledgeRetrievalResult> {
+        return {
+          kind: "evidence",
+          hits: retrievalHits(harness!.repository, workspace, ["faq-vip-refund", "faq-closed", "faq-shipping-fee"]),
+        };
+      },
+    },
+  });
+  const session = harness.openSession("conn-grounding");
+  const response = await harness.send("conn-grounding", session.cookie, "ค่าจัดส่งเท่าไหร่");
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as AnswerResponse;
+  assert.equal(body.kind, "answer");
+  // Only the shipping-fee sentence; the two earlier hits must never be quoted.
+  assert.equal(body.text, "ค่าจัดส่งเริ่มต้น 50 บาท");
+  assert.doesNotMatch(body.text, /VIP|ปิดวันอาทิตย์/u);
+  assert.equal(body.citations.length, 1);
+  assert.equal(body.citations[0]!.title, "ค่าจัดส่ง");
+});
+
+test("end-to-end: a question that only shares one topic word with a document is refused", async () => {
+  const harness = createHarness({ extraDocuments: GROUNDING_DOCUMENTS });
+  const session = harness.openSession("conn-moon");
+  const response = await harness.send("conn-moon", session.cookie, "ค่าจัดส่งไปดวงจันทร์เท่าไหร่");
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as UncertainResponse;
+  assert.equal(body.kind, "uncertain");
+  assert.doesNotMatch(body.text, /50 บาท|VIP|ปิดวันอาทิตย์/u);
+  assert.deepEqual(harness.handoffReasons, ["INSUFFICIENT_EVIDENCE"]);
+});
+
+test("end-to-end: two first messages on one conversation create it once and both answer", async () => {
+  // The delay makes both first messages observe "no conversation yet".
+  const harness = createHarness({ createDelayMs: 10 });
+  const workspace = workspaceFor("conn-race");
+  const session = harness.openSession("conn-race");
+  assert.equal(await harness.conversations.load(workspace, session.conversationId), null);
+
+  const [first, second] = await Promise.all([
+    harness.send("conn-race", session.cookie, "ร้านเปิดกี่โมง"),
+    harness.send("conn-race", session.cookie, "คืนสินค้าได้ภายในกี่วัน"),
+  ]);
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal((await first.json() as AnswerResponse).kind, "answer");
+  assert.equal((await second.json() as AnswerResponse).kind, "answer");
+  assert.equal(harness.createCalls(), 2, "both messages race to create the conversation");
+  assert.equal(harness.createdConversations(), 1, "only one conversation row is created");
+
+  const conversation = await harness.load("conn-race", session.conversationId);
+  assert.ok(conversation);
+  assert.equal(conversation.status, "ai_active");
+  assert.equal(conversation.version, 0);
 });

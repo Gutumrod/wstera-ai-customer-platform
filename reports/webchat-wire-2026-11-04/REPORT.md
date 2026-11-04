@@ -165,3 +165,171 @@ AssertionError [ERR_ASSERTION]: ... actual: 'answer' expected: 'uncertain'
 - ไฟล์ที่คอมไพล์ใน `dist/` (ซึ่งถูก ignore) ถูกกู้คืนเป็นสภาพเดิมหลังการทดลอง mutation
 
 DONE
+
+---
+
+# FIX1 — แก้ข้อตรวจพบรีวิวรอบ 2 (H1 · H2 · H2b · H2c · M1 · M2 · LOW)
+
+รอบนี้แก้เฉพาะข้อตรวจพบของรีวิว ไม่ขยายสโคป ไม่แตะไฟล์ที่ถูกล็อก และไม่แตะไฟล์ของ AGY
+branch เดิม `opencode/aicp-webchat-wire-20261104` ต่อจาก `f98a872` (ไม่ push)
+
+## FIX1.1 ไฟล์ที่แก้ (พร้อมบรรทัดจริง)
+
+| ไฟล์ | บรรทัด | สิ่งที่เปลี่ยน |
+|---|---|---|
+| `platform/adapters/answers/extractive/extractive-answerability-port.ts` | 15, 18, 27 | เกณฑ์ `MIN_QUERY_TERM_COVERAGE = 0.85` (เดิม 0.4), `MIN_MATCHED_KEY_TERMS = 2`, เพิ่ม `MIN_QUERY_KEY_TERMS = 6` |
+| เดียวกัน | 43–60 | คอมเมนต์ระบุชัดว่า prompt-injection screening เป็น **heuristic เท่านั้น ไม่ใช่ด่านป้องกัน** (ไม่ได้เพิ่ม pattern) |
+| เดียวกัน | 69–124 | รายการคำสุภาพ/คำถามไทย + คำฟังก์ชันอังกฤษ ที่ถูกตัดออกจากตัวหาร coverage |
+| เดียวกัน | 151–183 | `normalizeForAnalysis` (NFKC + lowercase + ตัด zero-width), `stripEdgeParticles`, `stripNonContentTerms` |
+| เดียวกัน | 191–206 | `analyzeKeyTerms` / `analyzeQueryTerms` — เก็บเฉพาะ Thai bigram + Latin/SKU form, ทิ้งเลขล้วน |
+| เดียวกัน | 219–242 | `matchEvidence` — นับ SKU แบบ compact form (`ZX650` = `ZX-650`) และบังคับว่าทุก SKU ในคำถามต้องมีในเอกสาร |
+| เดียวกัน | 252–299 | **`selectSupportingEvidence(query, evidence)`** — ฟังก์ชันกลางตัวเดียวที่ทั้ง gate และ answer port ใช้ |
+| เดียวกัน | 265–270, 286–288 | specificity floor (ยกเว้นเมื่อมี SKU) และเกณฑ์ตัดสิน (`matched ≥ 2`, `coverage ≥ 0.85`) |
+| เดียวกัน | 352–353 | gate ตอบ `answerable` ก็ต่อเมื่อ selection ไม่ว่าง — ไม่มีเส้นทางตอบที่แยกจากกันอีก |
+| `platform/composition/web-chat-host.ts` | 48–64 | `withSupportingEvidence(port)` — ครอบ `GroundedAnswerPort` แล้วกรอง evidence ด้วยฟังก์ชันเดียวกัน |
+| เดียวกัน | 73 | ห่อ `deps.answer ?? createAnswerPort(...)` — ไม่แก้ port ที่ล็อกไว้ |
+| `platform/adapters/answers/extractive/extractive-answerability-port.test.ts` | 53–103 | ตาราง 41 เคส (13 answerable / 28 refused) |
+| เดียวกัน | 105, 131, 150 | เทสต์ตาราง, เทสต์คำสุภาพ, เทสต์ snippet ของผู้รีวิว |
+| เดียวกัน | 252, 265, 283, 291, 306 | เทสต์ค่าคงที่, H1 selection, การเรียงลำดับ, totality, zero-width |
+| `platform/composition/web-chat-host.test.ts` | 88–121, 425–457 | harness: `extraDocuments`, `createDelayMs`, `createdConversations()`, `retrievalHits()` |
+| เดียวกัน | 459, 487, 499 | e2e H1 (อ้างเฉพาะเอกสารที่รองรับ), e2e ปฏิเสธคำถามนอกเรื่อง, e2e first-message พร้อมกัน |
+
+## FIX1.2 ข้อตรวจพบ → สาเหตุ → การแก้ → หลักฐาน
+
+| ID | สาเหตุที่พบ | การแก้ | หลักฐาน |
+|---|---|---|---|
+| **H1** | gate ตัดสินด้วย evidence ทั้งก้อน แต่ `extractive-answer-port` หยิบ 2 ชิ้นแรกไปตอบ → ตอบด้วยเอกสารที่ gate ไม่ได้รับรอง | ดึงการเลือกออกมาเป็น `selectSupportingEvidence` ตัวเดียว; gate ใช้มัน และ host ห่อ answer port ด้วยมัน (selection ว่าง = ไม่ตอบ) | `...answerability-port.ts:252`, `web-chat-host.ts:48`; เทสต์ `...test.ts:265`, `web-chat-host.test.ts:459` |
+| **H2** | coverage 0.4 + นับคำซ้ำ + ตัวเลขเป็นคำสำคัญ → พ่วงคำนอกเรื่อง/คำซ้ำเพื่อผ่านเกณฑ์ได้ | เพิ่มเป็น 0.85, dedupe ด้วย `Set`, ตัดเลขล้วนออกจากคำสำคัญ, บังคับ ≥2 คำต่างกัน | `...answerability-port.ts:191`, `219`, `286`; เทสต์ 7 เคส `ride-*` / `repeated-topic` |
+| **H2b** | คำสุภาพ (ครับ/ค่ะ/หน่อย/สอบถาม/เท่าไหร่) ถูกนับเป็นคำเนื้อหา → คำถามสุภาพจริงถูกปฏิเสธ | ตัดคำสุภาพ/คำถามออกจากตัวหาร coverage (ทั้งแบบ substring และแบบ edge particle) | `...answerability-port.ts:69`, `104`, `177`; เทสต์ `...test.ts:131` + 2 เคสในตาราง |
+| **H2c** | รหัสสินค้าที่ไม่มีในเอกสารยังตอบได้ถ้าคำอื่นตรง | บังคับว่าทุก SKU ในคำถามต้องปรากฏในเอกสาร (เทียบ compact form) | `...answerability-port.ts:230`, `285`; เทสต์ `sku-unknown`, `sku-en-refuse` |
+| **M1** | คำหัวข้อเดี่ยว ("จัดส่ง", "shipping") ถือเป็นคำถาม | specificity floor `MIN_QUERY_KEY_TERMS = 6` bigram (ยกเว้นคำถามที่มี SKU) | `...answerability-port.ts:27`, `265`; เทสต์ `single-topic-*` |
+| **M2** | คำซ้ำ/ตัวเลขทำให้ coverage สูงเกินจริง | รวมกับ H2 (dedupe + ตัดเลข) และเพิ่มเคส `12345`, `ร้านเปิดกี่โมง สินค้า 1` | ตาราง `...test.ts:84`, `93` |
+| **LOW** | `numericTerms` เป็น dead code | ลบทิ้ง (ไม่มีตัวแปรเหลือในไฟล์) | `...answerability-port.ts` ทั้งไฟล์ |
+| **หมายเหตุ injection** | รีวิวเตือนว่า blocklist เลี่ยงได้ | **ไม่ขยาย regex** — เขียนคอมเมนต์ระบุว่าเป็น heuristic และเหตุผลว่าทำไม safety มาจากรูปร่างไปป์ไลน์ (ข้อความถูกคัดลอกเป็น DATA ไม่มีโมเดลอ่าน) | `...answerability-port.ts:43–52` |
+
+## FIX1.3 หลักฐานก่อน/หลัง (raw output)
+
+สคริปต์ probe รันกับ `dist/` จริง โดยสลับเฉพาะไฟล์ implementation ระหว่างเวอร์ชัน `f98a872` (ก่อน) และเวอร์ชันที่แก้ (หลัง) แล้วกู้คืนตามเดิม (sha1 ตรงกันทั้งสองไฟล์)
+
+### ก. ชุด 35 คำถามจากตาราง 41 เคส
+
+ก่อนแก้ (เวอร์ชัน `f98a872`) — เฉพาะบรรทัดที่ผิด:
+
+```
+WRONG expect=ANSWER got=REFUSE    CERAMIC-77 ราคาเท่าไหร่ครับ
+WRONG expect=ANSWER got=REFUSE    สอบถามราคา CERAMIC-77 หน่อยครับ
+WRONG expect=REFUSE got=ANSWER    ราคาเฟอร์รารี่ สินค้า จัดส่ง
+WRONG expect=REFUSE got=ANSWER    สินค้า สินค้า สินค้า สินค้า 1 1 1
+WRONG expect=REFUSE got=ANSWER    ต้นทุนเท่าไหร่ คืนสินค้าได้
+WRONG expect=REFUSE got=ANSWER    ใครเป็นนายก เปลี่ยนคืนสินค้า
+WRONG expect=REFUSE got=ANSWER    ราคา ZX-999 เท่าไหร่ ค่าจัดส่ง
+WRONG expect=REFUSE got=ANSWER    ร้านเปิดกี่โมง สินค้า 1
+WRONG expect=REFUSE got=ANSWER    จัดส่ง
+ROWS=35 WRONG=9
+```
+
+หลังแก้ — ไม่มีบรรทัดที่ตอบผิดอีก (2 บรรทัดที่เหลือคือ `12345` และ `900` ซึ่ง probe นับ `uncertain` เป็น "ไม่ตรงกับ REFUSE" แต่ทั้งคู่เป็น **การไม่ตอบ** ตามข้อกำหนด จึงไม่ใช่การตอบผิด):
+
+```
+right expect=ANSWER got=ANSWER    คืนสินค้าได้ภายในกี่วัน
+...
+right expect=ANSWER got=ANSWER    CERAMIC-77 ราคาเท่าไหร่ครับ
+right expect=ANSWER got=ANSWER    สอบถามราคา CERAMIC-77 หน่อยครับ
+...
+right expect=REFUSE got=REFUSE    จัดส่ง
+right expect=REFUSE got=REFUSE    ร้านเปิดกี่โมง สินค้า 1
+WRONG expect=REFUSE got=UNCERTAIN 12345
+WRONG expect=REFUSE got=UNCERTAIN 900
+ROWS=35 WRONG=2   ← ทั้ง 2 แถวเป็นการไม่ตอบ (uncertain) ไม่ใช่การตอบ
+```
+
+6 เคสของตารางที่ไม่อยู่ใน probe (`markup-script`, `too-short`, `blank`, `injection-en`, `injection-th`, `numeric-only-single`) เป็น `uncertain` ทั้งก่อนและหลัง — ไม่มีการเปลี่ยนพฤติกรรม
+
+### ข. ชุด snippet ของผู้รีวิว (17 คำถาม, evidence ชิ้นเดียว)
+
+ก่อนแก้:
+
+```
+right expect=ANSWER got=ANSWER    ค่าจัดส่งเท่าไหร่
+right expect=ANSWER got=ANSWER    จัดส่งภายในกี่วัน
+right expect=ANSWER got=ANSWER    ZX650
+right expect=ANSWER got=ANSWER    ZX-650
+right expect=ANSWER got=ANSWER    สินค้ารับประกันกี่ปี
+right expect=ANSWER got=ANSWER    ＺＸ－６５０ ค่าจัดส่ง
+WRONG expect=REFUSE got=ANSWER    สินค้า สินค้า สินค้า สินค้า 1 1 1
+WRONG expect=REFUSE got=ANSWER    วันนี้ฝนตกไหม ส่งสินค้า
+WRONG expect=REFUSE got=ANSWER    ราคา ZX-999 เท่าไหร่ ค่าจัดส่ง
+WRONG expect=REFUSE got=ANSWER    ค่าจัดส่งไปดวงจันทร์เท่าไหร่
+WRONG expect=REFUSE got=ANSWER    ราคาเฟอร์รารี่ สินค้า จัดส่ง
+right expect=REFUSE got=REFUSE    what is the weather shipping
+right expect=REFUSE got=REFUSE    cost of a spaceship delivery
+right expect=REFUSE got=REFUSE    ร้านเปิดกี่โมง สินค้า 1
+WRONG expect=REFUSE got=ANSWER    จัดส่ง
+right expect=REFUSE got=REFUSE    shipping
+right expect=REFUSE got=REFUSE    delivery
+ROWS=17 WRONG=6
+```
+
+หลังแก้: `ROWS=17 WRONG=0` (ทุกแถวตรงตามที่กำหนด รวม `ＺＸ－６５０` ที่ยังตอบได้เพราะ NFKC)
+
+## FIX1.4 พิสูจน์ว่าเทสต์ใหม่จับบั๊กได้จริง (ไม่ใช่เทสต์ที่ผ่านทั้งก่อนและหลัง)
+
+1. **ตารางคำถาม** — รันสคริปต์ที่ทำซ้ำตรรกะเดียวกับ assertion ของตารางกับโค้ดเวอร์ชัน `f98a872`: ผิด 9 แถว (7 ตอบในสิ่งที่ต้องปฏิเสธ, 2 ปฏิเสธในสิ่งที่ต้องตอบ) ตามหลักฐาน FIX1.3 ก. หลังแก้ผิด 0 แถว
+2. **H1 (host)** — ถอดเฉพาะการกรองใน `withSupportingEvidence` (`const selected = input.evidence`) แล้วรันเทสต์ host:
+
+```
+✖ end-to-end: the answer quotes only the evidence that supports the question
+  actual: 'ลูกค้า VIP คืนเงินได้ภายใน 30 วัน\n\nร้านปิดวันอาทิตย์'
+  expected: 'ค่าจัดส่งเริ่มต้น 50 บาท'
+ℹ tests 13
+ℹ pass 12
+ℹ fail 1
+```
+
+กู้คืนแล้ว (`sha1 a59ffaba7cc35491c954b6b1e4c8a157b4301b54` ตรงกับไฟล์สุดท้าย) และรันใหม่ผ่าน 13/13
+
+> หมายเหตุความโปร่งใส: การรันไฟล์เทสต์ *ใหม่* ทั้งไฟล์กับ *source เก่า* จะล้มตั้งแต่ import (`selectSupportingEvidence` / `MIN_QUERY_KEY_TERMS` ไม่มีในเวอร์ชันเก่า) ซึ่งเป็น failure ที่ไม่มี assertion จึงใช้สคริปต์ที่ทำซ้ำ assertion ของตารางเป็นหลักฐานแทน — เป็นการวัดเดียวกันเป๊ะ ไม่ใช่การอ้างลอย
+
+## FIX1.5 เกตและผลตรวจ
+
+| รายการ | ผล |
+|---|---|
+| `npx tsc --noEmit` | ผ่าน |
+| `extractive-answerability-port.test.js` | 113/113 ผ่าน |
+| `web-chat-host.test.js` | 13/13 ผ่าน |
+| `npm run check` (typecheck + ทั้งชุด + `build:console`) | ผ่าน — **414/414** เทสต์, Next build สำเร็จ |
+| `git diff --check` | ผ่าน (exit 0, ไม่มี whitespace error) |
+| dependency ใหม่ / network / Supabase / คีย์ | ไม่มี |
+| ไฟล์ที่ถูกล็อก (`extractive-answer-port.ts`, `support-orchestrator.ts`) | ไม่ถูกแก้ (0 บรรทัดใน diff) |
+| ไฟล์ของ AGY (`render-chat-page.ts`, `web-chat-routes.ts` + เทสต์, `knowledge-intake.ts`, `merchant-console/**`) | ไม่ถูกแก้ |
+
+## FIX1.6 ข้อตัดสินใจที่ต้องบันทึกไว้ (judgment calls)
+
+1. **0.85 ไม่ใช่ 0.9** — ฝั่งที่ต้องตอบวัดได้ต่ำสุด 0.9 และฝั่งที่ต้องปฏิเสธสูงสุด 0.778 จึงเลือก 0.85 กลางช่วง (ห่างจากฝั่งปฏิเสธ 0.072 และต่ำกว่าฝั่งตอบ 0.05) ถ้าตั้ง 0.9 จะเหลือ margin 0 ฝั่งตอบ ซึ่งเปราะกว่า
+2. **`MIN_QUERY_KEY_TERMS = 6` เป็นตัวแทนของ "ต้องมีมากกว่าหนึ่งคำเนื้อหา"** — ภาษาไทยไม่มีการเว้นวรรค จึงใช้จำนวน bigram ต่างกันเป็น proxy: "จัดส่ง" = 5, "ค่าจัดส่ง" = 8 ตัวเลข 6 จึงแยกคำหัวข้อเดี่ยวออกจากคำถามจริงได้โดยไม่ต้องมี tokenizer (§ ความจริงข้อนี้คือ *proxy* ไม่ใช่การนับคำ — ระบุไว้ในคอมเมนต์โค้ดแล้ว)
+3. **SKU เป็นข้อยกเว้นของ specificity floor** — `ZX650` เพียงคำเดียวคือคำถามที่สมบูรณ์ในตัว (ระบุสินค้า) จึงตอบได้ แต่ยังต้องผ่าน `containsQuerySkus` และ coverage
+4. **ตัด `บอก` / `แจ้ง` / `ช่วย` ออกจากตัวหาร** — เป็นกรอบคำขอ ("ช่วยบอกหน่อย") ไม่ใช่หัวข้อ และทำให้คำถามสุภาพจริงมี coverage ต่ำลงโดยไม่มีเหตุผลเชิงเนื้อหา
+5. **`uncertain` กับ `insufficient_evidence` ต่างกันที่ความหมาย** — `uncertain` = คำถามใช้ไม่ได้ (ว่าง/ยาวเกิน/injection/ตัวเลขล้วน), `insufficient_evidence` = คำถามใช้ได้แต่ไม่มีเอกสารรองรับ ทั้งคู่คือ "ไม่ตอบ" จึงผ่านข้อกำหนด must-not-answer
+6. **ไม่ขยาย regex injection** — ตามที่รีวิวเตือน การไล่เพิ่ม pattern คือการไล่ตามถ้อยคำที่ไม่มีวันจบ และสร้างความมั่นใจผิด ๆ เมื่อไม่มีโมเดลอยู่ในเส้นทางนี้ ทางป้องกันจริงคือรูปร่างไปป์ไลน์ (extractive = คัดลอกข้อความเป็น DATA)
+7. **การตัดคำแบบ substring + edge particle** — คำอย่าง "สิ" อยู่ใน "สินค้า" และ "คะ" อยู่ใน "คะแนน" จึงตัดเฉพาะขอบ run ไม่ตัดกลางคำ ขณะที่คำหลายพยางค์ที่ไม่มีทางอยู่ในคำธุรกิจ (เช่น "เท่าไหร่", "หรือเปล่า") ตัดแบบ substring ได้
+
+## FIX1.7 สิ่งที่ไม่ได้ทำ และเหตุผล
+
+- **ไม่ได้แก้ `extractive-answer-port.ts` หรือ `support-orchestrator.ts`** — ถูกล็อกตามบรีฟ และไม่จำเป็น: การกรองทำได้จากการห่อ (wrapper) โดยไม่แก้สัญญาของ port
+- **ไม่ได้ต่อ UI/route เพิ่ม** — host ถูกเรียกผ่าน route เดิมอยู่แล้ว; การแก้ครั้งนี้เปลี่ยนเฉพาะ evidence ที่ไหลเข้า answer port
+- **ไม่ได้ทำ semantic matching / embedding / tokenizer ไทย** — ผิดข้อกำหนด (ห้ามเพิ่ม dependency/โมเดล) และเกินขอบเขตงานรีวิว; บันทึกเป็นข้อจำกัดด้านล่าง
+- **ไม่ได้ทดสอบกับฐานข้อมูลจริง ผู้ใช้จริง หรือ LINE** — ระดับหลักฐานจึงหยุดที่ BUILD_PASS
+- **ไม่ได้ push / เปิด PR / merge / เรียก reviewer** ตามบรีฟ
+
+### ข้อจำกัดที่ยังเหลือ (ต้องรู้ก่อนขึ้น production)
+
+- ตรรกะยังเป็น **bigram heuristic** ไม่ใช่ความหมาย: คำถามที่ใช้คนละคำแต่บังเอิญ bigram ร่วมกันอาจหลุด และคำถามที่ถูกต้องแต่ใช้คำพ้องใหม่ทั้งหมดจะถูกปฏิเสธ (fail closed — ปลอดภัยแต่ผู้ใช้อาจต้องคุยกับคน)
+- ตัวเลข 6 bigram เป็นค่าที่ปรับจากชุดทดสอบชุดนี้เท่านั้น ยังไม่มี evaluation จากคำถามลูกค้าจริง
+- รายการคำสุภาพครอบคลุมรูปแบบที่พบบ่อย ไม่ใช่ทั้งหมดของภาษาไทย
+
+## FIX1.8 สถานะ
+
+`BUILD_PASS` — typecheck + เทสต์ 414/414 + build ผ่าน, มีหลักฐานก่อน/หลังและการพิสูจน์ mutation
+ไม่ใช่ `PRODUCTION_READY` / `LIVE_PROVEN` เพราะยังไม่มีการรันกับข้อมูลจริงและยังไม่มี evaluation ชุดจริง
+
+DONE
