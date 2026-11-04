@@ -87,3 +87,42 @@ test("prompt-injection inside evidence is returned verbatim as plain data withou
   assert.equal(result.text, injection);
   assert.deepEqual(result.citationRefs, ["ref-inj"]);
 });
+
+test("extractive answer port skips evidence items with empty, whitespace, or duplicate referenceId", async () => {
+  const port = createExtractiveAnswerPort();
+  const evidence: readonly SupportEvidence[] = [
+    { referenceId: "", sourceLabel: "EmptyRef", text: "ข้อความที่ไม่ควรถูกเลือก" },
+    { referenceId: "   ", sourceLabel: "WhitespaceRef", text: "ข้อความเว้นวรรค" },
+    { referenceId: "ref-valid-1", sourceLabel: "Valid1", text: "ข้อความที่ถูกต้องที่ 1" },
+    { referenceId: "ref-valid-1", sourceLabel: "DuplicateRef", text: "ข้อความซ้ำ ref เดิม" },
+    { referenceId: "ref-valid-2", sourceLabel: "Valid2", text: "ข้อความที่ถูกต้องที่ 2" },
+  ];
+
+  const result = await port.generate({
+    workspaceId: "ws-1",
+    query: "test",
+    evidence,
+  }) as { text: string; citationRefs: readonly string[] } | null;
+
+  assert.ok(result);
+  assert.equal(result.text, "ข้อความที่ถูกต้องที่ 1\n\nข้อความที่ถูกต้องที่ 2");
+  assert.deepEqual(result.citationRefs, ["ref-valid-1", "ref-valid-2"]);
+});
+
+test("extractive answer port safely truncates single evidence item that exceeds MAX_EXTRACTIVE_CHARS", async () => {
+  const port = createExtractiveAnswerPort();
+  const hugeText = "X".repeat(MAX_EXTRACTIVE_CHARS + 500);
+
+  const result = await port.generate({
+    workspaceId: "ws-1",
+    query: "truncate test",
+    evidence: [
+      { referenceId: "ref-huge", sourceLabel: "HugeDoc", text: hugeText },
+    ],
+  }) as { text: string; citationRefs: readonly string[] } | null;
+
+  assert.ok(result);
+  assert.equal(result.text.length, MAX_EXTRACTIVE_CHARS);
+  assert.equal(result.text, "X".repeat(MAX_EXTRACTIVE_CHARS));
+  assert.deepEqual(result.citationRefs, ["ref-huge"]);
+});

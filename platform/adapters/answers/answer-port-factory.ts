@@ -2,7 +2,8 @@ import type { GroundedAnswerPort } from "../../modules/ai-engine/support-orchest
 import { createExtractiveAnswerPort } from "./extractive/extractive-answer-port.js";
 
 export type AnswerPortFactoryOptions = Readonly<{
-  modelEnabled?: boolean | unknown;
+  /** Explicit feature flag enabling model-backed port. Defaults to false. */
+  modelEnabled?: boolean;
   createModelPort?: () => GroundedAnswerPort;
 }>;
 

@@ -6,6 +6,7 @@ import { createRateLimiter, type RateLimit } from "../apps/merchant-console/lib/
 import {
   issueWebChatSession,
   parseSessionCookie,
+  inspectSessionCookie,
   formatSessionSetCookie,
 } from "./web-chat-session.js";
 import { renderChatPage } from "../apps/web-chat/render-chat-page.js";
@@ -17,6 +18,7 @@ export type SupportResponder = (input: Readonly<{
   workspace: TrustedWorkspaceContext;
   conversationId: string;
   query: string;
+  audience: "customer";
 }>) => Promise<SupportReply>;
 
 export type CitationDescription = Readonly<{
@@ -128,6 +130,61 @@ function parseAndValidateBody(rawBody: string): { ok: true; body: ValidatedBody 
   return { ok: false, status: 400, error: "INVALID_BODY" };
 }
 
+/**
+ * Bounds request body reading during streaming to prevent unbounded memory/CPU DoS.
+ */
+async function readBoundedBody(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false; status: 413 | 400; error: string }> {
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader) {
+    const contentLength = parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      return { ok: false, status: 413, error: "PAYLOAD_TOO_LARGE" };
+    }
+  }
+
+  if (request.body && typeof request.body.getReader === "function") {
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            await reader.cancel("PAYLOAD_TOO_LARGE");
+            return { ok: false, status: 413, error: "PAYLOAD_TOO_LARGE" };
+          }
+          chunks.push(value);
+        }
+      }
+      const combined = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return { ok: true, text: new TextDecoder("utf-8").decode(combined) };
+    } catch {
+      return { ok: false, status: 400, error: "INVALID_BODY" };
+    }
+  }
+
+  try {
+    const text = await request.text();
+    if (Buffer.byteLength(text, "utf8") > maxBytes) {
+      return { ok: false, status: 413, error: "PAYLOAD_TOO_LARGE" };
+    }
+    return { ok: true, text };
+  } catch {
+    return { ok: false, status: 400, error: "INVALID_BODY" };
+  }
+}
+
 export function createWebChatRoutes(deps: WebChatRoutesDeps) {
   const now = deps.now ?? Date.now;
   const clientLimiter = createRateLimiter(deps.limits?.client ?? { limit: 60, windowMs: 60_000 }, 10_000, now);
@@ -135,6 +192,26 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
 
   return Object.freeze({
     async page(request: Request): Promise<Response> {
+      // Method check (LOW-2)
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: { Allow: "GET, HEAD" },
+        });
+      }
+
+      // Client key validation (LOW-4)
+      const clientKey = deps.clientKey(request);
+      if (typeof clientKey !== "string" || clientKey.trim().length === 0) {
+        return new Response("Bad Request", { status: 400 });
+      }
+
+      // Rate limit per client before calling resolveConnection (MEDIUM-2)
+      const clientRetry = clientLimiter.retryAfterSeconds(clientKey);
+      if (clientRetry > 0) {
+        return rateLimitResponse(clientRetry);
+      }
+
       let connectionId: string | null = null;
       try {
         const url = new URL(request.url);
@@ -197,16 +274,29 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
     },
 
     async message(request: Request): Promise<Response> {
-      // 1. Rate limit per client (429)
+      // Method check (LOW-2)
+      if (request.method !== "POST") {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: { Allow: "POST" },
+        });
+      }
+
+      // Client key validation (LOW-4)
       const clientKey = deps.clientKey(request);
+      if (typeof clientKey !== "string" || clientKey.trim().length === 0) {
+        return jsonErrorResponse(400, "CLIENT_KEY_REQUIRED");
+      }
+
+      // 1. Rate limit per client (429)
       const clientRetry = clientLimiter.retryAfterSeconds(clientKey);
       if (clientRetry > 0) {
         return rateLimitResponse(clientRetry);
       }
 
-      // 2. Cookie signature and expiration check (401)
+      // 2. Cookie signature, canonical encoding, and expiration check (401)
       const cookieHeader = request.headers.get("cookie");
-      const session = parseSessionCookie(cookieHeader, deps.sessionSecret, undefined, now);
+      const session = inspectSessionCookie(cookieHeader, deps.sessionSecret, now);
       if (!session) {
         return jsonErrorResponse(401, "UNAUTHENTICATED");
       }
@@ -234,32 +324,20 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
       }
 
       // 6. Rate limit per session (429) - must occur before reading body
-      const sessionRetry = sessionLimiter.retryAfterSeconds(session.conversationId);
+      // Keyed by connectionId + conversationId to close cookie-dropping avoidance
+      const sessionKey = `${session.connectionId}:${session.conversationId}`;
+      const sessionRetry = sessionLimiter.retryAfterSeconds(sessionKey);
       if (sessionRetry > 0) {
         return rateLimitResponse(sessionRetry);
       }
 
-      // 7. Read body: size check (413), JSON parsing and validation (400)
-      const contentLengthHeader = request.headers.get("content-length");
-      if (contentLengthHeader) {
-        const contentLength = parseInt(contentLengthHeader, 10);
-        if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-          return jsonErrorResponse(413, "PAYLOAD_TOO_LARGE");
-        }
+      // 7. Read body: stream-bounded size check (413), JSON parsing and validation (400)
+      const bodyResult = await readBoundedBody(request, MAX_BODY_BYTES);
+      if (!bodyResult.ok) {
+        return jsonErrorResponse(bodyResult.status, bodyResult.error);
       }
 
-      let rawBody: string;
-      try {
-        rawBody = await request.text();
-      } catch {
-        return jsonErrorResponse(400, "INVALID_BODY");
-      }
-
-      if (rawBody.length > MAX_BODY_BYTES) {
-        return jsonErrorResponse(413, "PAYLOAD_TOO_LARGE");
-      }
-
-      const validation = parseAndValidateBody(rawBody);
+      const validation = parseAndValidateBody(bodyResult.text);
       if (!validation.ok) {
         return jsonErrorResponse(validation.status, validation.error);
       }
@@ -267,7 +345,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
       const body = validation.body;
 
       // 8. connectionId in body must match cookie (401)
-      if (body.connectionId !== session.connectionId) {
+      if (!parseSessionCookie(cookieHeader, deps.sessionSecret, body.connectionId, now)) {
         return jsonErrorResponse(401, "CONNECTION_MISMATCH");
       }
 
@@ -287,6 +365,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
           workspace,
           conversationId: session.conversationId,
           query: body.text,
+          audience: "customer",
         });
 
         switch (reply.kind) {

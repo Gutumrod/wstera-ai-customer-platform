@@ -6,9 +6,16 @@ import type { GroundedAnswerPort } from "../../modules/ai-engine/support-orchest
 
 test("factory default (undefined options) returns extractive port without calling createModelPort", () => {
   let modelPortCalls = 0;
-  const port = createAnswerPort();
+  const port1 = createAnswerPort();
+  assert.ok(port1 instanceof ExtractiveAnswerAdapter);
 
-  assert.ok(port instanceof ExtractiveAnswerAdapter);
+  const port2 = createAnswerPort({
+    createModelPort: () => {
+      modelPortCalls += 1;
+      return {} as GroundedAnswerPort;
+    },
+  });
+  assert.ok(port2 instanceof ExtractiveAnswerAdapter);
   assert.equal(modelPortCalls, 0);
 });
 
@@ -32,7 +39,7 @@ test("all non-boolean-true values for modelEnabled are treated as disabled and n
   for (const candidate of truthyNonBooleans) {
     let calls = 0;
     const port = createAnswerPort({
-      modelEnabled: candidate,
+      modelEnabled: candidate as unknown as boolean,
       createModelPort: () => {
         calls += 1;
         return {} as GroundedAnswerPort;

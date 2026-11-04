@@ -21,14 +21,15 @@ const ALLOWED_ORIGIN = "https://shop.example.com";
 
 function createHarness(overrides: Partial<Parameters<typeof createWebChatRoutes>[0]> = {}) {
   let handoffCalls: { workspace: TrustedWorkspaceContext; conversationId: string }[] = [];
-  let responderCalls: { workspace: TrustedWorkspaceContext; conversationId: string; query: string }[] = [];
+  let responderCalls: { workspace: TrustedWorkspaceContext; conversationId: string; query: string; audience: "customer" }[] = [];
 
-  const defaultResponder = async ({ workspace, conversationId, query }: {
+  const defaultResponder = async ({ workspace, conversationId, query, audience }: {
     workspace: TrustedWorkspaceContext;
     conversationId: string;
     query: string;
+    audience: "customer";
   }): Promise<SupportReply> => {
-    responderCalls.push({ workspace, conversationId, query });
+    responderCalls.push({ workspace, conversationId, query, audience });
     return Object.freeze({
       kind: "answer",
       text: `ตอบสำหรับ: ${query}`,
@@ -121,6 +122,29 @@ test("page route sets signed session cookie and strict CSP for resolved connecti
   assert.match(setCookie, /Secure/);
 });
 
+test("page route enforces client rate limit with Retry-After (429)", async () => {
+  let time = 1_000;
+  const { routes } = createHarness({
+    now: () => time,
+    limits: {
+      client: { limit: 2, windowMs: 10_000 },
+      session: { limit: 10, windowMs: 10_000 },
+    },
+  });
+
+  const req = () => new Request(`https://example.com/chat?c=${TRUSTED_WORKSPACE.connectionId}`);
+  const res1 = await routes.page(req());
+  assert.equal(res1.status, 200);
+
+  const res2 = await routes.page(req());
+  assert.equal(res2.status, 200);
+
+  // 3rd page request from same client should be rate limited
+  const res3 = await routes.page(req());
+  assert.equal(res3.status, 429);
+  assert.ok(res3.headers.get("retry-after"));
+});
+
 test("message route rejects missing or foreign Origin (403)", async () => {
   const { routes } = createHarness();
   const cookie = makeValidCookie();
@@ -169,7 +193,7 @@ test("message route rejects missing, forged, or expired session cookies (401)", 
   assert.deepEqual(await resMissing.json(), { error: "UNAUTHENTICATED" });
 
   // Forged signature
-  const forgedCookie = makeValidCookie(TRUSTED_WORKSPACE.connectionId, "wrong-secret");
+  const forgedCookie = makeValidCookie(TRUSTED_WORKSPACE.connectionId, "wrong-secret-key-of-attacker-at-least-32-bytes");
   const resForged = await routes.message(new Request("https://example.com/message", {
     method: "POST",
     headers: { ...headers, cookie: forgedCookie },
@@ -262,6 +286,52 @@ test("message route enforces client and session rate limits with Retry-After (42
 
   // Client limit exceeded
   const res3 = await routes.message(req());
+  assert.equal(res3.status, 429);
+  assert.ok(res3.headers.get("retry-after"));
+  assert.deepEqual(await res3.json(), { error: "RATE_LIMITED" });
+});
+
+test("message route enforces session rate limit directly and yields 429 before checking oversized body", async () => {
+  let time = 1_000;
+  let clientCounter = 0;
+  const { routes } = createHarness({
+    now: () => time,
+    clientKey: () => `rotating-client-${clientCounter++}`,
+    limits: {
+      client: { limit: 100, windowMs: 10_000 },
+      session: { limit: 2, windowMs: 10_000 },
+    },
+  });
+  const cookie = makeValidCookie();
+  const validReq = () => new Request("https://example.com/message", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, text: "ping" }),
+  });
+
+  const res1 = await routes.message(validReq());
+  assert.equal(res1.status, 200);
+
+  const res2 = await routes.message(validReq());
+  assert.equal(res2.status, 200);
+
+  // 3rd request has quota exhausted on session and has oversized body (> 16 KiB)
+  const hugeText = "x".repeat(30_000);
+  const res3 = await routes.message(new Request("https://example.com/message", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, text: hugeText }),
+  }));
+
+  // Must be 429 (session limit hit before reading body), NOT 413 (body size check)
   assert.equal(res3.status, 429);
   assert.ok(res3.headers.get("retry-after"));
   assert.deepEqual(await res3.json(), { error: "RATE_LIMITED" });
@@ -404,6 +474,137 @@ test("message route returns answer with citation chips describing source title a
   assert.equal(responderCalls[0]!.workspace, TRUSTED_WORKSPACE);
   assert.equal(responderCalls[0]!.conversationId, session.conversationId);
   assert.equal(responderCalls[0]!.query, "สอบถามเวลาทำการ");
+  assert.equal(responderCalls[0]!.audience, "customer");
+});
+
+test("page and message routes reject disallowed HTTP methods (405)", async () => {
+  const { routes } = createHarness();
+  const cookie = makeValidCookie();
+
+  // POST on page
+  const resPagePost = await routes.page(new Request(`https://example.com/chat?c=${TRUSTED_WORKSPACE.connectionId}`, {
+    method: "POST",
+  }));
+  assert.equal(resPagePost.status, 405);
+  assert.equal(resPagePost.headers.get("allow"), "GET, HEAD");
+
+  // GET on message
+  const resMsgGet = await routes.message(new Request("https://example.com/message", {
+    method: "GET",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+    },
+  }));
+  assert.equal(resMsgGet.status, 405);
+  assert.equal(resMsgGet.headers.get("allow"), "POST");
+});
+
+test("page and message routes reject empty or whitespace clientKey (400)", async () => {
+  const { routes } = createHarness({
+    clientKey: () => "",
+  });
+  const cookie = makeValidCookie();
+
+  const resPage = await routes.page(new Request(`https://example.com/chat?c=${TRUSTED_WORKSPACE.connectionId}`));
+  assert.equal(resPage.status, 400);
+
+  const resMsg = await routes.message(new Request("https://example.com/message", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, text: "hi" }),
+  }));
+  assert.equal(resMsg.status, 400);
+  assert.deepEqual(await resMsg.json(), { error: "CLIENT_KEY_REQUIRED" });
+});
+
+test("message route returns 500 without leaking error details when responder or handoff throws", async () => {
+  const cookie = makeValidCookie();
+
+  // Responder throws internal error
+  const { routes: routesWithExplodingResponder } = createHarness({
+    responder: async () => {
+      throw new Error("SECRET_INTERNAL_DB_CRASH_DETAILS_SHOULD_NEVER_LEAK");
+    },
+  });
+
+  const res1 = await routesWithExplodingResponder.message(new Request("https://example.com/message", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, text: "hi" }),
+  }));
+  assert.equal(res1.status, 500);
+  const text1 = await res1.text();
+  assert.doesNotMatch(text1, /SECRET_INTERNAL_DB_CRASH_DETAILS/);
+  assert.deepEqual(JSON.parse(text1), { error: "INTERNAL_ERROR" });
+
+  // Handoff throws internal error
+  const { routes: routesWithExplodingHandoff } = createHarness({
+    requestHandoff: async () => {
+      throw new Error("SECRET_HANDOFF_QUEUE_FAILURE_DETAILS");
+    },
+  });
+
+  const res2 = await routesWithExplodingHandoff.message(new Request("https://example.com/message", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, action: "handoff" }),
+  }));
+  assert.equal(res2.status, 500);
+  const text2 = await res2.text();
+  assert.doesNotMatch(text2, /SECRET_HANDOFF_QUEUE_FAILURE_DETAILS/);
+  assert.deepEqual(JSON.parse(text2), { error: "INTERNAL_ERROR" });
+});
+
+test("message route aborts streamed body exceeding MAX_BODY_BYTES (413)", async () => {
+  const { routes } = createHarness();
+  const cookie = makeValidCookie();
+
+  // Create a ReadableStream that yields chunks exceeding 16KiB
+  let chunksPushed = 0;
+  let canceled = false;
+  const chunk = new Uint8Array(8_192); // 8 KiB chunks
+  const stream = new ReadableStream({
+    pull(controller) {
+      if (chunksPushed < 5) { // 5 * 8KiB = 40KiB
+        chunksPushed += 1;
+        controller.enqueue(chunk);
+      } else {
+        controller.close();
+      }
+    },
+    cancel() {
+      canceled = true;
+    },
+  });
+
+  const res = await routes.message(new Request("https://example.com/message", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: ALLOWED_ORIGIN,
+      "content-type": "application/json",
+      // Note: no content-length header sent, simulating chunked stream
+    },
+    body: stream,
+    ...({ duplex: "half" } as Record<string, unknown>),
+  }));
+
+  assert.equal(res.status, 413);
+  assert.deepEqual(await res.json(), { error: "PAYLOAD_TOO_LARGE" });
+  assert.ok(canceled, "ReadableStream must be canceled when exceeding MAX_BODY_BYTES");
 });
 
 test("message route omits citation chip when describeCitation returns null", async () => {
