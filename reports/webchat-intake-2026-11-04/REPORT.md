@@ -1,11 +1,11 @@
 # รายงานภารกิจ WEBCHAT-INTAKE — Visibility ในเส้นอัปโหลดเอกสาร & แก้ path ส่งข้อความ (N1)
 
-**LANE:** AICP  
-**ผู้ทำ:** Antigravity (AGY)  
-**ฐานโค้ด:** `main` @ `12fa011`  
-**สาขา:** `agy/aicp-webchat-intake-20261104`  
-**Worktree:** `D:/AI-Workspace/projects/wstera-ai-customer-platform/.worktrees/webchat-intake-20261104`  
-**อ้างอิง:** D-20261104-25, D-20261104-26, ผลตรวจ N1 ใน `D:/AI-Workspace/runtime/dispatch/out/aicp-wc-rvC2-oc.out`, `architecture/CORE-CONTRACT-v0.1.md` ข้อ 3.4  
+**LANE:** AICP
+**ผู้ทำ:** Antigravity (AGY)
+**ฐานโค้ด:** `main` @ `12fa011`
+**สาขา:** `agy/aicp-webchat-intake-20261104`
+**Worktree:** `D:/AI-Workspace/projects/wstera-ai-customer-platform/.worktrees/webchat-intake-20261104`
+**อ้างอิง:** D-20261104-25, D-20261104-26, ผลตรวจ N1 ใน `D:/AI-Workspace/runtime/dispatch/out/aicp-wc-rvC2-oc.out`, `architecture/CORE-CONTRACT-v0.1.md` ข้อ 3.4
 **ระดับการยืนยันสูงสุด:** BUILD_PASS (ผ่านการคอมไพล์ TypeScript, ทดสอบ 297/297 ผ่านบน PGlite ในโปรเซส และ Next.js production build ไม่ได้ทดสอบกับ Supabase จริง)
 
 ---
@@ -74,9 +74,9 @@ not ok 1 - intake accepts visibility=customer for FAQ and stores visibility=cust
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     400 !== 201
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 201
@@ -92,9 +92,9 @@ not ok 2 - intake accepts visibility=customer for CSV file and stores visibility
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     400 !== 201
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 201
@@ -117,12 +117,12 @@ not ok 4 - intake rejects invalid visibility with 400 INVALID_KNOWLEDGE_INPUT an
   error: |-
     Expected values to be strictly deep-equal:
     + actual - expected
-    
+
       {
     +   error: 'INVALID_FORM_FIELDS'
     -   error: 'INVALID_KNOWLEDGE_INPUT'
       }
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -146,9 +146,9 @@ not ok 6 - retrieval with audience customer sees customer docs and not internal 
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     400 !== 201
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 201
@@ -175,9 +175,9 @@ not ok 8 - webchat page renders exact absolute messageEndpoint and integration m
   failureType: 'testCodeFailure'
   error: |-
     HTML must not contain old relative fallback './message'
-    
+
     true !== false
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: false
