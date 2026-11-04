@@ -152,6 +152,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
   });
 
   const routes = createWebChatRoutes({
+    messageEndpoint: "/chat/message",
     resolveConnection: async (connectionId, channel) =>
       channel === "web" && /^conn-[a-z0-9-]+$/u.test(connectionId) ? workspaceFor(connectionId) : null,
     allowedOrigins: () => [ALLOWED_ORIGIN],
