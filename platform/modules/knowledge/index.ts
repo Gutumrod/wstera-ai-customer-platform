@@ -450,7 +450,8 @@ const tokens = (text: string): ReadonlySet<string> => {
 
 const skuCodePattern = /^(?=.*[a-z])(?=.*\d)[a-z0-9]+(?:[-_./][a-z0-9]+)*$/u;
 
-function analyzeText(text: string): Readonly<{ terms: ReadonlySet<string>; skuCodes: readonly string[] }> {
+/** Shared term analysis. Retrieval and answerability must agree on what a "key term" is. */
+export function analyzeText(text: string): Readonly<{ terms: ReadonlySet<string>; skuCodes: readonly string[] }> {
   const terms = tokens(text);
   return Object.freeze({ terms, skuCodes: Object.freeze([...terms].filter((term) => skuCodePattern.test(term))) });
 }
