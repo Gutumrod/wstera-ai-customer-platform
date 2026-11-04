@@ -47,6 +47,7 @@ function createHarness(overrides: Partial<Parameters<typeof createWebChatRoutes>
   };
 
   const deps: Parameters<typeof createWebChatRoutes>[0] = {
+    messageEndpoint: "/chat/message",
     resolveConnection: async (connectionId: string, channel: "web") => {
       if (connectionId === TRUSTED_WORKSPACE.connectionId && channel === "web") {
         return TRUSTED_WORKSPACE;
