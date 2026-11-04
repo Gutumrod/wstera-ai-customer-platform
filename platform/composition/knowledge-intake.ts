@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import type { KnowledgeIntakeAuditPort } from "../contracts/data/knowledge-intake.js";
-import type { KnowledgeErrorCode, KnowledgeRepositoryPort, KnowledgeSourceKind, KnowledgeVersion } from "../contracts/data/knowledge.js";
+import type { KnowledgeErrorCode, KnowledgeRepositoryPort, KnowledgeSourceKind, KnowledgeVersion, KnowledgeVisibility } from "../contracts/data/knowledge.js";
 import { KnowledgeError, createFaqVersion, prepareKnowledgeDocumentVersion } from "../modules/knowledge/index.js";
 import type { KnowledgeDocumentExtractorPort } from "../contracts/data/knowledge.js";
 import type { KnowledgeObjectStoragePort } from "../contracts/data/knowledge-storage.js";
@@ -20,6 +20,7 @@ export type KnowledgeIntakeInput = Readonly<{
   bytes?: Uint8Array;
   filename?: string;
   contentType?: string;
+  visibility?: KnowledgeVisibility;
 }>;
 
 function digest(value: string | Uint8Array): string {
@@ -129,6 +130,7 @@ export async function ingestKnowledgeVersion(
         versionId,
         title: input.title,
         content: input.content,
+        visibility: input.visibility,
       });
     } else {
       if (!(input.bytes instanceof Uint8Array) || !input.filename || !input.contentType) {
@@ -150,6 +152,7 @@ export async function ingestKnowledgeVersion(
         title: input.title,
         kind: input.kind,
         bytes: input.bytes,
+        visibility: input.visibility,
       });
       if (prepared.kind === "failure") {
         if (prepared.code === "EXTRACTION_BUSY") throw new KnowledgeIntakeError(prepared.code, 503);

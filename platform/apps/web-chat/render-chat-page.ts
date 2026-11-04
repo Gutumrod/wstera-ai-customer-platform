@@ -1,7 +1,7 @@
 export type RenderChatPageParams = Readonly<{
   connectionId: string;
   nonce: string;
-  messageEndpoint?: string;
+  messageEndpoint: string;
 }>;
 
 function escapeHtmlAttr(value: string): string {
@@ -30,7 +30,7 @@ function escapeJsStringLiteral(value: string): string {
 export function renderChatPage(params: RenderChatPageParams): string {
   const safeNonce = escapeHtmlAttr(params.nonce);
   const jsConnectionId = escapeJsStringLiteral(params.connectionId);
-  const jsEndpoint = escapeJsStringLiteral(params.messageEndpoint ?? "./message");
+  const jsEndpoint = escapeJsStringLiteral(params.messageEndpoint);
 
   return `<!DOCTYPE html>
 <html lang="th">

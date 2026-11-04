@@ -26,6 +26,7 @@ export type CitationDescription = Readonly<{
 }>;
 
 export type WebChatRoutesDeps = Readonly<{
+  messageEndpoint: string;
   resolveConnection: (connectionId: string, channel: "web") => Promise<TrustedWorkspaceContext | null>;
   allowedOrigins: (connection: TrustedWorkspaceContext) => Promise<readonly string[]> | readonly string[];
   sessionSecret: string;
@@ -185,7 +186,17 @@ async function readBoundedBody(
   }
 }
 
+const SAME_ORIGIN_PATH = /^\/(?![/\\])[^\s\u0000-\u001F\\]*$/u;
+
 export function createWebChatRoutes(deps: WebChatRoutesDeps) {
+  if (
+    typeof deps.messageEndpoint !== "string" ||
+    deps.messageEndpoint.trim().length === 0 ||
+    // Same-origin path only: "//host" and "/\host" read as another origin; spaces and control chars are never valid.
+    !SAME_ORIGIN_PATH.test(deps.messageEndpoint)
+  ) {
+    throw new Error(`messageEndpoint must be a non-empty absolute path starting with "/": got ${JSON.stringify(deps.messageEndpoint)}`);
+  }
   const now = deps.now ?? Date.now;
   const clientLimiter = createRateLimiter(deps.limits?.client ?? { limit: 60, windowMs: 60_000 }, 10_000, now);
   const sessionLimiter = createRateLimiter(deps.limits?.session ?? { limit: 20, windowMs: 60_000 }, 10_000, now);
@@ -244,7 +255,11 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
       }
 
       const nonce = crypto.randomBytes(16).toString("base64");
-      const html = renderChatPage({ connectionId, nonce });
+      const html = renderChatPage({
+        connectionId,
+        nonce,
+        messageEndpoint: deps.messageEndpoint,
+      });
 
       const csp = [
         "default-src 'none'",

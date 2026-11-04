@@ -345,6 +345,7 @@ export async function prepareKnowledgeDocumentVersion(
     kind: "pdf" | "csv";
     bytes: Uint8Array;
     createdAt?: string;
+    visibility?: KnowledgeVisibility;
   }>,
 ): Promise<PreparedKnowledgeDocumentVersion> {
   let extraction: KnowledgeDocumentExtractionResult;
@@ -375,6 +376,7 @@ export async function prepareKnowledgeDocumentVersion(
         kind: input.kind,
         segments: extraction.segments,
         createdAt: input.createdAt,
+        visibility: input.visibility,
       }),
     });
   } catch (error: unknown) {
