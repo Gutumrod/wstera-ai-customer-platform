@@ -83,7 +83,17 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
         const { repository, extractor, storage, intakeAudit, identity } = await requireHost();
         enforce(uploadLimiter, identity.userId);
         const form = await parseBoundedFormData(request, 5 * 1024 * 1024 + 256 * 1024);
-        assertKnownFields(form, ["kind", "title", "content", "file"]);
+        assertKnownFields(form, ["kind", "title", "content", "file", "visibility"]);
+
+        const rawVisibility = form.get("visibility");
+        let visibility: "internal" | "customer" | undefined;
+        if (rawVisibility !== null) {
+          if (rawVisibility === "internal" || rawVisibility === "customer") {
+            visibility = rawVisibility;
+          } else {
+            throw new HttpError(400, "INVALID_KNOWLEDGE_INPUT");
+          }
+        }
 
         const kindValue = form.get("kind");
         const title = form.get("title");
@@ -103,6 +113,7 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
             title,
             kind,
             content,
+            ...(visibility !== undefined ? { visibility } : {}),
           });
         } else {
           const file = form.get("file");
@@ -120,6 +131,7 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
             bytes,
             filename: file.name,
             contentType: file.type,
+            ...(visibility !== undefined ? { visibility } : {}),
           });
         }
         return Response.json({ data: versionSummary(version) }, { status: 201, headers: noStore });

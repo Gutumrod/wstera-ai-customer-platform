@@ -6,6 +6,7 @@ test("renderChatPage output contains no occurrences of innerHTML", () => {
   const html = renderChatPage({
     connectionId: "conn-test",
     nonce: "test-nonce-12345",
+    messageEndpoint: "/chat/message",
   });
 
   assert.equal(html.includes("innerHTML"), false, "HTML must never contain the word 'innerHTML'");
@@ -16,6 +17,7 @@ test("every script and style tag in renderChatPage output has nonce attribute ma
   const html = renderChatPage({
     connectionId: "conn-test",
     nonce,
+    messageEndpoint: "/chat/message",
   });
 
   // Verify scripts
@@ -39,6 +41,7 @@ test("renderChatPage includes accessible landmarks, live region, and buttons", (
   const html = renderChatPage({
     connectionId: "conn-accessible",
     nonce: "nonce-abc",
+    messageEndpoint: "/chat/message",
   });
 
   // Language attribute
