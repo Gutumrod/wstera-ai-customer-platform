@@ -1,7 +1,9 @@
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import type {
+  KnowledgeAudience,
   KnowledgeCitation,
   KnowledgeCitationLocator,
+  KnowledgeRetrievalShortlist,
   KnowledgeSource,
   KnowledgeVersion,
   KnowledgeVersionDraft,
@@ -13,6 +15,7 @@ import {
   archiveKnowledgeSource,
   approveKnowledgeVersion,
   canonicalizeKnowledgeVersionDraft,
+  resolveKnowledgeAudience,
   revokeKnowledgeVersion,
   transitionKnowledgeVersion,
 } from "../index.js";
@@ -92,6 +95,7 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     const existing = this.versions.get(id);
     if (existing) {
       if (existing.content !== canonical.content || existing.title !== canonical.title || existing.kind !== canonical.kind
+        || existing.visibility !== canonical.visibility
         || existing.chunks.length !== version.chunks.length
         || existing.chunks.some((chunk, index) => {
           const candidate = canonical.chunks[index];
@@ -148,18 +152,21 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     return this.replaceVersion(workspace, sourceId, versionId, (version) => revokeKnowledgeVersion(version, input));
   }
 
-  isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): boolean {
+  isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation, audience: KnowledgeAudience): boolean {
     if (citation.workspaceId !== workspace.workspaceId) return false;
+    const resolvedAudience = resolveKnowledgeAudience(audience);
     const source = this.getSource(workspace, citation.sourceId);
     const version = this.getVersion(workspace, citation.sourceId, citation.sourceVersionId);
+    if (resolvedAudience !== "staff" && version?.visibility !== "customer") return false;
     return source?.status === "active" && version?.status === "approved"
       && version.chunks.some((chunk) => chunk.workspaceId === workspace.workspaceId
         && chunk.sourceId === citation.sourceId && chunk.versionId === citation.sourceVersionId
         && chunk.chunkId === citation.chunkId && sameLocator(chunk.locator, citation.locator));
   }
 
-  areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): boolean {
-    return citations.length > 0 && citations.every((citation) => this.isCurrentCitation(workspace, citation));
+  areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[], audience: KnowledgeAudience): boolean {
+    const resolvedAudience = resolveKnowledgeAudience(audience);
+    return citations.length > 0 && citations.every((citation) => this.isCurrentCitation(workspace, citation, resolvedAudience));
   }
 
   replaceVersionContent(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, content: string): never {
@@ -169,13 +176,15 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     throw new Error("CREATE_A_NEW_VERSION_INSTEAD");
   }
 
-  listRetrievableChunks(workspace: TrustedWorkspaceContext) {
+  listRetrievableChunks(workspace: TrustedWorkspaceContext, _shortlist: KnowledgeRetrievalShortlist | undefined, audience: KnowledgeAudience) {
+    const resolvedAudience = resolveKnowledgeAudience(audience);
     const rows: { source: KnowledgeSource; version: KnowledgeVersion; chunk: KnowledgeVersion["chunks"][number] }[] = [];
     for (const source of this.sources.values()) {
       if (source.workspaceId !== workspace.workspaceId) continue;
       for (const version of this.versions.values()) {
         if (version.workspaceId !== workspace.workspaceId || version.sourceId !== source.sourceId) continue;
         if (source.status !== "active" || version.status !== "approved") continue;
+        if (resolvedAudience !== "staff" && version.visibility !== "customer") continue;
         for (const chunk of version.chunks) rows.push(Object.freeze({ source, version, chunk }));
       }
     }

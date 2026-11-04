@@ -1,4 +1,12 @@
-import { MAX_KNOWLEDGE_QUERY_CHARS, MAX_SUPPORT_QUERY_CHARS, type KnowledgeCitation, type KnowledgeRetrievalHit, type KnowledgeRetrievalPort } from "../../contracts/data/knowledge.js";
+import {
+  MAX_KNOWLEDGE_QUERY_CHARS,
+  MAX_SUPPORT_QUERY_CHARS,
+  type KnowledgeAudience,
+  type KnowledgeCitation,
+  type KnowledgeRetrievalHit,
+  type KnowledgeRetrievalPort,
+} from "../../contracts/data/knowledge.js";
+import { resolveKnowledgeAudience } from "../knowledge/index.js";
 import type { ConversationRepositoryPort, ConversationSnapshot } from "../../contracts/data/conversation.js";
 import type { TrustedWorkspaceContext } from "../../contracts/tenancy/index.js";
 import { validateAnswerCitations, type CitationIntegrityReason } from "./citation-integrity.js";
@@ -27,7 +35,7 @@ export interface GroundedAnswerPort {
 
 /** Rechecks every model-visible source/version after generation in one consistent snapshot. */
 export interface EvidenceFreshnessPort {
-  areCurrentAndApproved(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Promise<boolean>;
+  areCurrentAndApproved(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[], audience: KnowledgeAudience): Promise<boolean>;
 }
 
 export type SupportHandoffReason =
@@ -243,6 +251,8 @@ export class SupportOrchestrator {
     workspace: TrustedWorkspaceContext;
     conversationId: string;
     query: string;
+    /** Who is asking; an absent or unrecognised value is treated as "customer". */
+    audience: KnowledgeAudience;
   }>): Promise<SupportReply> {
     // Shape checks are defensive only; callers must resolve this context from a trusted server binding.
     if (!isRecord(input)
@@ -258,10 +268,12 @@ export class SupportOrchestrator {
       return Object.freeze({ kind: "invalid_request" });
     }
     if (!workspace) return Object.freeze({ kind: "invalid_request" });
+    const audience = resolveKnowledgeAudience((input as { audience?: unknown }).audience);
     const request = Object.freeze({
       workspace,
       conversationId: input.conversationId,
       query: input.query,
+      audience,
     });
 
     const initialConversation = await this.loadConversation(request);
@@ -272,7 +284,7 @@ export class SupportOrchestrator {
 
     let retrieval: unknown;
     try {
-      retrieval = await this.ports.retrieval.search({ workspace: request.workspace, query: request.query, limit: this.evidenceLimit });
+      retrieval = await this.ports.retrieval.search({ workspace: request.workspace, query: request.query, limit: this.evidenceLimit, audience: request.audience });
     } catch {
       return this.handoff(guardedRequest, "RETRIEVAL_UNAVAILABLE");
     }
@@ -359,7 +371,7 @@ export class SupportOrchestrator {
       return this.handoff(guardedRequest, reason);
     }
     try {
-      if (await this.ports.evidenceFreshness.areCurrentAndApproved(request.workspace, hits.map((hit) => hit.citation)) !== true) {
+      if (await this.ports.evidenceFreshness.areCurrentAndApproved(request.workspace, hits.map((hit) => hit.citation), request.audience) !== true) {
         return this.handoff(guardedRequest, "KNOWLEDGE_CHANGED");
       }
     } catch {

@@ -32,6 +32,13 @@ export class KnowledgeError extends Error {
 
 export type KnowledgeSourceKind = "faq" | "pdf" | "csv";
 export type KnowledgeSourceStatus = "active" | "archived";
+/**
+ * Chosen once when a version is created and immutable afterwards: changing it
+ * would let a citation produced for one audience stay valid for another.
+ */
+export type KnowledgeVisibility = "internal" | "customer";
+/** Who is asking. An absent or unrecognised value must resolve to "customer". */
+export type KnowledgeAudience = "customer" | "staff";
 export type KnowledgeVersionStatus =
   | "uploaded"
   | "validating"
@@ -72,6 +79,8 @@ export type KnowledgeVersion = Readonly<{
   title: string;
   content: string;
   status: KnowledgeVersionStatus;
+  /** Per-version audience scope; set at creation, never updated. */
+  visibility: KnowledgeVisibility;
   chunks: readonly KnowledgeChunk[];
   createdAt: string;
   approvedAt?: string;
@@ -82,7 +91,11 @@ export type KnowledgeVersion = Readonly<{
 }>;
 
 export type KnowledgeVersionDraft = Omit<KnowledgeVersion,
-  "status" | "approvedAt" | "approvedBy" | "revokedAt" | "revokedBy" | "revocationReason">;
+  | "status" | "approvedAt" | "approvedBy" | "revokedAt" | "revokedBy" | "revocationReason"
+  | "visibility"> & Readonly<{
+  /** Omitted means "internal"; an explicit unknown value must be rejected. */
+  visibility?: KnowledgeVisibility;
+}>;
 export type KnowledgeVersionTransition = "validating" | "extracting" | "indexed" | "quarantined" | "failed";
 
 export type KnowledgeCitationLocator = Readonly<{
@@ -135,6 +148,8 @@ export type KnowledgeRetrievalQuery = Readonly<{
   workspace: TrustedWorkspaceContext;
   query: string;
   limit: number;
+  /** Absent at runtime is treated as "customer" by the core, never as "staff". */
+  audience: KnowledgeAudience;
 }>;
 
 export type KnowledgeRetrievalHit = Readonly<{
@@ -177,14 +192,18 @@ export interface KnowledgeRepositoryPort {
   /** Approval must be atomic and preserve at most one approved/current version per source. */
   approveVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: Readonly<{ approvedBy: string; approvedAt?: string }>): Awaitable<KnowledgeVersion>;
   revokeVersion(workspace: TrustedWorkspaceContext, sourceId: string, versionId: string, input: Readonly<{ revokedBy: string; reason: string; revokedAt?: string }>): Awaitable<KnowledgeVersion>;
-  /** Targeted active/approved check for one cited chunk; adapters must scope every key by workspace. */
-  isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Awaitable<boolean>;
+  /** Targeted active/approved check for one cited chunk; adapters must scope every key by workspace and audience. */
+  isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation, audience: KnowledgeAudience): Awaitable<boolean>;
   /** Check every citation within one consistent repository snapshot. */
-  areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Awaitable<boolean>;
-  /** Bounded and without version content: retrieval needs identity and status, not the whole document per row. */
-  listRetrievableChunks(workspace: TrustedWorkspaceContext, shortlist?: KnowledgeRetrievalShortlist): Awaitable<readonly Readonly<{
+  areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[], audience: KnowledgeAudience): Awaitable<boolean>;
+  /**
+   * Bounded and without version content: retrieval needs identity, status and
+   * visibility, not the whole document per row. The audience is required and
+   * adapters must filter with it, even though the core filters again.
+   */
+  listRetrievableChunks(workspace: TrustedWorkspaceContext, shortlist: KnowledgeRetrievalShortlist | undefined, audience: KnowledgeAudience): Awaitable<readonly Readonly<{
     source: KnowledgeSource;
-    version: Pick<KnowledgeVersion, "workspaceId" | "sourceId" | "versionId" | "status">;
+    version: Pick<KnowledgeVersion, "workspaceId" | "sourceId" | "versionId" | "status" | "visibility">;
     chunk: KnowledgeChunk;
   }>[]>;
 }
