@@ -22,10 +22,11 @@ export class PostgresConversationMessages implements ConversationMessagePort {
 
   async appendTurn(input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; customerText: string; botText: string }>): Promise<void> {
     if (input.customerText.length > 5000 || input.botText.length > 5000) throw new Error("MESSAGE_TOO_LONG");
+    // clock_timestamp (not the transaction-wide now()) orders the pair; the +1us guards clocks too coarse to tell two inserts apart (PGlite).
     await this.database.transaction(async (query) => {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [input.workspace.workspaceId]);
-      await query.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body) VALUES ($1,$2,'customer',$3)", [input.workspace.workspaceId, input.conversationId, input.customerText]);
-      await query.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, delivery_id) VALUES ($1,$2,'bot',$3,$4)", [input.workspace.workspaceId, input.conversationId, input.botText, randomUUID()]);
+      await query.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, created_at) VALUES ($1,$2,'customer',$3,clock_timestamp())", [input.workspace.workspaceId, input.conversationId, input.customerText]);
+      await query.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, delivery_id, created_at) VALUES ($1,$2,'bot',$3,$4,clock_timestamp() + interval '1 microsecond')", [input.workspace.workspaceId, input.conversationId, input.botText, randomUUID()]);
     });
   }
 

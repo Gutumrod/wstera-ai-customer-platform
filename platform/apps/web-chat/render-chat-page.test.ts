@@ -98,7 +98,7 @@ test("welcome bubble is one tight line because the bubble uses pre-wrap", () => 
 });
 
 /** Runs the page script against a tiny fake DOM to exercise history, citations and the handoff lock. */
-function runPage(storage: Map<string, string> | null, fetchReply: unknown, server: { handoffOpen?: boolean; pollFails?: boolean; staff?: { id: string; text: string }[] } = {}): Record<string, any> {
+function runPage(storage: Map<string, string> | null, fetchReply: unknown, server: { handoffOpen?: boolean; pollFails?: boolean; pollHold?: Promise<void>; staff?: { id: string; text: string }[] } = {}): Record<string, any> {
   const html = renderChatPage({ connectionId: "conn-1", nonce: "n", messageEndpoint: "/m" });
   const script = /<script\b[^>]*>([\s\S]*?)<\/script>/i.exec(html)![1]!;
   const make = (): Record<string, any> => {
@@ -121,7 +121,9 @@ function runPage(storage: Map<string, string> | null, fetchReply: unknown, serve
   const fetch = async (url: string, init: { body: string }) => {
     if (url.startsWith("/chat/updates")) {
       if (server.pollFails) throw new Error("offline");
-      return { ok: true, status: 200, json: async () => ({ data: server.staff ?? [], cursor: null, handoffOpen: server.handoffOpen === true }) };
+      const open = server.handoffOpen === true;
+      if (server.pollHold) await server.pollHold;
+      return { ok: true, status: 200, json: async () => ({ data: server.staff ?? [], cursor: null, handoffOpen: open }) };
     }
     return { ok: true, status: 200, json: async () => (init.body.includes("handoff") ? { kind: "handoff_recorded" } : fetchReply) };
   };
@@ -222,4 +224,29 @@ test("page script: a staff message keeps its place after a refresh and is not sh
   await second["poll"]();
   assert.deepEqual(texts(second).slice(-5), ["A", "g", "B", "C", "g"]);
   assert.equal(texts(second).filter((t: string) => t === "B").length, 1);
+});
+
+test("page script: a poll that began before the handoff request cannot unlock the button", async () => {
+  let release!: () => void;
+  const server = { handoffOpen: false, pollHold: new Promise<void>((r) => { release = r; }) };
+  const page = runPage(new Map(), {}, server);
+  await page["poll"](); // initial poll is held, it saw handoffOpen:false
+  await page["handoff-btn"].listeners["click"]();
+  assert.equal(page["handoff-btn"].disabled, true);
+  release();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(page["handoff-btn"].disabled, true);
+});
+
+test("page script: a poll that began before a handoff:true answer cannot unlock the button", async () => {
+  let release!: () => void;
+  const server = { handoffOpen: false, pollHold: new Promise<void>((r) => { release = r; }) };
+  const page = runPage(new Map(), { kind: "uncertain", text: "ไม่แน่ใจ", handoff: true }, server);
+  await page["poll"]();
+  page["chat-input"].value = "ถาม";
+  await page["chat-form"].listeners["submit"]({ preventDefault() {} });
+  assert.equal(page["handoff-btn"].disabled, true);
+  release();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(page["handoff-btn"].disabled, true);
 });
