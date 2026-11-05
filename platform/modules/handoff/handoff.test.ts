@@ -33,12 +33,12 @@ test("new conversation starts with AI enabled and tenant-scoped identity", async
   assert.equal(canSendAiReply(conversation), true);
 });
 
-test("handoff request pauses AI before operator claim and staff reply keeps it paused", async () => {
+test("handoff request leaves AI active until operator claim and staff reply keeps it paused", async () => {
   const repository = new InMemoryConversationRepository();
   await createConversation(repository, workspace, "thread-2");
   const waiting = await requestHandoff(repository, workspace, "thread-2", "no_answer");
   assert.equal(waiting.status, "handoff_requested");
-  assert.equal(canSendAiReply(waiting), false);
+  assert.equal(canSendAiReply(waiting), true);
 
   const active = await claimHandoff(repository, authorization(), workspace, "thread-2", "staff-1");
   assert.equal(active.status, "human_active");
@@ -119,14 +119,18 @@ test("handoff commands reject a forged workspace and an active conversation cann
   );
 });
 
-test("handoff failures are explicit and invalid transition requests fail closed", async () => {
+test("repeated handoff requests are idempotent and invalid transitions fail closed", async () => {
   const repository = new InMemoryConversationRepository();
   await createConversation(repository, workspace, "thread-6");
   const first = await requestHandoff(repository, workspace, "thread-6", "no_answer");
   const repeated = await requestHandoff(repository, workspace, "thread-6", "no_answer");
   assert.equal(repeated.version, first.version);
+  const repeatedCustomerRequest = await requestHandoff(repository, workspace, "thread-6", "customer_requested");
+  assert.equal(repeatedCustomerRequest.version, first.version);
   await assert.rejects(
-    () => requestHandoff(repository, workspace, "thread-6", "customer_requested"),
+    () => repository.append(workspace, "thread-6", first.version, {
+      kind: "handoff_requested", reason: "customer_requested", occurredAt: new Date().toISOString(),
+    }),
     (error: unknown) => error instanceof ConversationError && error.code === "INVALID_TRANSITION",
   );
 });

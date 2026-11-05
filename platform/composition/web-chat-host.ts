@@ -118,9 +118,9 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
 
   const responder: SupportResponder = async ({ workspace, conversationId, query }) => {
     await ensureConversation(workspace, conversationId);
-    // Small talk is answered only while the AI owns the conversation; once handed off, the normal path decides.
+    // Small talk stays available while a handoff is waiting; staff ownership pauses the AI.
     const text = smallTalkReply(query);
-    if (text !== null && (await deps.conversations.load(workspace, conversationId))?.status === "ai_active") {
+    if (text !== null && (await deps.conversations.load(workspace, conversationId))?.status !== "human_active") {
       return Object.freeze({ kind: "small_talk", text });
     }
     // A greeting in front of a real question is not part of the question.
