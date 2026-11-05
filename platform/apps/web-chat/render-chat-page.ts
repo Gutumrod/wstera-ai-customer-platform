@@ -279,18 +279,12 @@ export function renderChatPage(params: RenderChatPageParams): string {
 
       const STORAGE_KEY = "aicp-webchat:" + connectionId;
       const MAX_STORED_MESSAGES = 50;
-      const state = { m: [], h: false };
+      const state = { m: [] };
 
       function saveState() {
         try {
           sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (err) { /* storage unavailable: the chat still works, it just will not survive a refresh */ }
-      }
-
-      function lockHandoff() {
-        handoffBtn.disabled = true;
-        state.h = true;
-        saveState();
       }
 
       // persist=false for connection errors, which must not come back after a refresh.
@@ -335,7 +329,6 @@ export function renderChatPage(params: RenderChatPageParams): string {
               appendMessage(entry[0], entry[1] === 1, Array.isArray(entry[2]) ? entry[2].filter(function (t) { return typeof t === "string"; }).map(function (t) { return { title: t }; }) : []);
             }
           });
-          if (saved.h === true) lockHandoff();
         }
       } catch (err) { /* ignore unreadable saved chat */ }
 
@@ -371,7 +364,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
               appendMessage(data.text || "", false, data.citations);
             } else if (data.kind === "uncertain") {
               appendMessage(data.text || "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ สามารถกดปุ่มขอคุยกับพนักงานได้ครับ", false);
-              if (data.handoff === true) lockHandoff();
+              if (data.handoff === true) handoffBtn.disabled = true;
             } else {
               appendMessage(data.text || "ได้รับข้อความแล้ว", false);
             }
@@ -407,6 +400,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
 
       handoffBtn.addEventListener("click", async function () {
         handoffBtn.disabled = true;
+        let sent = false;
         messagesContainer.setAttribute("aria-busy", "true");
 
         const controller = new AbortController();
@@ -428,7 +422,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
           const data = await response.json();
           if (response.ok && data.kind === "handoff_recorded") {
             appendMessage("ส่งคำขอคุยกับพนักงานเรียบร้อยแล้วครับ เจ้าหน้าที่จะติดต่อกลับโดยเร็ว", false);
-            lockHandoff();
+            sent = true;
           } else {
             appendMessage("ไม่สามารถส่งคำขอคุยกับพนักงานได้ในขณะนี้", false, undefined, false);
           }
@@ -441,7 +435,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
           }
         } finally {
           messagesContainer.removeAttribute("aria-busy");
-          if (!state.h) handoffBtn.disabled = false;
+          if (!sent) handoffBtn.disabled = false;
         }
       });
 
@@ -458,6 +452,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
             seenStaffMessages.add(message.id);
             appendMessage(message.text, false, undefined, false);
           });
+          if (typeof result.handoffOpen === "boolean") handoffBtn.disabled = result.handoffOpen;
           if (typeof result.cursor === "string") updateCursor = result.cursor;
         } catch (err) { /* polling resumes on the next interval */ }
       }
