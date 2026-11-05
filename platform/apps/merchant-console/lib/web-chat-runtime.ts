@@ -44,6 +44,8 @@ function configuredRoutes(): Promise<ReturnType<typeof createWebChatRoutes>> | n
         }
       },
     }));
+    // A failed init (e.g. transient DB outage) must not be cached forever; the next request retries.
+    pending.catch(() => { if (shared.__webChatRoutes === pending) delete shared.__webChatRoutes; });
     shared.__webChatRoutes = pending;
   }
   return shared.__webChatRoutes;
