@@ -115,22 +115,22 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
   // The page issues a server-side conversation id with the session, but the
   // first message arrives before any conversation row exists. Create it under
   // the server-resolved workspace, tolerating a concurrent first message.
-  const ensureConversation = async (workspace: TrustedWorkspaceContext, conversationId: string): Promise<void> => {
+  const ensureConversation = async (workspace: TrustedWorkspaceContext, conversationId: string) => {
     const existing = await deps.conversations.load(workspace, conversationId);
-    if (existing !== null) return;
+    if (existing !== null) return existing;
     try {
-      await createConversation(deps.conversations, workspace, conversationId, now());
+      return await createConversation(deps.conversations, workspace, conversationId, now());
     } catch (error) {
       const raced = await deps.conversations.load(workspace, conversationId).catch(() => null);
       if (raced === null) throw error;
+      return raced;
     }
   };
 
   const responder: SupportResponder = async ({ workspace, conversationId, query }) => {
-    await ensureConversation(workspace, conversationId);
+    const current = await ensureConversation(workspace, conversationId);
     // Small talk stays available while a handoff is waiting; staff ownership pauses the AI.
     const text = smallTalkReply(query);
-    const current = await deps.conversations.load(workspace, conversationId);
     if (text !== null && current?.status !== "human_active") {
       return Object.freeze({ kind: "small_talk", text });
     }

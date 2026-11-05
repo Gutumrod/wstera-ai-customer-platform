@@ -745,8 +745,16 @@ test("message route de-duplicates citation titles and passes small talk through 
     chunkId,
     locator: { kind: "page" as const, page: 1 },
   });
+  let descriptionCalls = 0;
   const post = async (reply: SupportReply | { kind: "small_talk"; text: string }) => {
-    const { routes } = createHarness({ responder: async () => reply });
+    const { routes } = createHarness({
+      responder: async () => reply,
+      describeCitations: async (_workspace, citations) => {
+        descriptionCalls += 1;
+        assert.equal(citations.length, 3);
+        return [{ title: "คู่มือ B" }, { title: "คู่มือ A" }, { title: "คู่มือ B" }];
+      },
+    });
     const res = await routes.message(new Request("https://example.com/message", {
       method: "POST",
       headers: { cookie: makeValidCookie(), origin: ALLOWED_ORIGIN, "content-type": "application/json" },
@@ -754,8 +762,9 @@ test("message route de-duplicates citation titles and passes small talk through 
     }));
     return res.json() as Promise<{ kind: string; text: string; citations?: unknown[] }>;
   };
-  const answer = await post({ kind: "answer", text: "ตอบ", citations: [citation("c1"), citation("c2")], conversationVersion: 1 });
-  assert.deepEqual(answer.citations, [{ title: "คู่มือการใช้งาน" }]);
+  const answer = await post({ kind: "answer", text: "ตอบ", citations: [citation("c1"), citation("c2"), citation("c3")], conversationVersion: 1 });
+  assert.deepEqual(answer.citations, [{ title: "คู่มือ B" }, { title: "คู่มือ A" }]);
+  assert.equal(descriptionCalls, 1, "all three citations are resolved in one call while chip order is retained");
   const greeting = await post({ kind: "small_talk", text: "สวัสดีครับ" });
   assert.deepEqual(greeting, { kind: "greeting", text: "สวัสดีครับ" });
 });

@@ -52,8 +52,13 @@ export async function createMigratedDatabase(): Promise<PGlite> {
 /** Runs each transaction as the real runtime role, as the pooled pg adapter does in production. */
 export function runtimePort(database: PGlite, statements?: string[]): PostgresDatabasePort {
   return {
+    async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
+      statements?.push(sql);
+      return { rows: (await database.query<Row>(sql, [...values])).rows };
+    },
     async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
       return database.transaction(async (transaction) => {
+        statements?.push("BEGIN");
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
         return operation({
           async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
@@ -61,7 +66,7 @@ export function runtimePort(database: PGlite, statements?: string[]): PostgresDa
             return { rows: (await transaction.query<Row>(sql, [...values])).rows };
           },
         });
-      });
+      }).then((value) => { statements?.push("COMMIT"); return value; }, (error) => { statements?.push("ROLLBACK"); throw error; });
     },
   };
 }

@@ -36,6 +36,7 @@ export type WebChatRoutesDeps = Readonly<{
   persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
   staffUpdates?: (input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; after: string | null; limit: number }>) => Promise<Readonly<{ messages: readonly StaffConversationMessage[]; cursor: string | null; handoffOpen: boolean | null }>>;
   describeCitation?: (workspace: TrustedWorkspaceContext, citation: KnowledgeCitation) => Promise<CitationDescription | null>;
+  describeCitations?: (workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]) => Promise<readonly (CitationDescription | null)[]>;
   clientKey: (request: Request) => string;
   limits?: Readonly<{
     session?: RateLimit;
@@ -380,13 +381,14 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
           case "answer": {
             const chips: CitationChip[] = [];
             if (reply.citations && Array.isArray(reply.citations)) {
-              for (const citation of reply.citations) {
-                if (deps.describeCitation) {
-                  const desc = await deps.describeCitation(workspace, citation);
-                  if (desc && typeof desc.title === "string" && desc.title.trim().length > 0) {
-                    if (!chips.some((chip) => chip.title === desc.title)) chips.push({ title: desc.title });
-                  }
-                }
+              const descriptions = deps.describeCitations
+                ? await deps.describeCitations(workspace, reply.citations)
+                : deps.describeCitation
+                  ? await Promise.all(reply.citations.map((citation) => deps.describeCitation!(workspace, citation)))
+                  : [];
+              for (const desc of descriptions) {
+                if (desc && typeof desc.title === "string" && desc.title.trim().length > 0
+                  && !chips.some((chip) => chip.title === desc.title)) chips.push({ title: desc.title });
               }
             }
             const body = {
