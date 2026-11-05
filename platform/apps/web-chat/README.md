@@ -1,6 +1,6 @@
 # Web AI Chat Widget
 
-**Status:** MERGED, BUILD_PASS only (WEBCHAT-001 PR #30–#33 on `main` @ `b080d57`); the page, session, routes and `SupportOrchestrator` wiring exist as code and local tests, but no real host or hosted deployment serves them. **Planned phase:** Phase 1.
+**Status:** BUILD_PASS target, local composition and PGlite route integration only. `platform/apps/merchant-console/app/chat/route.ts` and `/chat/message` mount the Web Chat host; this does not prove hosted migration application or deployment. **Phase:** Phase 1.
 
 ## Responsibility
 
@@ -16,6 +16,10 @@ Customer web chat UI rendering, safe origin binding, signed session management, 
 
 ## Pending
 
-- A real app host that mounts `createWebChatRoutes` and `createWebChatHost`; only composition code and tests call them today.
-- Durable conversation storage (HANDOFF-002); conversations are in memory only.
+- Apply migration `20261105000100_web_chat_host.sql` only after a separate Owner GO; it adds `allowed_origins` and `query_aliases` with column-only read grants for `knowledge_runtime`.
+- Configure `WEB_CHAT_SESSION_SECRET` to at least 32 bytes. Missing or short values make chat routes return 503. `WEB_CHAT_TRUSTED_IP_HEADER` is optional; when unset, visitors to one connection share a rate-limit bucket.
+- Configure exact allowed website origins through workspace connection setup. The local seed reads `WEB_CHAT_ALLOWED_ORIGINS`; when unset, every origin is denied.
+- Durable conversation storage and human handoff remain HANDOFF-002. Conversations are in memory only; when handoff is unavailable, the customer is told it could not be sent.
 - Cross-origin iframe embed packaging (Phase 1 currently enforces `frame-ancestors 'none'`).
+
+No hosted Postgres, Supabase, or deployed route has been exercised by this task.

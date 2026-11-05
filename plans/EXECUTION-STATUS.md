@@ -23,6 +23,8 @@ PR #25 (HOST-004: lab mode fails closed) and PR #23 (AICP objects in schema `aic
 
 What this does not show: the migrations (including `20261104000100_knowledge_visibility.sql`) have never run on Supabase, all database evidence is PGlite, no real host serves the visitor chat, no model is enabled, durable handoff (HANDOFF-002) is not built, and the browser-to-`wstera-lab` E2E was not run. CI runs recorded for HOST-002 cover `250bb67` and `acb0e9e`; a unified CI result for `b080d57` is not asserted here. Nothing above is `PRODUCTION_READY`.
 
+WEBCHAT-HOST-001 follow-on (2026-11-05, branch `codex/aicp-webchat-host-20261105`): local Next.js routes and PostgreSQL/PGlite host composition now exist, with PGlite integration tests. The new migration has not run on Supabase, routes are not deployed, and staff handoff remains unavailable pending HANDOFF-002. This does not change BUILD_PASS-only status.
+
 ## Owner decisions 2026-10-25
 
 Docker Desktop is withdrawn from this machine; the host E2E runs against schema `aicp` on `wstera-lab`, and applying the migration needs a separate Owner GO (register `D-20261025-11`). The G1 answer path is extractive citations by default with the model-backed path behind an off-by-default flag; turning the flag on needs separate Owner approval, a budget ceiling, a usage ledger and a data-region choice. Owner work order (`D-20261025-09`) is host hardening → Web Chat → durable handoff → G1 acceptance. Proposed before it, not an Owner decision: HOST-004, then the Owner GO and PR #23 merge decision.

@@ -25,7 +25,7 @@
 -- the preflight output and with the project named in the Owner GO. Pooled hosted databases are usually
 -- all called `postgres`, so the database name alone proves nothing.
 --
--- Ownership after the five migrations (main @1b94ce5, role-compat rewrite): schema aicp, all 8 tables and 9 of the
+-- Ownership after the six migrations (includes 20261105000100_web_chat_host.sql): schema aicp, all 8 tables and 9 of the
 -- 10 functions belong to aicp_migrator; aicp.current_auth_uid() belongs to the migration runner (the connecting
 -- `postgres` user). The runner is NOT a superuser, owns nothing else in aicp, and every migration file ends by
 -- revoking its SET option on aicp_migrator (it keeps only the ADMIN option it got when it created the role).
@@ -178,6 +178,8 @@ SELECT 'synthetic users' AS what, string_agg(email, ', ') AS name, count(*)::tex
 -- NOTIFY pgrst, 'reload schema';
 
 -- Section 6: verification (read-only, safe): re-run scripts/e2e-preflight.sql and keep the raw output.
+-- The Web Chat columns/policies/grants are owned by aicp_migrator and are removed with the workspace tables/schema;
+-- do not try to drop them as knowledge_runtime or leave their column-level grants behind.
 
 -- ===========================================================================================
 -- MANUAL, outside SQL (Owner or authorised operator, dashboard):

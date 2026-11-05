@@ -43,3 +43,7 @@ EVIDENCE .worktrees/docs-g1-plan-20261025 platform/contracts/tenancy/index.ts:5-
 ## PR
 
 Scoped PR with touched paths, fresh test output, security impact, cost impact (zero provider spend), remaining blockers. Do not self-merge.
+
+## Follow-on host status · 2026-11-05
+
+WEBCHAT-HOST-001 adds merchant-console `/chat` and `/chat/message` Node routes, PostgreSQL-backed active web connection/origin/alias reads, and real-host composition. Verification is local PGlite only; the migration is not applied to hosted Supabase and no deployment has been performed. In-memory conversations and unavailable staff handoff remain bounded gaps for HANDOFF-002.

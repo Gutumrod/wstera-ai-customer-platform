@@ -675,10 +675,10 @@ test("message route maps responder status to standardized HTTP responses", async
   assert.match(data2.text, /รอพนักงานตอบ/);
   assert.doesNotMatch(data2.text, /ไม่พบข้อมูล|กดปุ่ม/);
 
-  // handoff_unavailable -> original wording that points to the button
+  // handoff_unavailable -> clearly disclose that staff could not be reached
   const res2b = await callWithReply({ kind: "handoff_unavailable", reason: "NO_APPROVED_EVIDENCE" });
   const data2b = await res2b.json() as { text: string; handoff?: boolean };
-  assert.match(data2b.text, /กดปุ่มขอคุยกับพนักงาน/);
+  assert.match(data2b.text, /ยังส่งเรื่องให้พนักงานไม่ได้/u);
   assert.equal(data2b.handoff, undefined);
 
   // conversation_changed -> 409
