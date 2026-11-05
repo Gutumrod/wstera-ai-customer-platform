@@ -139,7 +139,7 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
   return <main className="shell">
     <header className="topbar">
       <div><p className="eyebrow">WSTERA · LOCAL SYNTHETIC</p><h1>Knowledge Desk</h1></div>
-      <div className="user-tools"><span className="role-chip">{role}</span><button className="button-quiet" onClick={signOut}>ออกจากระบบ</button></div>
+      <div className="user-tools"><span className="role-chip">{role}</span><a href="/handoffs">เรื่องที่รอพนักงาน</a><button className="button-quiet" onClick={signOut}>ออกจากระบบ</button></div>
     </header>
     {message && <p className="notice" role="status">{message}</p>}
 

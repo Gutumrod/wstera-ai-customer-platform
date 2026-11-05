@@ -11,7 +11,7 @@
 --   * supabase/migrations/20261022000100_knowledge.sql:1  CREATE SCHEMA IF NOT EXISTS aicp, then plain CREATE TABLE (fails on a name clash)
 --   * supabase/migrations/20261023000100_g1_workspace_host.sql:37 (aicp.current_auth_uid), 20261103000100_host_hardening.sql,
 --     20261103000200_host_hardening_revoke.sql, 20261104000100_knowledge_visibility.sql and
---     20261105000100_web_chat_host.sql create functions, triggers and columns by plain CREATE/ADD
+--     20261105000100_web_chat_host.sql and 20261105000200_durable_handoff.sql create functions, triggers, tables and columns by plain CREATE/ADD
 --     (no IF NOT EXISTS); check 21 below looks for name clashes
 --   * Reads the runner may not be allowed (UNVERIFIED on hosted; D-20261105-04 measured only INSERT/UPDATE on
 --     storage.buckets, not SELECT, and nothing on storage.objects or SELECT on auth.users) are looked up first by the
@@ -106,11 +106,11 @@ new_name_clashes AS (
   SELECT 'function ' || p.proname AS name FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'aicp' AND p.proname IN ('revoke_knowledge_version', 'archive_knowledge_source',
         'protect_knowledge_source_identity', 'protect_knowledge_version_visibility',
-        'assert_active_knowledge_writer', 'approve_knowledge_version', 'current_auth_uid')
+        'assert_active_knowledge_writer', 'approve_knowledge_version', 'current_auth_uid', 'reject_conversation_event_mutation')
   UNION ALL
   SELECT 'trigger ' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = 'aicp' AND NOT t.tgisinternal
-    AND t.tgname IN ('knowledge_source_identity_guard', 'knowledge_version_visibility_guard')
+    AND t.tgname IN ('knowledge_source_identity_guard', 'knowledge_version_visibility_guard', 'conversation_events_immutable')
   UNION ALL
   SELECT 'column knowledge_versions.visibility' FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = 'aicp' AND c.relname = 'knowledge_versions' AND a.attname = 'visibility' AND a.attnum > 0 AND NOT a.attisdropped

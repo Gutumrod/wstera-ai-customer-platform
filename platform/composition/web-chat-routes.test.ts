@@ -103,6 +103,35 @@ test("page route returns 404 when connectionId is missing or resolve fails", asy
   assert.equal(res2.headers.get("set-cookie"), null);
 });
 
+test("staff updates are session-bound, expose staff-only data, and cap polling at 30 per minute", async () => {
+  let updateCalls = 0;
+  let lastAfter: string | null = null;
+  const { routes } = createHarness({
+    limits: { updates: { limit: 30, windowMs: 60_000 } },
+    staffUpdates: async ({ conversationId, after }) => {
+      updateCalls += 1;
+      lastAfter = after;
+      assert.ok(conversationId);
+      return { messages: [{ id: "staff-message", text: "คำตอบจากพนักงาน", createdAt: "2026-11-05T00:00:00.000Z" }], cursor: "opaque-cursor" };
+    },
+  });
+  const cookie = makeValidCookie();
+  const first = await routes.updates(new Request("https://example.com/chat/updates", { headers: { cookie, "sec-fetch-site": "same-origin" } }));
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { data: [{ id: "staff-message", text: "คำตอบจากพนักงาน", createdAt: "2026-11-05T00:00:00.000Z" }], cursor: "opaque-cursor" });
+  assert.equal(lastAfter, null);
+  const malformedCookie = await routes.updates(new Request("https://example.com/chat/updates", { headers: { "sec-fetch-site": "same-origin" } }));
+  assert.equal(malformedCookie.status, 401);
+  for (let index = 1; index < 30; index += 1) {
+    const response = await routes.updates(new Request("https://example.com/chat/updates?after=opaque-cursor", { headers: { cookie, "sec-fetch-site": "same-origin" } }));
+    assert.equal(response.status, 200);
+  }
+  const limited = await routes.updates(new Request("https://example.com/chat/updates", { headers: { cookie, "sec-fetch-site": "same-origin" } }));
+  assert.equal(limited.status, 429);
+  assert.equal(updateCalls, 30);
+  assert.equal(lastAfter, "opaque-cursor");
+});
+
 test("page route sets signed session cookie and strict CSP for resolved connection", async () => {
   const { routes } = createHarness();
   const res = await routes.page(new Request(`https://example.com/chat?c=${TRUSTED_WORKSPACE.connectionId}`));
@@ -664,7 +693,9 @@ test("message route maps responder status to standardized HTTP responses", async
   assert.match(data1.text, /ไม่พบข้อมูลที่ยืนยันได้/);
 
   assert.equal((data1 as { handoff?: boolean }).handoff, undefined);
-  assert.match(data1.text, /ส่งเรื่องให้พนักงานแล้ว/);
+  assert.match(data1.text, /ขออภัย/);
+  assert.match(data1.text, /แจ้งพนักงาน/);
+  assert.match(data1.text, /ถามเรื่องอื่นได้/);
 
   // ai_paused -> 200 uncertain, already with staff: wait, do not press the button again
   const res2 = await callWithReply({ kind: "ai_paused" });

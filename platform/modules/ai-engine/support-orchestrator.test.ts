@@ -263,11 +263,18 @@ test("freshness revalidates every chunk shown to the model, including uncited ev
   assert.deepEqual(freshnessCalls[0]!.citations, [hit.citation, secondHit.citation]);
 });
 
-test("paused conversations stop before retrieval and a handoff during generation suppresses the answer", async (t) => {
+test("human-active conversations stop before retrieval and handoff waits leave AI enabled", async (t) => {
   await t.test("already paused", async () => {
     const { engine, calls } = harness({ conversationStatus: "human_active" });
     assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "ai_paused" });
     assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
+  });
+  await t.test("handoff requested still answers", async () => {
+    const { engine, calls } = harness({ conversationStatus: "handoff_requested" });
+    const result = await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" });
+    assert.equal(result.kind, "answer");
+    assert.equal(calls.assessment, 1);
+    assert.equal(calls.generation, 1);
   });
   await t.test("handoff starts and is released while generating", async () => {
     const { engine } = harness({ takeoverAndReleaseAfterGeneration: true });

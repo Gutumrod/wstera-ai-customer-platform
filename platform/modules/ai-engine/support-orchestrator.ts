@@ -278,7 +278,7 @@ export class SupportOrchestrator {
 
     const initialConversation = await this.loadConversation(request);
     if (initialConversation.kind !== "loaded") return initialConversation;
-    if (initialConversation.snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });
+    if (initialConversation.snapshot.status === "human_active") return Object.freeze({ kind: "ai_paused" });
     const guardedRequest = Object.freeze({ ...request, expectedConversationVersion: initialConversation.snapshot.version });
     if (request.query.length > MAX_KNOWLEDGE_QUERY_CHARS) return this.handoff(guardedRequest, "QUERY_TOO_LONG");
 
@@ -379,7 +379,7 @@ export class SupportOrchestrator {
     }
     const currentConversation = await this.loadConversation(request);
     if (currentConversation.kind !== "loaded") return currentConversation;
-    if (currentConversation.snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });
+    if (currentConversation.snapshot.status === "human_active") return Object.freeze({ kind: "ai_paused" });
     if (currentConversation.snapshot.version !== initialConversation.snapshot.version) return Object.freeze({ kind: "conversation_changed" });
     return Object.freeze({
       kind: "answer",
@@ -425,7 +425,7 @@ export class SupportOrchestrator {
     if (input.expectedConversationVersion !== undefined) {
       const current = await this.loadConversation(input);
       if (current.kind !== "loaded") return current;
-      if (current.snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });
+      if (current.snapshot.status === "human_active") return Object.freeze({ kind: "ai_paused" });
       if (current.snapshot.version !== input.expectedConversationVersion) return Object.freeze({ kind: "conversation_changed" });
     }
     try {

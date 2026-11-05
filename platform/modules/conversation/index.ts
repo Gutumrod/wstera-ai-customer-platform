@@ -88,7 +88,7 @@ function withEvent(snapshot: ConversationSnapshot, event: ConversationEvent): Co
 }
 
 export function canSendAiReply(conversation: ConversationSnapshot): boolean {
-  return conversation.status === "ai_active";
+  return conversation.status !== "human_active";
 }
 
 export async function createConversation(
@@ -116,7 +116,8 @@ export async function requestHandoff(
   assertTime(now);
   const current = await repository.load(workspace, conversationId);
   if (!current) throw new ConversationError("CONVERSATION_NOT_FOUND");
-  if (current.status === "handoff_requested" && current.handoffReason === reason) return current;
+  // A repeated customer request while staff notification is already open is a no-op.
+  if (current.status !== "ai_active") return current;
   return repository.append(workspace, conversationId, current.version, { kind: "handoff_requested", reason, occurredAt: now });
 }
 

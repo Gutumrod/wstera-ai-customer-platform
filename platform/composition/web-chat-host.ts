@@ -1,6 +1,7 @@
 import type { ConversationRepositoryPort } from "../contracts/data/conversation.js";
 import type { KnowledgeRetrievalPort } from "../contracts/data/knowledge.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
+import type { ConversationMessagePort } from "../contracts/data/conversation-messages.js";
 import type {
   AnswerabilityPort,
   EvidenceFreshnessPort,
@@ -25,6 +26,7 @@ export type WebChatHostDeps = Readonly<{
   evidenceFreshness: EvidenceFreshnessPort;
   answerability: AnswerabilityPort;
   handoff: SupportHandoffPort;
+  messages?: ConversationMessagePort;
   /** Test/alternate wiring. When omitted, the extractive answer port is used. */
   answer?: GroundedAnswerPort;
   /** Only consulted when `answer` is omitted; a model port is built only when enabled === true. */
@@ -42,6 +44,8 @@ export type WebChatHostDeps = Readonly<{
 export type WebChatHost = Readonly<{
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
+  persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
+  staffUpdates?: ConversationMessagePort["staffUpdates"];
 }>;
 
 const greetingPattern = /^(?:สวัสดี|หวัดดี|ฮัลโหล|ฮัลโล|ฮาโลว?|hello|hi|hey)(?:ครับ|ค่ะ|คะ|คับ|จ้า|จ้ะ|ฮะ)?(?:นะ)?$/u;
@@ -118,9 +122,9 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
 
   const responder: SupportResponder = async ({ workspace, conversationId, query }) => {
     await ensureConversation(workspace, conversationId);
-    // Small talk is answered only while the AI owns the conversation; once handed off, the normal path decides.
+    // Small talk stays available while a handoff is waiting; staff ownership pauses the AI.
     const text = smallTalkReply(query);
-    if (text !== null && (await deps.conversations.load(workspace, conversationId))?.status === "ai_active") {
+    if (text !== null && (await deps.conversations.load(workspace, conversationId))?.status !== "human_active") {
       return Object.freeze({ kind: "small_talk", text });
     }
     // A greeting in front of a real question is not part of the question.
@@ -142,5 +146,10 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
       await ensureConversation(workspace, conversationId);
       await requestConversationHandoff(deps.conversations, workspace, conversationId, "customer_requested", now());
     },
+    ...(deps.messages ? {
+      persistTurn: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) =>
+        deps.messages!.appendTurn({ workspace, conversationId, customerText, botText }),
+      staffUpdates: (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => deps.messages!.staffUpdates(input),
+    } : {}),
   });
 }

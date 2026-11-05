@@ -39,7 +39,9 @@ LINE OA ───────┘       │
 - [`reports/G1-HOST-001-IMPLEMENTATION.md`](reports/G1-HOST-001-IMPLEMENTATION.md): implementation evidence and remaining gates.
 - `.github/workflows/ci.yml`: Node CI for typecheck and tests.
 
-**Still not implemented:** public Web Chat, live model wiring, semantic answerability, durable human Inbox/dispatch, billing, production webhook operations, and full one-shop G1 acceptance. The event lease port only specifies claim, completion, retry-release and expiry semantics; its test double is not durable storage. The unsigned LINE URL connectivity probe is acknowledged only when its payload has no events and creates no tenant context.
+**HANDOFF-002 candidate (2026-11-05, `codex/aicp-handoff-002-20261105`):** durable PostgreSQL conversation state, a minimal merchant Inbox, transactional staff actions, local customer-message polling and an internal notification outbox are implemented and covered with PGlite. This candidate is not merged; no migration was applied to Supabase, no external notification is sent, message retention is not configured, and independent review remains pending.
+
+**Still not implemented:** live model wiring, semantic answerability, external human notification/channel delivery, billing, production webhook operations, and full one-shop G1 acceptance. The event lease port only specifies claim, completion, retry-release and expiry semantics; its test double is not durable storage. The unsigned LINE URL connectivity probe is acknowledged only when its payload has no events and creates no tenant context.
 
 ## Baseline checks
 

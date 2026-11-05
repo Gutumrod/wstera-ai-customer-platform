@@ -11,6 +11,7 @@ import {
 } from "../modules/knowledge/index.js";
 import { InMemoryKnowledgeRepository } from "../modules/knowledge/testing/in-memory-repository.js";
 import { InMemoryConversationRepository } from "../modules/conversation/testing/in-memory-repository.js";
+import { claimHandoff } from "../modules/conversation/index.js";
 import { createExtractiveAnswerabilityPort } from "../adapters/answers/extractive/extractive-answerability-port.js";
 import { createWebChatRoutes } from "./web-chat-routes.js";
 import { createWebChatHost, type WebChatHostDeps } from "./web-chat-host.js";
@@ -93,6 +94,7 @@ type Harness = Readonly<{
   openSession: (connectionId: string) => Readonly<{ cookie: string; conversationId: string }>;
   send: (connectionId: string, cookie: string, text: string) => Promise<Response>;
   sendHandoff: (connectionId: string, cookie: string) => Promise<Response>;
+  claim: (connectionId: string, conversationId: string) => Promise<void>;
   load: (connectionId: string, conversationId: string) => ReturnType<InMemoryConversationRepository["load"]>;
 }>;
 
@@ -205,6 +207,13 @@ function createHarness(options: HarnessOptions = {}): Harness {
     openSession,
     send: (connectionId: string, cookie: string, text: string) => post(connectionId, cookie, { text }),
     sendHandoff: (connectionId: string, cookie: string) => post(connectionId, cookie, { action: "handoff" }),
+    claim: async (connectionId: string, conversationId: string) => {
+      await claimHandoff(baseConversations, {
+        assertCanClaim: async () => undefined,
+        assertCanReply: async () => undefined,
+        assertCanRelease: async () => undefined,
+      }, workspaceFor(connectionId), conversationId, "staff-1", FIXED_NOW);
+    },
     load: (connectionId: string, conversationId: string) =>
       baseConversations.load(workspaceFor(connectionId), conversationId),
   });
@@ -357,10 +366,10 @@ test("end-to-end: two visitors in the same workspace never share conversation st
   const handoffA = await harness.sendHandoff("conn-visitor-a", visitorA.cookie);
   assert.equal(handoffA.status, 200);
 
-  // A is now paused...
+  // A has a pending staff handoff, but the AI keeps answering until staff claims it.
   const pausedA = await harness.send("conn-visitor-a", visitorA.cookie, "คืนสินค้าได้ภายในกี่วัน");
   assert.equal(pausedA.status, 200);
-  assert.equal((await pausedA.json() as UncertainResponse).kind, "uncertain");
+  assert.equal((await pausedA.json() as AnswerResponse).kind, "answer");
 
   // ...but B is unaffected and gets a real answer.
   const answerB = await harness.send("conn-visitor-b", visitorB.cookie, "คืนสินค้าได้ภายในกี่วัน");
@@ -559,17 +568,26 @@ test("end-to-end: a greeting followed by a question walks the normal path", asyn
   assert.match(body.text, /09:00-18:00/u);
 });
 
-test("end-to-end: after handoff a greeting is not small talk and the customer is told staff will reply", async () => {
+test("end-to-end: after handoff a greeting still gets a small-talk reply", async () => {
   const harness = createHarness();
   const session = harness.openSession("conn-after-handoff");
   assert.equal((await harness.sendHandoff("conn-after-handoff", session.cookie)).status, 200);
   const response = await harness.send("conn-after-handoff", session.cookie, "สวัสดี");
-  const body = await response.json() as UncertainResponse & { handoff?: boolean };
-  assert.equal(body.kind, "uncertain");
-  assert.equal(body.handoff, true);
-  assert.match(body.text, /รอพนักงานตอบ/u);
-  assert.doesNotMatch(body.text, /ไม่พบข้อมูล|กดปุ่ม/u);
+    const body = await response.json() as { kind: string; text: string };
+    assert.equal(body.kind, "greeting");
+    assert.match(body.text, /สวัสดี/u);
 });
+
+test("end-to-end: greeting is paused after an operator claims the handoff", async () => {
+    const harness = createHarness();
+    const session = harness.openSession("conn-human-active");
+    assert.equal((await harness.sendHandoff("conn-human-active", session.cookie)).status, 200);
+    await harness.claim("conn-human-active", session.conversationId);
+    const response = await harness.send("conn-human-active", session.cookie, "สวัสดี");
+    const body = await response.json() as UncertainResponse;
+    assert.equal(body.kind, "uncertain");
+    assert.match(body.text, /รอพนักงานตอบ/u);
+  });
 
 test("end-to-end: no-evidence handoff tells the customer staff were notified", async () => {
   const harness = createHarness();
@@ -577,7 +595,9 @@ test("end-to-end: no-evidence handoff tells the customer staff were notified", a
   const body = await (await harness.send("conn-no-evidence", session.cookie, "ต้นทุนสินค้าและกำไรขั้นต้นเท่าไหร่")).json() as UncertainResponse & { handoff?: boolean };
   assert.equal(body.kind, "uncertain");
   assert.equal(body.handoff, undefined);
-  assert.match(body.text, /ส่งเรื่องให้พนักงานแล้ว/u);
+  assert.match(body.text, /ขออภัย/u);
+  assert.match(body.text, /แจ้งพนักงาน/u);
+  assert.match(body.text, /ถามเรื่องอื่นได้/u);
 });
 
 test("end-to-end: short everyday questions answer from the synthetic shop", async () => {
