@@ -70,6 +70,17 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     return this.sources.get(key(workspace.workspaceId, sourceId)) ?? null;
   }
 
+  findDuplicateContent(workspace: TrustedWorkspaceContext, content: string, excludeSourceId: string): string | null {
+    const normalized = content.trim();
+    for (const version of this.versions.values()) {
+      if (version.workspaceId === workspace.workspaceId && version.sourceId !== excludeSourceId
+        && version.status !== "revoked" && version.status !== "failed" && version.content.trim() === normalized) {
+        return version.sourceId;
+      }
+    }
+    return null;
+  }
+
   listSources(workspace: TrustedWorkspaceContext): readonly KnowledgeSource[] {
     return Object.freeze([...this.sources.values()]
       .filter((source) => source.workspaceId === workspace.workspaceId)

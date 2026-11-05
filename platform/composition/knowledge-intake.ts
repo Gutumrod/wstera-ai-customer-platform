@@ -37,6 +37,7 @@ const statusByKnowledgeCode: Partial<Record<KnowledgeErrorCode, number>> = {
   MEMBERSHIP_REQUIRED: 403,
   OWNER_ROLE_REQUIRED: 403,
   SOURCE_CONFLICT: 409,
+  DUPLICATE_KNOWLEDGE_CONTENT: 409,
   VERSION_CONFLICT: 409,
   APPROVED_VERSION_EXISTS: 409,
   REVOCATION_NOT_ELIGIBLE: 409,
@@ -160,6 +161,11 @@ export async function ingestKnowledgeVersion(
         return await quarantine(input, prepared.code, 422);
       }
       version = prepared.version;
+    }
+
+    // ponytail: this read-before-write check can race between concurrent uploads; add a workspace/content unique index in the next migration cycle.
+    if (await dependencies.repository.findDuplicateContent(input.workspace, version.content, sourceId)) {
+      throw new KnowledgeIntakeError("DUPLICATE_KNOWLEDGE_CONTENT", 409);
     }
 
     await dependencies.repository.createSource(input.workspace, {

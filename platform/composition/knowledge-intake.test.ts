@@ -95,6 +95,28 @@ test("reusing an idempotency key with different knowledge fails closed", async (
   );
 });
 
+test("duplicate FAQ content is rejected after trimming outer whitespace, while the same key stays idempotent", async () => {
+  const deps = dependencies();
+  const first = await ingestKnowledgeVersion(deps, baseInput());
+  const retry = await ingestKnowledgeVersion(deps, baseInput());
+  assert.equal(retry.versionId, first.versionId);
+  await assert.rejects(ingestKnowledgeVersion(deps, {
+    ...baseInput(), idempotencyKey: "synthetic-request-0002", content: `  ${baseInput().content}\n `,
+  }), intakeError("DUPLICATE_KNOWLEDGE_CONTENT", 409));
+  assert.equal((await deps.repository.listSources(shopA)).length, 1);
+});
+
+test("revoked content can be uploaded again and duplicate checks do not cross workspaces", async () => {
+  const deps = dependencies();
+  const first = await ingestKnowledgeVersion(deps, baseInput());
+  await deps.repository.approveVersion(shopA, first.sourceId, first.versionId, { approvedBy: "synthetic-owner" });
+  await deps.repository.revokeVersion(shopA, first.sourceId, first.versionId, { revokedBy: "synthetic-owner", reason: "ข้อมูลใหม่" });
+  const replacement = await ingestKnowledgeVersion(deps, { ...baseInput(), idempotencyKey: "synthetic-request-0002" });
+  const otherShop = await ingestKnowledgeVersion(deps, { ...baseInput(shopB), idempotencyKey: "synthetic-request-0003" });
+  assert.notEqual(replacement.sourceId, first.sourceId);
+  assert.equal(otherShop.workspaceId, "shop-b");
+});
+
 test("bounded document intake stores the original and keeps exact page citations", async () => {
   const deps = dependencies();
   const result = await ingestKnowledgeVersion(deps, {

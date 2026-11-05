@@ -58,6 +58,7 @@ const ERROR_TEXT: Record<string, string> = {
   INVALID_KNOWLEDGE_INPUT: "ข้อมูลที่กรอกไม่ครบหรือไม่ถูกต้อง กรุณาตรวจชื่อ เนื้อหา หรือไฟล์อีกครั้ง",
   MEMBERSHIP_REQUIRED: "บัญชีนี้ยังไม่ได้เป็นสมาชิกของร้าน กรุณาติดต่อเจ้าของร้าน",
   REVOCATION_NOT_ELIGIBLE: "เอกสารนี้ยังถอนไม่ได้ ต้องเป็นเอกสารที่อนุมัติแล้ว",
+  DUPLICATE_KNOWLEDGE_CONTENT: "เอกสารนี้มีอยู่แล้ว",
   VERSION_NOT_FOUND: "ไม่พบเอกสารเวอร์ชันนี้ในร้านของคุณ",
   SOURCE_NOT_FOUND: "ไม่พบเอกสารนี้ในร้านของคุณ",
 };
