@@ -12,6 +12,7 @@ const migrationNames = [
   "20261104000100_knowledge_visibility.sql",
   "20261105000100_web_chat_host.sql",
   "20261105000200_durable_handoff.sql",
+  "20261105000300_model_usage.sql",
 ];
 const migrationPaths = migrationNames.map((name) => resolve(process.cwd(), "supabase/migrations", name));
 const mirroredKnowledgePath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
@@ -311,7 +312,7 @@ test("migrations fail clearly when an existing product role has unsafe attribute
   }
 });
 
-test("the seven Supabase migrations remain applicable on a local superuser", async () => {
+test("the eight Supabase migrations remain applicable on a local superuser", async () => {
   const migrations = await Promise.all(migrationPaths.map((path) => readFile(path, "utf8")));
   const database = new PGlite();
   try {
