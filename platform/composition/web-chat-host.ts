@@ -30,7 +30,7 @@ export type WebChatHostDeps = Readonly<{
   /** Test/alternate wiring. When omitted, the extractive answer port is used. */
   answer?: GroundedAnswerPort;
   /** Only consulted when `answer` is omitted; a model port is built only when enabled === true. */
-  model?: Readonly<{ enabled?: boolean; createModelPort?: () => GroundedAnswerPort }>;
+  model?: Readonly<{ enabled?: boolean; createModelPort?: (context: Readonly<{ conversationId: string }>) => GroundedAnswerPort }>;
   /**
    * Per-workspace [from, to] phrase swaps applied to the question before it
    * reaches the orchestrator (e.g. a shop's word for what its documents call
@@ -93,18 +93,21 @@ function withSupportingEvidence(port: GroundedAnswerPort): GroundedAnswerPort {
  */
 export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
   const now = deps.now ?? (() => new Date().toISOString());
-  const answer = withSupportingEvidence(deps.answer ?? createAnswerPort({
-    modelEnabled: deps.model?.enabled === true,
-    ...(deps.model?.createModelPort ? { createModelPort: deps.model.createModelPort } : {}),
-  }));
-  const orchestrator = new SupportOrchestrator({
-    conversations: deps.conversations,
-    retrieval: deps.retrieval,
-    evidenceFreshness: deps.evidenceFreshness,
-    answerability: deps.answerability,
-    answer,
-    handoff: deps.handoff,
-  });
+  const orchestratorFor = (conversationId: string): SupportOrchestrator => {
+    const modelFactory = deps.model?.createModelPort;
+    const answer = withSupportingEvidence(deps.answer ?? createAnswerPort({
+      modelEnabled: deps.model?.enabled === true,
+      ...(modelFactory ? { createModelPort: () => modelFactory({ conversationId }) } : {}),
+    }));
+    return new SupportOrchestrator({
+      conversations: deps.conversations,
+      retrieval: deps.retrieval,
+      evidenceFreshness: deps.evidenceFreshness,
+      answerability: deps.answerability,
+      answer,
+      handoff: deps.handoff,
+    });
+  };
 
   // The page issues a server-side conversation id with the session, but the
   // first message arrives before any conversation row exists. Create it under
@@ -136,7 +139,7 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
     } catch {
       asked = query.replace(leadingGreetingPattern, "") || query;
     }
-    return orchestrator.respond({ workspace, conversationId, query: asked, audience: "customer" });
+    return orchestratorFor(conversationId).respond({ workspace, conversationId, query: asked, audience: "customer" });
   };
 
   return Object.freeze({
