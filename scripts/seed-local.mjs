@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
 import pg from "pg";
 import { seedEnvironment } from "./seed-environment.mjs";
 
 const { Client } = pg;
-loadEnvConfig(process.cwd());
+nextEnv.loadEnvConfig(process.cwd());
 
 function webChatAllowedOrigins(value) {
   if (!value?.trim()) return [];
@@ -42,7 +42,7 @@ async function main() {
     if (role.rowCount !== 1 || role.rows[0].rolsuper || role.rows[0].rolbypassrls) {
       throw new Error("KNOWLEDGE_RUNTIME_ROLE_UNSAFE");
     }
-    const passwordDdl = await database.query("SELECT format('ALTER ROLE knowledge_runtime LOGIN PASSWORD %L', $1) AS statement", [runtimePassword]);
+    const passwordDdl = await database.query("SELECT format('ALTER ROLE knowledge_runtime LOGIN PASSWORD %L', $1::text) AS statement", [runtimePassword]);
     await database.query(passwordDdl.rows[0].statement);
     await database.query(`
       INSERT INTO aicp.workspaces (workspace_id, name, status)
