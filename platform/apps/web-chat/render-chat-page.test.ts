@@ -98,7 +98,7 @@ test("welcome bubble is one tight line because the bubble uses pre-wrap", () => 
 });
 
 /** Runs the page script against a tiny fake DOM to exercise history, citations and the handoff lock. */
-function runPage(storage: Map<string, string> | null, fetchReply: unknown, server: { handoffOpen?: boolean; pollFails?: boolean } = {}): Record<string, any> {
+function runPage(storage: Map<string, string> | null, fetchReply: unknown, server: { handoffOpen?: boolean; pollFails?: boolean; staff?: { id: string; text: string }[] } = {}): Record<string, any> {
   const html = renderChatPage({ connectionId: "conn-1", nonce: "n", messageEndpoint: "/m" });
   const script = /<script\b[^>]*>([\s\S]*?)<\/script>/i.exec(html)![1]!;
   const make = (): Record<string, any> => {
@@ -121,7 +121,7 @@ function runPage(storage: Map<string, string> | null, fetchReply: unknown, serve
   const fetch = async (url: string, init: { body: string }) => {
     if (url.startsWith("/chat/updates")) {
       if (server.pollFails) throw new Error("offline");
-      return { ok: true, status: 200, json: async () => ({ data: [], cursor: null, handoffOpen: server.handoffOpen === true }) };
+      return { ok: true, status: 200, json: async () => ({ data: server.staff ?? [], cursor: null, handoffOpen: server.handoffOpen === true }) };
     }
     return { ok: true, status: 200, json: async () => (init.body.includes("handoff") ? { kind: "handoff_recorded" } : fetchReply) };
   };
@@ -205,4 +205,21 @@ test("page script: works with blocked storage, caps stored history at 50, and ne
     await page["chat-form"].listeners["submit"]({ preventDefault() {} });
   }
   assert.equal(JSON.parse([...storage.values()][0]!).m.length, 50);
+});
+
+test("page script: a staff message keeps its place after a refresh and is not shown twice", async () => {
+  const storage = new Map<string, string>();
+  const staff: { id: string; text: string }[] = [];
+  const first = runPage(storage, { kind: "greeting", text: "g" }, { staff });
+  first["chat-input"].value = "A";
+  await first["chat-form"].listeners["submit"]({ preventDefault() {} });
+  staff.push({ id: "s1", text: "B" });
+  await first["poll"]();
+  first["chat-input"].value = "C";
+  await first["chat-form"].listeners["submit"]({ preventDefault() {} });
+  assert.deepEqual(texts(first).slice(-5), ["A", "g", "B", "C", "g"]);
+  const second = runPage(storage, {}, { staff });
+  await second["poll"]();
+  assert.deepEqual(texts(second).slice(-5), ["A", "g", "B", "C", "g"]);
+  assert.equal(texts(second).filter((t: string) => t === "B").length, 1);
 });

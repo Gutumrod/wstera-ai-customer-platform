@@ -288,7 +288,8 @@ export function renderChatPage(params: RenderChatPageParams): string {
       }
 
       // persist=false for connection errors, which must not come back after a refresh.
-      function appendMessage(text, isUser, citations, persist) {
+      // staffId keeps a staff message in its place in the stored history and lets the poll skip it after a refresh.
+      function appendMessage(text, isUser, citations, persist, staffId) {
         const item = document.createElement("div");
         item.className = isUser ? "message-item message-user" : "message-item message-bot";
         item.textContent = text;
@@ -315,7 +316,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
         messagesContainer.appendChild(item);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         if (persist !== false) {
-          state.m.push([text, isUser ? 1 : 0, titles]);
+          state.m.push(typeof staffId === "string" ? [text, 0, titles, staffId] : [text, isUser ? 1 : 0, titles]);
           if (state.m.length > MAX_STORED_MESSAGES) state.m.splice(0, state.m.length - MAX_STORED_MESSAGES);
           saveState();
         }
@@ -326,7 +327,8 @@ export function renderChatPage(params: RenderChatPageParams): string {
         if (saved && Array.isArray(saved.m)) {
           saved.m.slice(-MAX_STORED_MESSAGES).forEach(function (entry) {
             if (Array.isArray(entry) && typeof entry[0] === "string") {
-              appendMessage(entry[0], entry[1] === 1, Array.isArray(entry[2]) ? entry[2].filter(function (t) { return typeof t === "string"; }).map(function (t) { return { title: t }; }) : []);
+              if (typeof entry[3] === "string") seenStaffMessages.add(entry[3]);
+              appendMessage(entry[0], entry[1] === 1, Array.isArray(entry[2]) ? entry[2].filter(function (t) { return typeof t === "string"; }).map(function (t) { return { title: t }; }) : [], true, typeof entry[3] === "string" ? entry[3] : undefined);
             }
           });
         }
@@ -450,7 +452,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
           result.data.forEach(function (message) {
             if (!message || typeof message.id !== "string" || typeof message.text !== "string" || seenStaffMessages.has(message.id)) return;
             seenStaffMessages.add(message.id);
-            appendMessage(message.text, false, undefined, false);
+            appendMessage(message.text, false, undefined, true, message.id);
           });
           if (typeof result.handoffOpen === "boolean") handoffBtn.disabled = result.handoffOpen;
           if (typeof result.cursor === "string") updateCursor = result.cursor;

@@ -34,7 +34,7 @@ export type WebChatRoutesDeps = Readonly<{
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
   persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
-  staffUpdates?: (input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; after: string | null; limit: number }>) => Promise<Readonly<{ messages: readonly StaffConversationMessage[]; cursor: string | null; handoffOpen?: boolean }>>;
+  staffUpdates?: (input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; after: string | null; limit: number }>) => Promise<Readonly<{ messages: readonly StaffConversationMessage[]; cursor: string | null; handoffOpen: boolean | null }>>;
   describeCitation?: (workspace: TrustedWorkspaceContext, citation: KnowledgeCitation) => Promise<CitationDescription | null>;
   clientKey: (request: Request) => string;
   limits?: Readonly<{
@@ -413,7 +413,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
           case "handoff_requested":
             await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ");
             return jsonResponse(200, {
-              kind: "uncertain", text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ",
+              kind: "uncertain", handoff: true, text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ",
             });
 
           case "handoff_unavailable":
@@ -461,7 +461,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
       if ((after?.length ?? 0) > 256) return jsonErrorResponse(400, "INVALID_CURSOR");
       try {
         const result = await deps.staffUpdates({ workspace, conversationId: session.conversationId, after, limit: 100 });
-        return jsonResponse(200, { data: result.messages.filter((message) => typeof message.text === "string"), cursor: result.cursor, handoffOpen: result.handoffOpen === true });
+        return jsonResponse(200, { data: result.messages.filter((message) => typeof message.text === "string"), cursor: result.cursor, ...(typeof result.handoffOpen === "boolean" ? { handoffOpen: result.handoffOpen } : {}) });
       } catch (error) {
         if (error instanceof Error && (error.message === "INVALID_MESSAGE_CURSOR" || error.message === "INVALID_MESSAGE_LIMIT")) return jsonErrorResponse(400, "INVALID_CURSOR");
         return jsonErrorResponse(503, "SERVICE_UNAVAILABLE");

@@ -103,6 +103,15 @@ test("page route returns 404 when connectionId is missing or resolve fails", asy
   assert.equal(res2.headers.get("set-cookie"), null);
 });
 
+test("staff updates omit handoffOpen when the status is unknown instead of reporting false", async () => {
+  const { routes } = createHarness({
+    staffUpdates: async () => ({ messages: [], cursor: null, handoffOpen: null }),
+  });
+  const response = await routes.updates(new Request("https://example.com/chat/updates", { headers: { cookie: makeValidCookie(), "sec-fetch-site": "same-origin" } }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { data: [], cursor: null });
+});
+
 test("staff updates are session-bound, expose staff-only data, and cap polling at 30 per minute", async () => {
   let updateCalls = 0;
   let lastAfter: string | null = null;
@@ -112,7 +121,7 @@ test("staff updates are session-bound, expose staff-only data, and cap polling a
       updateCalls += 1;
       lastAfter = after;
       assert.ok(conversationId);
-      return { messages: [{ id: "staff-message", text: "คำตอบจากพนักงาน", createdAt: "2026-11-05T00:00:00.000Z" }], cursor: "opaque-cursor" };
+      return { messages: [{ id: "staff-message", text: "คำตอบจากพนักงาน", createdAt: "2026-11-05T00:00:00.000Z" }], cursor: "opaque-cursor", handoffOpen: false };
     },
   });
   const cookie = makeValidCookie();
@@ -692,7 +701,7 @@ test("message route maps responder status to standardized HTTP responses", async
   assert.equal(data1.kind, "uncertain");
   assert.match(data1.text, /ไม่พบข้อมูลที่ยืนยันได้/);
 
-  assert.equal((data1 as { handoff?: boolean }).handoff, undefined);
+  assert.equal((data1 as { handoff?: boolean }).handoff, true);
   assert.match(data1.text, /ขออภัย/);
   assert.match(data1.text, /แจ้งพนักงาน/);
   assert.match(data1.text, /ถามเรื่องอื่นได้/);
