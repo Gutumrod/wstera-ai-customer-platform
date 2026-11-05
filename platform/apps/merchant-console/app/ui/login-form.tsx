@@ -31,9 +31,9 @@ export default function LoginForm() {
   }
 
   return <form className="stack" onSubmit={submit}>
-    <label>อีเมล<input name="email" type="email" autoComplete="username" required maxLength={254} /></label>
+    <label>อีเมล<input name="email" type="email" autoComplete="username" inputMode="email" required maxLength={254} /></label>
     <label>รหัสผ่าน<input name="password" type="password" autoComplete="current-password" required maxLength={128} /></label>
     {error && <p className="error" role="alert">{error}</p>}
-    <button disabled={busy}>{busy ? "กำลังตรวจสอบ…" : "เข้าสู่ระบบ"}</button>
+    <button disabled={busy} aria-busy={busy}>{busy ? "กำลังตรวจสอบ…" : "เข้าสู่ระบบ"}</button>
   </form>;
 }

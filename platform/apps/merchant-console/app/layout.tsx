@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "WSTERA • Knowledge desk",
-  description: "Local synthetic knowledge upload and review console.",
+  title: "WSTERA • จัดการความรู้ร้าน",
+  description: "หน้าจัดการเอกสารและคำตอบที่ AI ใช้ตอบลูกค้า สำหรับเจ้าของร้านและพนักงาน",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
