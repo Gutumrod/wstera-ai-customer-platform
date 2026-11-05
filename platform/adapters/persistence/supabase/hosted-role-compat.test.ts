@@ -150,6 +150,22 @@ test("all Supabase migrations and seed writes work as hosted postgres without we
       "SELECT rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = 'aicp_migrator'",
     );
     assert.deepEqual(actorRole.rows[0], { rolsuper: false, rolbypassrls: false, rolcanlogin: false });
+    const schemaOwner = await database.query<{ owner: string }>(
+      "SELECT r.rolname AS owner FROM pg_namespace n JOIN pg_roles r ON r.oid=n.nspowner WHERE n.nspname='aicp'",
+    );
+    assert.deepEqual(schemaOwner.rows, [{ owner: "aicp_migrator" }]);
+    const relationOwners = await database.query<{ owner: string }>(`
+      SELECT DISTINCT r.rolname AS owner
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner
+      WHERE n.nspname='aicp' AND c.relkind IN ('r','p','i','S') ORDER BY owner
+    `);
+    assert.deepEqual(relationOwners.rows, [{ owner: "aicp_migrator" }]);
+    const productFunctionOwners = await database.query<{ owner: string }>(`
+      SELECT DISTINCT r.rolname AS owner
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+      WHERE n.nspname='aicp' AND p.proname <> 'current_auth_uid' ORDER BY owner
+    `);
+    assert.deepEqual(productFunctionOwners.rows, [{ owner: "aicp_migrator" }]);
 
     const migrationRolePrivileges = await database.query<{ membership: boolean; can_set: boolean; membership_rows: number; grants: string }>(
       `SELECT pg_has_role('hosted_postgres', 'aicp_migrator', 'MEMBER') AS membership,
