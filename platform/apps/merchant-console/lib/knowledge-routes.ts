@@ -20,6 +20,7 @@ export type KnowledgeHostContext = Readonly<{
   extractor: KnowledgeDocumentExtractorPort;
   storage: KnowledgeObjectStoragePort;
   approval: KnowledgeApprovalPort;
+  revocation: import("../../../adapters/persistence/supabase/knowledge-revocation.js").KnowledgeRevocationPort;
 }>;
 
 export type KnowledgeRouteLimits = Readonly<{ upload?: RateLimit; search?: RateLimit }>;
@@ -159,6 +160,52 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
         }
         if (!version) return Response.json({ data: { sourceId, versionId, status: "approved" } }, { headers: noStore });
         return Response.json({ data: versionSummary(version) }, { headers: noStore });
+      } catch (error: unknown) {
+        return routeErrorResponse(error);
+      }
+    },
+
+    async revokeVersion(request: Request, context: { params: Promise<{ sourceId: string; versionId: string }> }): Promise<Response> {
+      try {
+        assertSameOrigin(request);
+        const { repository, revocation, identity } = await requireHost();
+        if (identity.role !== "owner") throw new HttpError(403, "OWNER_ROLE_REQUIRED");
+        const { sourceId, versionId } = await context.params;
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(sourceId)
+          || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(versionId)) throw new HttpError(404, "VERSION_NOT_FOUND");
+        const body = await readBoundedJson(request, 4_096);
+        if (typeof body !== "object" || body === null || Array.isArray(body)
+          || Object.keys(body).length !== 1 || !("reason" in body) || typeof body.reason !== "string"
+          || body.reason.trim().length < 1 || body.reason.trim().length > 500) {
+          throw new HttpError(400, "INVALID_KNOWLEDGE_INPUT");
+        }
+        await revocation.revokeVersion(identity.workspace, sourceId, versionId, body.reason.trim());
+        // Revocation has committed; a failed read-back must not turn it into a retryable error.
+        let version: Awaited<ReturnType<typeof repository.getVersion>> = null;
+        try {
+          version = await repository.getVersion(identity.workspace, sourceId, versionId);
+        } catch {
+          // fall through to the minimal answer below
+        }
+        if (!version) return Response.json({ data: { sourceId, versionId, status: "revoked" } }, { headers: noStore });
+        return Response.json({ data: versionSummary(version) }, { headers: noStore });
+      } catch (error: unknown) {
+        return routeErrorResponse(error);
+      }
+    },
+
+    async getVersion(request: Request, context: { params: Promise<{ sourceId: string; versionId: string }> }): Promise<Response> {
+      try {
+        assertSameOriginRead(request);
+        const { repository, identity } = await requireHost();
+        if (identity.role !== "owner") throw new HttpError(403, "OWNER_ROLE_REQUIRED");
+        const { sourceId, versionId } = await context.params;
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(sourceId)
+          || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(versionId)) throw new HttpError(404, "VERSION_NOT_FOUND");
+        const version = await repository.getVersion(identity.workspace, sourceId, versionId);
+        if (!version) throw new HttpError(404, "VERSION_NOT_FOUND");
+        const content = version.content.slice(0, 20_000);
+        return Response.json({ data: { ...versionSummary(version), content, truncated: version.content.length > content.length } }, { headers: noStore });
       } catch (error: unknown) {
         return routeErrorResponse(error);
       }

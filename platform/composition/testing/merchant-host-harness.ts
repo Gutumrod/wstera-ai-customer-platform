@@ -5,6 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "../../adapters/persistence/postgres/knowledge-repository.js";
 import { SupabaseKnowledgeApproval } from "../../adapters/persistence/supabase/knowledge-approval.js";
+import { SupabaseKnowledgeRevocation } from "../../adapters/persistence/supabase/knowledge-revocation.js";
 import type { KnowledgeObjectStoragePort } from "../../contracts/data/knowledge-storage.js";
 import type { ActiveMerchantBinding, MerchantMembershipRepositoryPort } from "../../contracts/tenancy/merchant.js";
 import type { KnowledgeHostContext } from "../../apps/merchant-console/lib/knowledge-routes.js";
@@ -155,7 +156,8 @@ export async function createHostHarness() {
     const identity = await resolveMerchantIdentity(memberships, session.userId);
     const host = await createMerchantKnowledgeHost(identity.userId);
     await session.afterIdentity?.();
-    return { ...host, storage, approval: new SupabaseKnowledgeApproval(authenticatedRpcClient(database, session.userId)), identity };
+    const authenticatedClient = authenticatedRpcClient(database, session.userId);
+    return { ...host, storage, approval: new SupabaseKnowledgeApproval(authenticatedClient), revocation: new SupabaseKnowledgeRevocation(authenticatedClient), identity };
   };
 
   return {

@@ -13,6 +13,7 @@ type Version = Readonly<{
   chunkCount: number;
   visibility?: "customer" | "internal";
 }>;
+type VersionContent = Readonly<{ content: string; truncated: boolean }>;
 type SourceGroup = Readonly<{
   source: Readonly<{ sourceId: string; title: string; kind: string; status: string; createdAt: string }>;
   versions: readonly Version[];
@@ -56,6 +57,9 @@ const ERROR_TEXT: Record<string, string> = {
   OWNER_ROLE_REQUIRED: "ต้องเป็นเจ้าของร้านเท่านั้นจึงทำรายการนี้ได้",
   INVALID_KNOWLEDGE_INPUT: "ข้อมูลที่กรอกไม่ครบหรือไม่ถูกต้อง กรุณาตรวจชื่อ เนื้อหา หรือไฟล์อีกครั้ง",
   MEMBERSHIP_REQUIRED: "บัญชีนี้ยังไม่ได้เป็นสมาชิกของร้าน กรุณาติดต่อเจ้าของร้าน",
+  REVOCATION_NOT_ELIGIBLE: "เอกสารนี้ยังถอนไม่ได้ ต้องเป็นเอกสารที่อนุมัติแล้ว",
+  VERSION_NOT_FOUND: "ไม่พบเอกสารเวอร์ชันนี้ในร้านของคุณ",
+  SOURCE_NOT_FOUND: "ไม่พบเอกสารนี้ในร้านของคุณ",
 };
 function thaiError(code: unknown, fallback: string): string {
   return typeof code === "string" && ERROR_TEXT[code] ? ERROR_TEXT[code] : fallback;
@@ -75,6 +79,11 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
   const [kind, setKind] = useState<Kind>("faq");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [viewingVersion, setViewingVersion] = useState<string | null>(null);
+  const [versionContent, setVersionContent] = useState<VersionContent | null>(null);
+  const [revokingVersion, setRevokingVersion] = useState<string | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
+  const [revokeConfirmed, setRevokeConfirmed] = useState(false);
   const uploadIdempotencyKey = useRef<string | null>(null);
 
   const fail = (text: string) => setMessage({ text, error: true });
@@ -155,6 +164,56 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
     }
   }
 
+  async function viewVersion(sourceId: string, versionId: string) {
+    const key = `${sourceId}:${versionId}`;
+    if (viewingVersion === key) {
+      setViewingVersion(null);
+      setVersionContent(null);
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    setViewingVersion(key);
+    setVersionContent(null);
+    try {
+      const response = await fetch(`/api/knowledge/sources/${encodeURIComponent(sourceId)}/versions/${encodeURIComponent(versionId)}`, { cache: "no-store" });
+      const payload = await readJson<{ data?: VersionContent; error?: string }>(response);
+      if (!response.ok || !payload.data) throw new Error(thaiError(payload.error, "เปิดเนื้อหาเอกสารไม่สำเร็จ ลองใหม่อีกครั้ง"));
+      setVersionContent(payload.data);
+    } catch (error: unknown) {
+      setViewingVersion(null);
+      fail(error instanceof Error && error.message ? error.message : "เปิดเนื้อหาเอกสารไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(sourceId: string, versionId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const reason = revokeReason.trim();
+    if (reason.length < 1 || reason.length > 500 || !revokeConfirmed) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/knowledge/sources/${encodeURIComponent(sourceId)}/versions/${encodeURIComponent(versionId)}/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const payload = await readJson<{ error?: string }>(response);
+      if (!response.ok) throw new Error(thaiError(payload.error, "ถอนเอกสารไม่สำเร็จ ลองใหม่อีกครั้ง"));
+      ok("ถอนเอกสารแล้ว ระบบจะไม่นำเนื้อหานี้ไปใช้ค้นหา");
+      setRevokingVersion(null);
+      setRevokeReason("");
+      setRevokeConfirmed(false);
+      await reload();
+    } catch (error: unknown) {
+      fail(error instanceof Error && error.message ? error.message : "ถอนเอกสารไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -226,6 +285,14 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
                 <span className="muted">{version.chunkCount} ส่วน</span>
               </div>
               {version.status === "indexed" && role === "owner" && <button className="button-small" disabled={busy} aria-busy={busy} onClick={() => void approve(source.sourceId, version.versionId)}>อนุมัติ</button>}
+              {(version.status === "indexed" || version.status === "approved") && role === "owner" && <button className="button-small button-quiet" disabled={busy} aria-busy={busy} onClick={() => void viewVersion(source.sourceId, version.versionId)}>{viewingVersion === `${source.sourceId}:${version.versionId}` ? "ปิดเนื้อหา" : "ดูเนื้อหา"}</button>}
+              {version.status === "approved" && role === "owner" && revokingVersion !== `${source.sourceId}:${version.versionId}` && <button className="button-small button-danger" disabled={busy} onClick={() => { setRevokingVersion(`${source.sourceId}:${version.versionId}`); setRevokeReason(""); setRevokeConfirmed(false); }}>ถอนเอกสาร</button>}
+              {role === "owner" && viewingVersion === `${source.sourceId}:${version.versionId}` && <div className="knowledge-preview" aria-live="polite">{versionContent ? <><p className="muted">เนื้อหาจะแสดงเป็นข้อความเท่านั้น</p><pre>{versionContent.content}</pre>{versionContent.truncated && <p className="hint">แสดง 20,000 ตัวอักษรแรก เนื้อหาถูกตัดบางส่วน</p>}</> : <p className="muted">กำลังโหลดเนื้อหา…</p>}</div>}
+              {role === "owner" && revokingVersion === `${source.sourceId}:${version.versionId}` && <form className="revoke-form" onSubmit={(event) => void revoke(source.sourceId, version.versionId, event)}>
+                <label htmlFor={`revoke-reason-${version.versionId}`}>เหตุผลที่ถอนเอกสาร<textarea id={`revoke-reason-${version.versionId}`} value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} maxLength={500} required rows={3} /></label>
+                <label className="revoke-confirm"><input type="checkbox" checked={revokeConfirmed} onChange={(event) => setRevokeConfirmed(event.target.checked)} />ยืนยันถอนเอกสารนี้และหยุดใช้ในการค้นหา</label>
+                <div className="knowledge-actions"><button className="button-small button-danger" disabled={busy || !revokeConfirmed || revokeReason.trim().length < 1} aria-busy={busy}>ยืนยันถอนเอกสาร</button><button className="button-small button-quiet" type="button" disabled={busy} onClick={() => setRevokingVersion(null)}>ยกเลิก</button></div>
+              </form>}
               <details className="tech"><summary>รายละเอียดทางเทคนิค</summary><code>รหัสเวอร์ชัน: {version.versionId}</code><code>รหัสเอกสาร: {version.sourceId}</code></details>
             </div>)}
           </article>)}

@@ -39,6 +39,7 @@ const statusByKnowledgeCode: Partial<Record<KnowledgeErrorCode, number>> = {
   SOURCE_CONFLICT: 409,
   VERSION_CONFLICT: 409,
   APPROVED_VERSION_EXISTS: 409,
+  REVOCATION_NOT_ELIGIBLE: 409,
 };
 
 export function knowledgeErrorStatus(code: KnowledgeErrorCode): number {
