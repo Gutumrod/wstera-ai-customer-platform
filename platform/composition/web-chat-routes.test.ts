@@ -118,7 +118,7 @@ test("staff updates are session-bound, expose staff-only data, and cap polling a
   const cookie = makeValidCookie();
   const first = await routes.updates(new Request("https://example.com/chat/updates", { headers: { cookie, "sec-fetch-site": "same-origin" } }));
   assert.equal(first.status, 200);
-  assert.deepEqual(await first.json(), { data: [{ id: "staff-message", text: "คำตอบจากพนักงาน", createdAt: "2026-11-05T00:00:00.000Z" }], cursor: "opaque-cursor" });
+  assert.deepEqual(await first.json(), { data: [{ id: "staff-message", text: "คำตอบจากพนักงาน", createdAt: "2026-11-05T00:00:00.000Z" }], cursor: "opaque-cursor", handoffOpen: false });
   assert.equal(lastAfter, null);
   const malformedCookie = await routes.updates(new Request("https://example.com/chat/updates", { headers: { "sec-fetch-site": "same-origin" } }));
   assert.equal(malformedCookie.status, 401);

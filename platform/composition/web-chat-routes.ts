@@ -34,7 +34,7 @@ export type WebChatRoutesDeps = Readonly<{
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
   persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
-  staffUpdates?: (input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; after: string | null; limit: number }>) => Promise<Readonly<{ messages: readonly StaffConversationMessage[]; cursor: string | null }>>;
+  staffUpdates?: (input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; after: string | null; limit: number }>) => Promise<Readonly<{ messages: readonly StaffConversationMessage[]; cursor: string | null; handoffOpen?: boolean }>>;
   describeCitation?: (workspace: TrustedWorkspaceContext, citation: KnowledgeCitation) => Promise<CitationDescription | null>;
   clientKey: (request: Request) => string;
   limits?: Readonly<{
@@ -461,7 +461,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
       if ((after?.length ?? 0) > 256) return jsonErrorResponse(400, "INVALID_CURSOR");
       try {
         const result = await deps.staffUpdates({ workspace, conversationId: session.conversationId, after, limit: 100 });
-        return jsonResponse(200, { data: result.messages.filter((message) => typeof message.text === "string"), cursor: result.cursor });
+        return jsonResponse(200, { data: result.messages.filter((message) => typeof message.text === "string"), cursor: result.cursor, handoffOpen: result.handoffOpen === true });
       } catch (error) {
         if (error instanceof Error && (error.message === "INVALID_MESSAGE_CURSOR" || error.message === "INVALID_MESSAGE_LIMIT")) return jsonErrorResponse(400, "INVALID_CURSOR");
         return jsonErrorResponse(503, "SERVICE_UNAVAILABLE");

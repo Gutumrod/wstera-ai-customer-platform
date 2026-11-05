@@ -163,6 +163,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     sessionSecret: SESSION_SECRET,
     responder: host.responder,
     requestHandoff: host.requestHandoff,
+    ...(host.staffUpdates ? { staffUpdates: host.staffUpdates } : {}),
     describeCitation: async (workspace, citation) => {
       describedCitations.push(citation);
       const source = repository.getSource(workspace, citation.sourceId);
@@ -588,6 +589,26 @@ test("end-to-end: greeting is paused after an operator claims the handoff", asyn
     assert.equal(body.kind, "uncertain");
     assert.match(body.text, /รอพนักงานตอบ/u);
   });
+
+test("end-to-end: handoffOpen follows the session's own conversation status and never another visitor's", async () => {
+  const messages = { appendTurn: async () => undefined, staffUpdates: async () => ({ messages: [], cursor: null }) } as unknown as NonNullable<WebChatHostDeps["messages"]>;
+  const harness = createHarness({ hostOverrides: { messages } });
+  const mine = harness.openSession("conn-open-a");
+  const other = harness.openSession("conn-open-b");
+  const poll = async (connectionId: string, cookie: string) => {
+    const response = await harness.routes.updates(new Request("https://shop.example.com/chat/updates", { headers: { cookie, "sec-fetch-site": "same-origin" } }));
+    return (await response.json() as { handoffOpen: boolean }).handoffOpen;
+  };
+  assert.equal(await poll("conn-open-a", mine.cookie), false, "no conversation yet");
+  await harness.send("conn-open-a", mine.cookie, "สวัสดี");
+  await harness.send("conn-open-b", other.cookie, "สวัสดี");
+  assert.equal(await poll("conn-open-a", mine.cookie), false, "ai_active");
+  assert.equal((await harness.sendHandoff("conn-open-a", mine.cookie)).status, 200);
+  assert.equal(await poll("conn-open-a", mine.cookie), true, "handoff_requested");
+  assert.equal(await poll("conn-open-b", other.cookie), false, "other visitor unaffected");
+  await harness.claim("conn-open-a", mine.conversationId);
+  assert.equal(await poll("conn-open-a", mine.cookie), true, "human_active");
+});
 
 test("end-to-end: no-evidence handoff tells the customer staff were notified", async () => {
   const harness = createHarness();

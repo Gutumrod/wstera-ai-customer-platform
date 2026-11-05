@@ -45,7 +45,7 @@ export type WebChatHost = Readonly<{
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
   persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
-  staffUpdates?: ConversationMessagePort["staffUpdates"];
+  staffUpdates?: (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => Promise<Awaited<ReturnType<ConversationMessagePort["staffUpdates"]>> & Readonly<{ handoffOpen: boolean }>>;
 }>;
 
 const greetingPattern = /^(?:สวัสดี|หวัดดี|ฮัลโหล|ฮัลโล|ฮาโลว?|hello|hi|hey)(?:ครับ|ค่ะ|คะ|คับ|จ้า|จ้ะ|ฮะ)?(?:นะ)?$/u;
@@ -149,7 +149,11 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
     ...(deps.messages ? {
       persistTurn: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) =>
         deps.messages!.appendTurn({ workspace, conversationId, customerText, botText }),
-      staffUpdates: (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => deps.messages!.staffUpdates(input),
+      staffUpdates: async (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => {
+        const result = await deps.messages!.staffUpdates(input);
+        const conversation = await deps.conversations.load(input.workspace, input.conversationId);
+        return { ...result, handoffOpen: conversation !== null && conversation.status !== "ai_active" };
+      },
     } : {}),
   });
 }

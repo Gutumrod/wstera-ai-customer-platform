@@ -98,7 +98,7 @@ test("welcome bubble is one tight line because the bubble uses pre-wrap", () => 
 });
 
 /** Runs the page script against a tiny fake DOM to exercise history, citations and the handoff lock. */
-function runPage(storage: Map<string, string> | null, fetchReply: unknown): Record<string, any> {
+function runPage(storage: Map<string, string> | null, fetchReply: unknown, server: { handoffOpen?: boolean; pollFails?: boolean } = {}): Record<string, any> {
   const html = renderChatPage({ connectionId: "conn-1", nonce: "n", messageEndpoint: "/m" });
   const script = /<script\b[^>]*>([\s\S]*?)<\/script>/i.exec(html)![1]!;
   const make = (): Record<string, any> => {
@@ -118,20 +118,24 @@ function runPage(storage: Map<string, string> | null, fetchReply: unknown): Reco
     getItem: (k: string) => storage.get(k) ?? null,
     setItem: (k: string, v: string) => { storage.set(k, v); },
   };
-  const fetch = async (_url: string, init: { body: string }) => ({
-    ok: true,
-    status: 200,
-    json: async () => (init.body.includes("handoff") ? { kind: "handoff_recorded" } : fetchReply),
-  });
+  const fetch = async (url: string, init: { body: string }) => {
+    if (url.startsWith("/chat/updates")) {
+      if (server.pollFails) throw new Error("offline");
+      return { ok: true, status: 200, json: async () => ({ data: [], cursor: null, handoffOpen: server.handoffOpen === true }) };
+    }
+    return { ok: true, status: 200, json: async () => (init.body.includes("handoff") ? { kind: "handoff_recorded" } : fetchReply) };
+  };
+  let tick: () => void = () => {};
   new Function("document", "sessionStorage", "fetch", "AbortController", "setTimeout", "clearTimeout", "setInterval", script)(
-    document, sessionStorage, fetch, AbortController, setTimeout, clearTimeout, () => ({ unref() {} }),
+    document, sessionStorage, fetch, AbortController, setTimeout, clearTimeout, (fn: () => void) => { tick = fn; return { unref() {} }; },
   );
+  els["poll"] = async () => { tick(); await new Promise((r) => setImmediate(r)); };
   return els;
 }
 
 const texts = (els: Record<string, any>) => els["messages"].children.map((c: any) => c.textContent);
 
-test("page script: citations show title only, once, and history survives a refresh with the handoff lock", async () => {
+test("page script: citations show title only, once, and history survives a refresh", async () => {
   const storage = new Map<string, string>();
   const first: Record<string, any> = runPage(storage, {
     kind: "answer",
@@ -146,25 +150,46 @@ test("page script: citations show title only, once, and history survives a refre
   await first["handoff-btn"].listeners["click"]();
   assert.equal(first["handoff-btn"].disabled, true);
   assert.equal(storage.size, 1);
+  assert.equal("h" in JSON.parse([...storage.values()][0]!), false);
   assert.ok([...storage.keys()][0]!.endsWith("conn-1"));
 
   // "refresh": new page, same storage
   const second = runPage(storage, {});
   assert.deepEqual(texts(second).slice(0, 2), ["ถาม", "ตอบ"]);
-  assert.equal(second["handoff-btn"].disabled, true);
 });
 
-test("page script: the staff button comes back once the bot answers again after a release", async () => {
-  for (const reply of [{ kind: "answer", text: "ตอบ", citations: [] }, { kind: "greeting", text: "สวัสดี" }]) {
-    const storage = new Map<string, string>();
-    const page = runPage(storage, reply);
-    await page["handoff-btn"].listeners["click"]();
-    assert.equal(page["handoff-btn"].disabled, true);
-    page["chat-input"].value = "ถาม";
-    await page["chat-form"].listeners["submit"]({ preventDefault() {} });
-    assert.equal(page["handoff-btn"].disabled, false);
-    assert.equal(runPage(storage, {})["handoff-btn"].disabled, false);
-  }
+test("page script: the handoff button follows handoffOpen from the server poll", async () => {
+  const server = { handoffOpen: true, pollFails: false };
+  const page = runPage(new Map(), {}, server);
+  await page["poll"]();
+  assert.equal(page["handoff-btn"].disabled, true);
+  // staff released the chat and the customer typed nothing: the next poll alone unlocks it
+  server.handoffOpen = false;
+  await page["poll"]();
+  assert.equal(page["handoff-btn"].disabled, false);
+  // a failed poll leaves the button as it was
+  server.handoffOpen = true;
+  await page["poll"]();
+  server.pollFails = true;
+  server.handoffOpen = false;
+  await page["poll"]();
+  assert.equal(page["handoff-btn"].disabled, true);
+});
+
+test("page script: a refresh takes the button state from the poll, not from storage", async () => {
+  const storage = new Map<string, string>();
+  const first = runPage(storage, {}, { handoffOpen: true });
+  await first["handoff-btn"].listeners["click"]();
+  assert.equal(first["handoff-btn"].disabled, true);
+  // old clients stored h:true; it is ignored
+  const key = [...storage.keys()][0]!;
+  storage.set(key, JSON.stringify({ ...JSON.parse(storage.get(key)!), h: true }));
+  const released = runPage(storage, {}, { handoffOpen: false });
+  await released["poll"]();
+  assert.equal(released["handoff-btn"].disabled, false);
+  const stillOpen = runPage(storage, {}, { handoffOpen: true });
+  await stillOpen["poll"]();
+  assert.equal(stillOpen["handoff-btn"].disabled, true);
 });
 
 test("page script: works with blocked storage, caps stored history at 50, and never stores connection errors", async () => {
