@@ -45,7 +45,7 @@ export type WebChatHost = Readonly<{
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
   persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
-  staffUpdates?: (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => Promise<Awaited<ReturnType<ConversationMessagePort["staffUpdates"]>> & Readonly<{ handoffOpen: boolean }>>;
+  staffUpdates?: (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => Promise<Awaited<ReturnType<ConversationMessagePort["staffUpdates"]>> & Readonly<{ handoffOpen: boolean | null }>>;
 }>;
 
 const greetingPattern = /^(?:สวัสดี|หวัดดี|ฮัลโหล|ฮัลโล|ฮาโลว?|hello|hi|hey)(?:ครับ|ค่ะ|คะ|คับ|จ้า|จ้ะ|ฮะ)?(?:นะ)?$/u;
@@ -151,8 +151,10 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
         deps.messages!.appendTurn({ workspace, conversationId, customerText, botText }),
       staffUpdates: async (input: Parameters<ConversationMessagePort["staffUpdates"]>[0]) => {
         const result = await deps.messages!.staffUpdates(input);
-        const conversation = await deps.conversations.load(input.workspace, input.conversationId);
-        return { ...result, handoffOpen: conversation !== null && conversation.status !== "ai_active" };
+        // null = status unreadable: staff messages still flow, the page keeps the button as it was.
+        const handoffOpen = await deps.conversations.load(input.workspace, input.conversationId)
+          .then((conversation) => conversation !== null && conversation.status !== "ai_active", () => null);
+        return { ...result, handoffOpen };
       },
     } : {}),
   });

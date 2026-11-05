@@ -11,7 +11,7 @@ import {
 } from "../modules/knowledge/index.js";
 import { InMemoryKnowledgeRepository } from "../modules/knowledge/testing/in-memory-repository.js";
 import { InMemoryConversationRepository } from "../modules/conversation/testing/in-memory-repository.js";
-import { claimHandoff } from "../modules/conversation/index.js";
+import { claimHandoff, releaseHandoff } from "../modules/conversation/index.js";
 import { createExtractiveAnswerabilityPort } from "../adapters/answers/extractive/extractive-answerability-port.js";
 import { createWebChatRoutes } from "./web-chat-routes.js";
 import { createWebChatHost, type WebChatHostDeps } from "./web-chat-host.js";
@@ -95,6 +95,7 @@ type Harness = Readonly<{
   send: (connectionId: string, cookie: string, text: string) => Promise<Response>;
   sendHandoff: (connectionId: string, cookie: string) => Promise<Response>;
   claim: (connectionId: string, conversationId: string) => Promise<void>;
+  release: (connectionId: string, conversationId: string) => Promise<void>;
   load: (connectionId: string, conversationId: string) => ReturnType<InMemoryConversationRepository["load"]>;
 }>;
 
@@ -105,6 +106,8 @@ type HarnessOptions = Readonly<{
   extraDocuments?: readonly SyntheticDocument[];
   /** Delays conversation creation so two concurrent first messages really race. */
   createDelayMs?: number;
+  /** While value is true, conversations.load throws (store outage). */
+  loadFails?: { value: boolean };
 }>;
 
 function createHarness(options: HarnessOptions = {}): Harness {
@@ -124,8 +127,10 @@ function createHarness(options: HarnessOptions = {}): Harness {
       createdConversations += 1;
       return snapshot;
     },
-    load: (workspace: TrustedWorkspaceContext, conversationId: string) =>
-      baseConversations.load(workspace, conversationId),
+    load: async (workspace: TrustedWorkspaceContext, conversationId: string) => {
+      if (options.loadFails?.value) throw new Error("STORE_DOWN");
+      return baseConversations.load(workspace, conversationId);
+    },
     append: (
       workspace: TrustedWorkspaceContext,
       conversationId: string,
@@ -210,6 +215,13 @@ function createHarness(options: HarnessOptions = {}): Harness {
     sendHandoff: (connectionId: string, cookie: string) => post(connectionId, cookie, { action: "handoff" }),
     claim: async (connectionId: string, conversationId: string) => {
       await claimHandoff(baseConversations, {
+        assertCanClaim: async () => undefined,
+        assertCanReply: async () => undefined,
+        assertCanRelease: async () => undefined,
+      }, workspaceFor(connectionId), conversationId, "staff-1", FIXED_NOW);
+    },
+    release: async (connectionId: string, conversationId: string) => {
+      await releaseHandoff(baseConversations, {
         assertCanClaim: async () => undefined,
         assertCanReply: async () => undefined,
         assertCanRelease: async () => undefined,
@@ -608,6 +620,26 @@ test("end-to-end: handoffOpen follows the session's own conversation status and 
   assert.equal(await poll("conn-open-b", other.cookie), false, "other visitor unaffected");
   await harness.claim("conn-open-a", mine.conversationId);
   assert.equal(await poll("conn-open-a", mine.cookie), true, "human_active");
+  await harness.release("conn-open-a", mine.conversationId);
+  assert.equal(await poll("conn-open-a", mine.cookie), false, "handoff_released back to ai_active");
+});
+
+test("end-to-end: when the conversation cannot be read, staff messages still flow and handoffOpen is left out, not guessed", async () => {
+  const loadFails = { value: false };
+  const messages = {
+    appendTurn: async () => undefined,
+    staffUpdates: async () => ({ messages: [{ id: "m1", text: "จากพนักงาน", createdAt: FIXED_NOW }], cursor: "c1" }),
+  } as unknown as NonNullable<WebChatHostDeps["messages"]>;
+  const harness = createHarness({ hostOverrides: { messages }, loadFails });
+  const session = harness.openSession("conn-load-down");
+  await harness.send("conn-load-down", session.cookie, "สวัสดี");
+  assert.equal((await harness.sendHandoff("conn-load-down", session.cookie)).status, 200);
+  loadFails.value = true;
+  const response = await harness.routes.updates(new Request("https://shop.example.com/chat/updates", { headers: { cookie: session.cookie, "sec-fetch-site": "same-origin" } }));
+  assert.equal(response.status, 200);
+  const body = await response.json() as { data: { id: string }[]; handoffOpen?: boolean };
+  assert.deepEqual(body.data.map((m) => m.id), ["m1"]);
+  assert.equal("handoffOpen" in body, false);
 });
 
 test("end-to-end: no-evidence handoff tells the customer staff were notified", async () => {
@@ -615,7 +647,7 @@ test("end-to-end: no-evidence handoff tells the customer staff were notified", a
   const session = harness.openSession("conn-no-evidence");
   const body = await (await harness.send("conn-no-evidence", session.cookie, "ต้นทุนสินค้าและกำไรขั้นต้นเท่าไหร่")).json() as UncertainResponse & { handoff?: boolean };
   assert.equal(body.kind, "uncertain");
-  assert.equal(body.handoff, undefined);
+  assert.equal(body.handoff, true);
   assert.match(body.text, /ขออภัย/u);
   assert.match(body.text, /แจ้งพนักงาน/u);
   assert.match(body.text, /ถามเรื่องอื่นได้/u);
