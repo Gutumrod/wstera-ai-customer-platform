@@ -22,10 +22,11 @@ test("member can claim, reply once by delivery id, and release; replies from AI-
   await new PostgresSupportHandoff(runtimePort(database)).request({ workspace: shopA, conversationId: "thread-staff", reason: "NO_APPROVED_EVIDENCE" });
   const claimed = await service.claim(shopA, STAFF_A, "thread-staff");
   assert.equal(claimed.status, "human_active");
-  const first = await service.reply(shopA, STAFF_A, "thread-staff", "สวัสดีครับ", "delivery-unique");
-  const retry = await service.reply(shopA, STAFF_A, "thread-staff", "สวัสดีครับ", "delivery-unique");
-  assert.equal(first.duplicate, false);
-  assert.equal(retry.duplicate, true);
+  const attempts = await Promise.all([
+    service.reply(shopA, STAFF_A, "thread-staff", "สวัสดีครับ", "delivery-unique"),
+    service.reply(shopA, STAFF_A, "thread-staff", "สวัสดีครับ", "delivery-unique"),
+  ]);
+  assert.deepEqual(attempts.map((item) => item.duplicate).sort(), [false, true]);
   assert.equal((await service.messages(shopA, STAFF_A, "thread-staff")).length, 1);
   const released = await service.release(shopA, STAFF_A, "thread-staff");
   assert.equal(released.status, "ai_active");

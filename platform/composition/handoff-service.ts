@@ -77,6 +77,8 @@ export class HandoffService {
   reply(workspace: TrustedWorkspaceContext, actorUserId: string, conversationId: string, text: string, deliveryId: string) {
     if (!text.trim() || text.length > 5000 || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(deliveryId)) throw new HandoffServiceError("INVALID_INPUT");
     return this.scoped(workspace, actorUserId, async (query) => {
+      // Serialize retries by workspace/delivery ID so a concurrent retry sees the committed row.
+      await query.query("SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))", [workspace.workspaceId, deliveryId]);
       const duplicate = await query.query<MessageRow>("SELECT id, conversation_id, role, body, staff_id, delivery_id, created_at FROM aicp.conversation_messages WHERE workspace_id=$1 AND delivery_id=$2", [workspace.workspaceId, deliveryId]);
       if (duplicate.rows[0]) {
         if (duplicate.rows[0].conversation_id !== conversationId) throw new HandoffServiceError("HANDOFF_NOT_OPEN");
