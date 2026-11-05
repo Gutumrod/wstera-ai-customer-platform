@@ -137,8 +137,7 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
 
   return Object.freeze({
     responder,
-    // Customer-initiated handoff belongs to the conversation module contract:
-    // SupportHandoffReason has no "customer requested" member and must stay locked.
+    // Customer handoff is intentionally left to a real channel/operator adapter.
     requestHandoff: async (workspace: TrustedWorkspaceContext, conversationId: string) => {
       await ensureConversation(workspace, conversationId);
       await requestConversationHandoff(deps.conversations, workspace, conversationId, "customer_requested", now());

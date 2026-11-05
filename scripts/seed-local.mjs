@@ -6,8 +6,21 @@ import { seedEnvironment } from "./seed-environment.mjs";
 const { Client } = pg;
 loadEnvConfig(process.cwd());
 
+function webChatAllowedOrigins(value) {
+  if (!value?.trim()) return [];
+  const origins = value.split(",").map((item) => item.trim());
+  if (origins.some((origin) => {
+    try {
+      const parsed = new URL(origin);
+      return (parsed.protocol !== "https:" && parsed.protocol !== "http:") || parsed.origin !== origin;
+    } catch { return true; }
+  })) throw new Error("WEB_CHAT_ALLOWED_ORIGINS_INVALID");
+  return [...new Set(origins)];
+}
+
 async function main() {
   const { appEnv, supabaseUrl, secretKey, adminUrl, runtimePassword, email, password, ssl } = seedEnvironment(process.env);
+  const allowedOrigins = webChatAllowedOrigins(process.env.WEB_CHAT_ALLOWED_ORIGINS);
 
   const supabase = createClient(supabaseUrl, secretKey, { auth: { autoRefreshToken: false, persistSession: false } });
   let user;
@@ -42,10 +55,11 @@ async function main() {
       ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = 'owner', status = 'active'
     `, [user.id]);
     await database.query(`
-      INSERT INTO aicp.workspace_connections (workspace_id, connection_id, channel, status)
-      VALUES ('synthetic-shop', 'synthetic-web', 'web', 'active')
-      ON CONFLICT (workspace_id, connection_id) DO UPDATE SET channel = 'web', status = 'active'
-    `);
+      INSERT INTO aicp.workspace_connections (workspace_id, connection_id, channel, status, allowed_origins)
+      VALUES ('synthetic-shop', 'synthetic-web', 'web', 'active', $1::text[])
+      ON CONFLICT (workspace_id, connection_id) DO UPDATE
+        SET channel = 'web', status = 'active', allowed_origins = EXCLUDED.allowed_origins
+    `, [allowedOrigins]);
   } finally {
     await database.end();
   }

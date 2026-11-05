@@ -265,6 +265,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
 
       return new Response(html, {
         status: 200,
+        ...(request.method === "HEAD" ? { body: null } : {}),
         headers: responseHeaders,
       });
     },
@@ -350,7 +351,13 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
         try {
           await deps.requestHandoff(workspace, session.conversationId);
           return jsonResponse(200, { kind: "handoff_recorded" });
-        } catch {
+        } catch (error) {
+          if (error instanceof Error && error.message === "HANDOFF_UNAVAILABLE") {
+          return jsonResponse(503, {
+            kind: "handoff_unavailable",
+            text: "ขออภัยครับ ตอนนี้ระบบยังส่งเรื่องให้พนักงานไม่ได้ กรุณาลองติดต่อร้านผ่านช่องทางอื่นครับ",
+          });
+          }
           return jsonErrorResponse(500, "INTERNAL_ERROR");
         }
       }
@@ -397,13 +404,13 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
           case "handoff_requested":
             return jsonResponse(200, {
               kind: "uncertain",
-              text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ในระบบ ได้ส่งเรื่องให้พนักงานแล้ว กรุณารอพนักงานตอบกลับครับ",
+              text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ในระบบ และส่งเรื่องให้พนักงานแล้วครับ",
             });
 
           case "handoff_unavailable":
             return jsonResponse(200, {
               kind: "uncertain",
-              text: "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ในระบบ หากต้องการสอบถามเพิ่มเติม สามารถกดปุ่มขอคุยกับพนักงานได้ครับ",
+              text: "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ในระบบ และตอนนี้ระบบยังส่งเรื่องให้พนักงานไม่ได้ กรุณาติดต่อร้านผ่านช่องทางอื่นครับ",
             });
 
           case "conversation_changed":

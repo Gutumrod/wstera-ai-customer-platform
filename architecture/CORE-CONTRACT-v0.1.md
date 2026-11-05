@@ -171,6 +171,8 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 - `GroundedAnswerPort` (`:32`) คืนข้อความ + `citationRefs` ที่เป็น reference ทึบ แล้ว engine แมปเป็น citation มาตรฐานเอง
 - **extractive port มีในโค้ดแล้ว (PR #31/#33):** `platform/adapters/answers/extractive/extractive-answer-port.ts` และ `extractive-answerability-port.ts`; `platform/adapters/answers/answer-port-factory.ts` สร้าง model port เฉพาะเมื่อ `modelEnabled === true`; `platform/composition/web-chat-host.ts` ต่อ `SupportOrchestrator` กับ port เหล่านี้ · ยังไม่มีโฮสต์จริง (ไม่มี Next route ของ web chat) ระดับ BUILD_PASS
 
+**Addendum 2026-11-05 · WEBCHAT-HOST-001:** branch `codex/aicp-webchat-host-20261105` adds Next routes, a PostgreSQL connection/configuration adapter and a customer-audience real host, verified locally with PGlite and `npm run check`. The migration has not been applied to hosted Supabase; this remains BUILD_PASS only. Conversations are in memory and staff handoff remains unavailable until HANDOFF-002.
+
 **Contract v0.1 ที่เสนอ:**
 - ล็อก `SupportOrchestrator` + ports เป็นเส้นทางเดียวของคำตอบสำหรับทุก channel
 - ค่าเริ่มต้นของ `GroundedAnswerPort` = extractive ตอบจากข้อความที่ถูก cite แบบคำต่อคำ (หรือแม่แบบจำกัด) ตาม D-20261025-09; port แบบ model สร้างได้เมื่อ flag เปิดเท่านั้น และ flag ปิดเป็นค่าเริ่มต้น

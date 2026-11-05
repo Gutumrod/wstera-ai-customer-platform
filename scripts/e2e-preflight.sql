@@ -10,8 +10,9 @@
 --   * scripts/seed-local.mjs:32-33  ALTER ROLE knowledge_runtime LOGIN PASSWORD ...
 --   * supabase/migrations/20261022000100_knowledge.sql:1  CREATE SCHEMA IF NOT EXISTS aicp, then plain CREATE TABLE (fails on a name clash)
 --   * supabase/migrations/20261023000100_g1_workspace_host.sql:37 (aicp.current_auth_uid), 20261103000100_host_hardening.sql,
---     20261103000200_host_hardening_revoke.sql and 20261104000100_knowledge_visibility.sql create functions, triggers and
---     a column by plain CREATE/ADD (no IF NOT EXISTS); check 21 below only looks for name clashes
+--     20261103000200_host_hardening_revoke.sql, 20261104000100_knowledge_visibility.sql and
+--     20261105000100_web_chat_host.sql create functions, triggers and columns by plain CREATE/ADD
+--     (no IF NOT EXISTS); check 21 below looks for name clashes
 --   * Reads the runner may not be allowed (UNVERIFIED on hosted; D-20261105-04 measured only INSERT/UPDATE on
 --     storage.buckets, not SELECT, and nothing on storage.objects or SELECT on auth.users) are looked up first by the
 --     DO block below, so a missing privilege shows up as a labelled row instead of aborting the whole check.
@@ -113,6 +114,12 @@ new_name_clashes AS (
   UNION ALL
   SELECT 'column knowledge_versions.visibility' FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = 'aicp' AND c.relname = 'knowledge_versions' AND a.attname = 'visibility' AND a.attnum > 0 AND NOT a.attisdropped
+  UNION ALL
+  SELECT 'column workspace_connections.allowed_origins' FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'aicp' AND c.relname = 'workspace_connections' AND a.attname = 'allowed_origins' AND a.attnum > 0 AND NOT a.attisdropped
+  UNION ALL
+  SELECT 'column workspaces.query_aliases' FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'aicp' AND c.relname = 'workspaces' AND a.attname = 'query_aliases' AND a.attnum > 0 AND NOT a.attisdropped
 ),
 auth_state AS (
   SELECT current_setting('e2e.users')::int AS users, current_setting('e2e.synthetic_users')::int AS synthetic_users
