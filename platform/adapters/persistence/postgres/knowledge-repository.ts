@@ -8,6 +8,7 @@ import type {
   KnowledgeRepositoryPort,
   KnowledgeRetrievalShortlist,
   KnowledgeSource,
+  KnowledgeSourceSummary,
   KnowledgeVersion,
   KnowledgeVersionDraft,
   KnowledgeVersionTransition,
@@ -97,6 +98,23 @@ type RetrievableRow = PostgresRow & {
   locator_position: number | null;
   start_offset: number;
   end_offset: number;
+};
+
+type SourceSummaryRow = PostgresRow & {
+  workspace_id: string;
+  source_id: string;
+  source_kind: KnowledgeSource["kind"];
+  source_title: string;
+  source_status: KnowledgeSource["status"];
+  source_created_at: Date | string;
+  version_id: string | null;
+  version_kind: KnowledgeSource["kind"] | null;
+  version_title: string | null;
+  version_status: KnowledgeVersion["status"] | null;
+  version_visibility: KnowledgeVisibility | null;
+  version_created_at: Date | string | null;
+  approved_at: Date | string | null;
+  chunk_count: number | string | null;
 };
 
 function asIso(value: Date | string): string {
@@ -460,6 +478,72 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
         [workspace.workspaceId],
       );
       return Object.freeze(result.rows.map(mapSource));
+    });
+  }
+
+  async listSourceSummaries(workspace: TrustedWorkspaceContext): Promise<readonly KnowledgeSourceSummary[]> {
+    return this.scoped(workspace, async (query) => {
+      const result = await query.query<SourceSummaryRow>(
+        `SELECT source.workspace_id, source.source_id, source.kind AS source_kind, source.title AS source_title,
+                source.status AS source_status, source.created_at AS source_created_at,
+                version.version_id, version.kind AS version_kind, version.title AS version_title,
+                version.status AS version_status, version.visibility AS version_visibility,
+                version.created_at AS version_created_at, version.approved_at,
+                COUNT(chunk.chunk_id)::int AS chunk_count
+         FROM (
+           SELECT workspace_id, source_id, kind, title, status, created_at
+           FROM aicp.knowledge_sources WHERE workspace_id = $1
+           ORDER BY created_at DESC, source_id LIMIT 100
+         ) AS source
+         LEFT JOIN LATERAL (
+           SELECT workspace_id, source_id, version_id, kind, title, status, visibility, created_at, approved_at
+           FROM aicp.knowledge_versions
+           WHERE workspace_id = source.workspace_id AND source_id = source.source_id
+           ORDER BY created_at DESC, version_id LIMIT 50
+         ) AS version ON true
+         LEFT JOIN aicp.knowledge_chunks AS chunk
+           ON chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
+             AND chunk.version_id = version.version_id
+         GROUP BY source.workspace_id, source.source_id, source.kind, source.title, source.status, source.created_at,
+                  version.version_id, version.kind, version.title, version.status, version.visibility,
+                  version.created_at, version.approved_at
+         ORDER BY source.created_at DESC, source.source_id, version.created_at DESC NULLS LAST, version.version_id`,
+        [workspace.workspaceId],
+      );
+      const summaries = new Map<string, { source: KnowledgeSource; versions: KnowledgeSourceSummary["versions"][number][] }>();
+      for (const row of result.rows) {
+        let summary = summaries.get(row.source_id);
+        if (!summary) {
+          summary = {
+            source: mapSource({ workspace_id: row.workspace_id, source_id: row.source_id, kind: row.source_kind,
+              title: row.source_title, status: row.source_status, created_at: row.source_created_at }),
+            versions: [],
+          };
+          summaries.set(row.source_id, summary);
+        }
+        if (row.version_id !== null) {
+          if (row.version_kind === null || row.version_title === null || row.version_status === null
+            || row.version_visibility === null || row.version_created_at === null) {
+            throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
+          }
+          const approvedAt = asNullableIso(row.approved_at);
+          summary.versions.push(Object.freeze({
+            sourceId: row.source_id,
+            versionId: row.version_id,
+            kind: row.version_kind,
+            title: row.version_title,
+            status: row.version_status,
+            createdAt: asIso(row.version_created_at),
+            ...(approvedAt ? { approvedAt } : {}),
+            chunkCount: Number(row.chunk_count ?? 0),
+            visibility: row.version_visibility,
+          }));
+        }
+      }
+      return Object.freeze([...summaries.values()].map(({ source, versions }) => Object.freeze({
+        source,
+        versions: Object.freeze(versions),
+      })));
     });
   }
 

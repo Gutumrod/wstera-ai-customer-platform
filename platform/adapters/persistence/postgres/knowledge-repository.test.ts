@@ -388,3 +388,44 @@ test("retrieval candidates are shortlisted and bounded in SQL without carrying v
     await database.close();
   }
 });
+
+test("source summaries use a fixed text-free read, preserve the 50-version cap, and stay workspace-scoped", async () => {
+  const { database, repository } = await createRepository();
+  try {
+    await addIndexedFaq(repository, shopA, "summary-1", "v1");
+    const oneVersionStatements: string[] = [];
+    const oneVersionRepository = new PostgresKnowledgeRepository(databasePort(database, false, oneVersionStatements), NO_ACTOR_FOR_SCHEMA_TESTS);
+    const oneVersion = await oneVersionRepository.listSourceSummaries(shopA);
+    assert.equal(oneVersion[0]?.versions.length, 1);
+    assert.equal(oneVersionStatements.filter((sql) => !/set_config\s*\(/i.test(sql)).length, 1);
+
+    for (let index = 2; index <= 51; index += 1) {
+      await addIndexedFaq(repository, shopA, "summary-1", `v${index}`);
+    }
+    const oneSourceStatements: string[] = [];
+    const oneSourceRepository = new PostgresKnowledgeRepository(databasePort(database, false, oneSourceStatements), NO_ACTOR_FOR_SCHEMA_TESTS);
+    const oneSource = await oneSourceRepository.listSourceSummaries(shopA);
+    assert.equal(oneSource.length, 1);
+    assert.equal(oneSource[0]?.versions.length, 50);
+    assert.equal(oneSource[0]?.versions.every((version) => version.chunkCount === 1 && version.visibility === "internal"), true);
+    assert.equal(oneSourceStatements.filter((sql) => !/set_config\s*\(/i.test(sql)).length, 1);
+    const summarySql = oneSourceStatements.find((sql) => /COUNT\(chunk\.chunk_id\)/i.test(sql));
+    assert.ok(summarySql);
+    assert.match(summarySql, /LIMIT 100[\s\S]*LIMIT 50/i);
+    assert.doesNotMatch(summarySql, /\bcontent\b|chunk\.text/i);
+
+    for (let index = 2; index <= 5; index += 1) {
+      await addIndexedFaq(repository, shopA, `summary-${index}`, "v1");
+    }
+    const fiveSourceStatements: string[] = [];
+    const fiveSourceRepository = new PostgresKnowledgeRepository(databasePort(database, false, fiveSourceStatements), NO_ACTOR_FOR_SCHEMA_TESTS);
+    const fiveSources = await fiveSourceRepository.listSourceSummaries(shopA);
+    assert.equal(fiveSources.length, 5);
+    assert.equal(fiveSourceStatements.filter((sql) => !/set_config\s*\(/i.test(sql)).length, 1);
+    assert.equal(fiveSourceStatements.filter((sql) => !/set_config\s*\(/i.test(sql)).length,
+      oneVersionStatements.filter((sql) => !/set_config\s*\(/i.test(sql)).length);
+    assert.deepEqual(await fiveSourceRepository.listSourceSummaries(shopB), []);
+  } finally {
+    await database.close();
+  }
+});

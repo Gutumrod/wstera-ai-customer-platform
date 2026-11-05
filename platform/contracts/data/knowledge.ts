@@ -59,6 +59,22 @@ export type KnowledgeSource = Readonly<{
   createdAt: string;
 }>;
 
+/** Lightweight merchant-console source listing; never includes document or chunk text. */
+export type KnowledgeSourceSummary = Readonly<{
+  source: KnowledgeSource;
+  versions: readonly Readonly<{
+    sourceId: string;
+    versionId: string;
+    kind: KnowledgeSourceKind;
+    title: string;
+    status: KnowledgeVersionStatus;
+    createdAt: string;
+    approvedAt?: string;
+    chunkCount: number;
+    visibility: KnowledgeVisibility;
+  }>[];
+}>;
+
 export type KnowledgeChunk = Readonly<{
   workspaceId: string;
   sourceId: string;
@@ -182,6 +198,8 @@ export interface KnowledgeRepositoryPort {
   ): Awaitable<KnowledgeSource>;
   /** List only sources in the authenticated workspace for merchant review. */
   listSources(workspace: TrustedWorkspaceContext): Awaitable<readonly KnowledgeSource[]>;
+  /** Bounded source/version listing with chunk counts, without reading document or chunk text. */
+  listSourceSummaries(workspace: TrustedWorkspaceContext): Awaitable<readonly KnowledgeSourceSummary[]>;
   getSource(workspace: TrustedWorkspaceContext, sourceId: string): Awaitable<KnowledgeSource | null>;
   /** Return only the matching source identity, never its content; ignore this request's idempotent source. */
   findDuplicateContent(workspace: TrustedWorkspaceContext, content: string, excludeSourceId: string): Awaitable<string | null>;

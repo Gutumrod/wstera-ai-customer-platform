@@ -9,7 +9,7 @@ import type {
   KnowledgeVersionDraft,
   KnowledgeVersionTransition,
 } from "../../../contracts/data/knowledge.js";
-import type { KnowledgeRepositoryPort } from "../../../contracts/data/knowledge.js";
+import type { KnowledgeRepositoryPort, KnowledgeSourceSummary } from "../../../contracts/data/knowledge.js";
 import {
   KnowledgeError,
   archiveKnowledgeSource,
@@ -85,6 +85,23 @@ export class InMemoryKnowledgeRepository implements KnowledgeRepositoryPort {
     return Object.freeze([...this.sources.values()]
       .filter((source) => source.workspaceId === workspace.workspaceId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.sourceId.localeCompare(b.sourceId)));
+  }
+
+  listSourceSummaries(workspace: TrustedWorkspaceContext): readonly KnowledgeSourceSummary[] {
+    return Object.freeze(this.listSources(workspace).slice(0, 100).map((source) => Object.freeze({
+      source,
+      versions: Object.freeze(this.listVersions(workspace, source.sourceId).slice(0, 50).map((version) => Object.freeze({
+        sourceId: version.sourceId,
+        versionId: version.versionId,
+        kind: version.kind,
+        title: version.title,
+        status: version.status,
+        createdAt: version.createdAt,
+        ...(version.approvedAt ? { approvedAt: version.approvedAt } : {}),
+        chunkCount: version.chunks.length,
+        visibility: version.visibility,
+      }))),
+    })));
   }
 
   createVersion(workspace: TrustedWorkspaceContext, version: KnowledgeVersionDraft): KnowledgeVersion {

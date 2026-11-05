@@ -374,7 +374,23 @@ test("the source list reports each version's visibility, and an upload without o
   }
   assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: "omitted", content: faqFields.content + " omitted" }))).status, 201);
   const list = await (await routes.listSources(new Request(url("sources"), { headers: { origin: APP_ORIGIN } }))).json() as
-    { data: Array<{ source: { title: string }; versions: Array<{ visibility?: string }> }> };
+    { data: Array<{ source: { sourceId: string; title: string; kind: string; status: string; createdAt: string };
+      versions: Array<{ sourceId: string; versionId: string; kind: string; title: string; status: string; createdAt: string;
+        approvedAt?: string; chunkCount: number; visibility?: string }> }>; quarantine: unknown[] };
+  assert.deepEqual(Object.keys(list).sort(), ["data", "quarantine"]);
+  assert.deepEqual(list.quarantine, []);
   const byTitle = Object.fromEntries(list.data.map((group) => [group.source.title, group.versions[0]?.visibility]));
   assert.deepEqual(byTitle, { customer: "customer", internal: "internal", omitted: "internal" });
+  for (const group of list.data) {
+    assert.deepEqual(Object.keys(group).sort(), ["source", "versions"]);
+    assert.deepEqual(Object.keys(group.source).sort(), ["createdAt", "kind", "sourceId", "status", "title"]);
+    const version = group.versions[0]!;
+    assert.deepEqual(Object.keys(version).sort(), ["chunkCount", "createdAt", "kind", "sourceId", "status", "title", "versionId", "visibility"]);
+    assert.equal(version.status, "indexed");
+    assert.equal(version.chunkCount, 1);
+  }
+  harness.session.userId = OWNER_B;
+  const otherWorkspace = await (await routes.listSources(new Request(url("sources"), { headers: { origin: APP_ORIGIN } }))).json() as
+    { data: unknown[]; quarantine: unknown[] };
+  assert.deepEqual(otherWorkspace, { data: [], quarantine: [] });
 });
