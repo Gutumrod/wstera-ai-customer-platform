@@ -45,7 +45,7 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
-  const refresh = useCallback(async (conversationId: string | null = selected) => {
+  const refresh = useCallback(async (conversationId: string | null = selectedRef.current) => {
     const listResponse = await fetch("/api/handoffs", { cache: "no-store" });
     if (!listResponse.ok) throw listResponse;
     const body = await listResponse.json() as { data: Handoff[] };
@@ -55,7 +55,13 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
     if (!messageResponse.ok) throw messageResponse;
     const messageBody = await messageResponse.json() as { data: Message[] };
     if (selectedRef.current === conversationId) setMessages(messageBody.data);
-  }, [selected]);
+  }, []);
+
+  // เปลี่ยนเรื่อง: เคลียร์ข้อความเก่าทันที แล้วโหลดเรื่องใหม่ (polling effect ไม่ผูกกับ selected จึงไม่ตายเมื่อคลิกระหว่าง poll)
+  useEffect(() => {
+    setMessages([]);
+    if (selected) refresh(selected).catch((reason) => setError(thaiError(reason, "โหลดข้อมูลบทสนทนาไม่ได้")));
+  }, [selected, refresh]);
 
   useEffect(() => {
     let disposed = false;
@@ -65,10 +71,10 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
       if (busyRef.current) { timeout = setTimeout(poll, 5000); return; }
       pollingRef.current = true;
       try {
-        await refresh(selected);
+        await refresh();
         setError("");
       } catch (reason) {
-        if (!disposed) setError(thaiError(reason, selected ? "โหลดข้อมูลบทสนทนาไม่ได้" : "โหลดรายการไม่ได้"));
+        if (!disposed) setError(thaiError(reason, selectedRef.current ? "โหลดข้อมูลบทสนทนาไม่ได้" : "โหลดรายการไม่ได้"));
       } finally {
         pollingRef.current = false;
         setNow(Date.now());
@@ -88,7 +94,7 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
       if (timeout) clearTimeout(timeout);
       document.removeEventListener("visibilitychange", visibilityChanged);
     };
-  }, [refresh, selected]);
+  }, [refresh]);
 
   async function action(path: "claim" | "release" | "reply", body?: unknown) {
     if (!selected || busyRef.current) return;
