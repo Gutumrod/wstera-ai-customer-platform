@@ -25,28 +25,51 @@
 -- the preflight output and with the project named in the Owner GO. Pooled hosted databases are usually
 -- all called `postgres`, so the database name alone proves nothing.
 --
+-- Ownership after the five migrations (main @1b94ce5, role-compat rewrite): schema aicp, all 8 tables and 9 of the
+-- 10 functions belong to aicp_migrator; aicp.current_auth_uid() belongs to the migration runner (the connecting
+-- `postgres` user). The runner is NOT a superuser, owns nothing else in aicp, and every migration file ends by
+-- revoking its SET option on aicp_migrator (it keeps only the ADMIN option it got when it created the role).
+-- So the runner cannot DROP SCHEMA aicp (not the owner) nor DROP OWNED BY a role it has no privileges of.
+-- Sections 3 and 4 therefore re-request the membership options first, through that ADMIN option, inside the
+-- same DO block as the guard. UNVERIFIED on hosted: that the runner really holds ADMIN on the roles it
+-- created (PostgreSQL 16+ gives it automatically; post-apply SQL in the runbook prints it). If a GRANT in
+-- these blocks fails, STOP and report; do not widen privileges by hand.
+--
 -- Order matters: storage -> synthetic user -> schema -> roles -> dashboard Data API entry.
 -- Run interactively (paste step by step); the connection string comes from the environment only:
 --   psql "$SUPABASE_DB_ADMIN_URL" -X -v ON_ERROR_STOP=1
 -- (with PGSSLMODE=verify-full and PGSSLROOTCERT set, see the runbook; never put the URL on the command line)
 -- ===========================================================================================
 
--- Section 0: read-only look at what exists now (safe).
+-- Section 0a: read-only look at what exists now, catalog only (safe).
 SELECT 'identity' AS what, current_database()::text AS name,
        'user=' || current_user || ' version=' || current_setting('server_version') AS detail
-UNION ALL SELECT 'bucket', id::text, public::text FROM storage.buckets WHERE id = 'knowledge-originals'
-UNION ALL SELECT 'bucket objects', count(*)::text, '' FROM storage.objects WHERE bucket_id = 'knowledge-originals'
 UNION ALL SELECT 'aicp relations (all kinds except indexes)', string_agg(c.relname || ':' || c.relkind::text, ', ' ORDER BY c.relname), count(*)::text
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'aicp' AND c.relkind <> 'i'
 UNION ALL SELECT 'aicp functions', string_agg(p.proname, ', ' ORDER BY p.proname), count(*)::text
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'aicp'
 UNION ALL SELECT 'roles', string_agg(rolname, ', '), '' FROM pg_roles WHERE rolname IN ('aicp_migrator', 'knowledge_runtime')
-UNION ALL SELECT 'synthetic users', string_agg(email, ', '), count(*)::text FROM auth.users WHERE email ILIKE '%@example.test';
+UNION ALL SELECT 'schema aicp owner', pg_get_userbyid(nspowner)::text, '' FROM pg_namespace WHERE nspname = 'aicp'
+UNION ALL SELECT 'functions in aicp not owned by aicp_migrator', string_agg(p.proname || ' owner=' || pg_get_userbyid(p.proowner), ', '), ''
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'aicp' AND pg_get_userbyid(p.proowner) <> 'aicp_migrator'
+UNION ALL SELECT 'session_user membership in product roles', string_agg(g.rolname || ' admin=' || m.admin_option || ' inherit=' || m.inherit_option || ' set=' || m.set_option, '; ' ORDER BY g.rolname), count(*)::text
+  FROM pg_auth_members m JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles s ON s.oid = m.member
+  WHERE s.rolname = session_user AND g.rolname IN ('aicp_migrator', 'knowledge_runtime');
+
+-- Section 0b: reads of tables that Supabase owns, one statement each (safe). The connected user may lack SELECT
+-- on them (UNVERIFIED: the probe measured only INSERT/UPDATE on storage.buckets). "permission denied for table X"
+-- is then an answer, not something to fix: look at the dashboard (Storage, Authentication) instead. Run them
+-- one at a time so one denial does not hide the others.
+SELECT 'bucket' AS what, id::text AS name, public::text AS detail FROM storage.buckets WHERE id = 'knowledge-originals';
+SELECT 'bucket objects' AS what, count(*)::text AS name, '' AS detail FROM storage.objects WHERE bucket_id = 'knowledge-originals';
+SELECT 'synthetic users' AS what, string_agg(email, ', ') AS name, count(*)::text AS detail FROM auth.users WHERE email ILIKE '%@example.test';
 
 -- Section 1: Storage originals, then the bucket (guard + deletes in ONE block).
 -- UNVERIFIED: Supabase may reject direct DELETE on storage.objects / storage.buckets from SQL
--- (a protection trigger is believed to exist). If it errors, remove the objects and the bucket with the
--- dashboard Storage page or the Storage API instead, and skip this block.
+-- (a protection trigger is believed to exist). The probe (D-20261105-04) measured only USAGE on schema storage
+-- plus INSERT/UPDATE on storage.buckets for the runner: SELECT and DELETE on storage.buckets and any privilege on
+-- storage.objects are not measured, so "permission denied" here is plausible. If it errors, remove the objects
+-- and the bucket with the dashboard Storage page or the Storage API instead, and skip this block.
 -- DO $$ BEGIN
 --   IF current_setting('e2e.rollback_ack', true) IS DISTINCT FROM 'DISPOSABLE-TEST-PROJECT-ONLY' THEN
 --     RAISE EXCEPTION 'rollback not acknowledged'; END IF;
@@ -70,11 +93,15 @@ UNION ALL SELECT 'synthetic users', string_agg(email, ', '), count(*)::text FROM
 -- DANGER: DROP SCHEMA ... CASCADE also drops objects OUTSIDE aicp that depend on aicp objects
 -- (a view, rule, policy, trigger or foreign key in public or any other schema that references an aicp
 -- table or function). The block therefore refuses when:
---   * aicp holds anything other than exactly our 8 tables and our 9 functions (any view, sequence,
+--   * aicp holds anything other than exactly our 8 tables and our 10 functions (any view, sequence,
 --     partitioned table, foreign table, materialized view or extra function fails the check), or
 --   * any object outside aicp depends on an aicp object. Dependents of unknown kind also count as outside
 --     (fail closed), so a refusal can be a false alarm: read the listed objects, then decide as a separate step.
--- This deletes every product row. It also removes the grants we gave `authenticated` on this schema.
+-- This deletes every product row. It also removes the grants we gave `authenticated` on this schema and the
+-- runner's own SELECT/INSERT/UPDATE grants on the three workspace tables (they vanish with the tables).
+-- The schema belongs to aicp_migrator, so the block first asks for SET on that role through the runner's ADMIN
+-- option, drops as aicp_migrator, then puts the session back and removes the SET option again.
+-- aicp.current_auth_uid() belongs to the runner but lives in the schema, so CASCADE removes it too.
 -- DO $$ DECLARE rels text[]; funcs text[]; outside text; BEGIN
 --   IF current_setting('e2e.rollback_ack', true) IS DISTINCT FROM 'DISPOSABLE-TEST-PROJECT-ONLY' THEN
 --     RAISE EXCEPTION 'rollback not acknowledged'; END IF;
@@ -87,9 +114,9 @@ UNION ALL SELECT 'synthetic users', string_agg(email, ', '), count(*)::text FROM
 --     RAISE EXCEPTION 'aicp does not contain exactly our 8 tables and nothing else (%); stop', rels; END IF;
 --   SELECT array_agg(p.proname::text ORDER BY p.proname) INTO funcs FROM pg_proc p WHERE p.pronamespace = 'aicp'::regnamespace;
 --   IF funcs IS DISTINCT FROM ARRAY['approve_knowledge_version','archive_knowledge_source','assert_active_knowledge_writer',
---        'guard_knowledge_chunk_insert','is_active_workspace_member','protect_knowledge_source_identity',
+--        'current_auth_uid','guard_knowledge_chunk_insert','is_active_workspace_member','protect_knowledge_source_identity',
 --        'protect_knowledge_version_identity','protect_knowledge_version_visibility','revoke_knowledge_version'] THEN
---     RAISE EXCEPTION 'aicp does not contain exactly our 9 functions (%); stop', funcs; END IF;
+--     RAISE EXCEPTION 'aicp does not contain exactly our 10 functions (%); stop', funcs; END IF;
 --   WITH aicp_objs AS (
 --     SELECT 'pg_class'::regclass::oid AS classid, oid FROM pg_class WHERE relnamespace = 'aicp'::regnamespace
 --     UNION ALL SELECT 'pg_proc'::regclass::oid, oid FROM pg_proc WHERE pronamespace = 'aicp'::regnamespace
@@ -114,15 +141,22 @@ UNION ALL SELECT 'synthetic users', string_agg(email, ', '), count(*)::text FROM
 --     FROM dep_ns WHERE nsp IS DISTINCT FROM 'aicp'::regnamespace;
 --   IF outside IS NOT NULL THEN
 --     RAISE EXCEPTION 'objects outside aicp depend on aicp (CASCADE would drop them): %; stop', outside; END IF;
+--   EXECUTE format('GRANT aicp_migrator TO %I WITH INHERIT FALSE, SET TRUE', session_user);
+--   EXECUTE 'SET ROLE aicp_migrator';
 --   DROP SCHEMA aicp CASCADE;
+--   EXECUTE 'RESET ROLE';
+--   EXECUTE format('REVOKE SET OPTION FOR aicp_migrator FROM %I', session_user);
 -- END $$;
 
 -- Section 4: roles (guard + REVOKE/DROP in ONE block). Only after section 3, and only if the preflight
 -- showed neither role pre-existed. There is deliberately NO REASSIGN OWNED: it would hand whatever the role
 -- still owns to the current user and make the "still owns something" check pass vacuously.
 -- The block refuses while schema aicp still exists, and while ANY object anywhere in the cluster is still
--- owned by the role. Only then it runs DROP OWNED (which here only revokes the role's grants, e.g.
--- GRANT USAGE ON SCHEMA auth TO aicp_migrator) and DROP ROLE.
+-- owned by the role. Only then it runs DROP OWNED (a safety net: after section 3 the migrations leave no grant
+-- outside aicp to revoke, since the old GRANT USAGE ON SCHEMA auth TO aicp_migrator no longer exists) and DROP ROLE.
+-- DROP OWNED needs the privileges of the role (INHERIT) and DROP ROLE needs ADMIN OPTION on it; the runner kept only
+-- ADMIN, so each loop turn first re-requests INHERIT through that ADMIN option. DROP ROLE also removes every
+-- membership row of the role, including the runner's own two rows on aicp_migrator.
 -- DO $$ DECLARE r text; n bigint; BEGIN
 --   IF current_setting('e2e.rollback_ack', true) IS DISTINCT FROM 'DISPOSABLE-TEST-PROJECT-ONLY' THEN
 --     RAISE EXCEPTION 'rollback not acknowledged'; END IF;
@@ -133,6 +167,7 @@ UNION ALL SELECT 'synthetic users', string_agg(email, ', '), count(*)::text FROM
 --     SELECT count(*) INTO n FROM pg_shdepend d JOIN pg_roles ro ON ro.oid = d.refobjid
 --       WHERE ro.rolname = r AND d.deptype = 'o';
 --     IF n > 0 THEN RAISE EXCEPTION 'role % still owns % object(s) (any database); stop', r, n; END IF;
+--     EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE, SET TRUE', r, session_user);
 --     EXECUTE format('DROP OWNED BY %I', r);
 --     EXECUTE format('DROP ROLE %I', r);
 --   END LOOP;

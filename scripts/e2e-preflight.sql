@@ -1,14 +1,20 @@
 -- DRAFT / NOT RUN / UNREVIEWED -- READ-ONLY preflight for the AICP E2E target project.
 --
 -- Purpose: run this FIRST on the target project, BEFORE applying any file in supabase/migrations/.
--- It only reads. The migrations would otherwise silently overwrite things that already exist:
---   * supabase/migrations/20261023000100_g1_workspace_host.sql:76  ALTER ROLE aicp_migrator ... NOLOGIN ...
---   * supabase/migrations/20261023000100_g1_workspace_host.sql:98  ALTER ROLE knowledge_runtime ...
---   * supabase/migrations/20261023000100_g1_workspace_host.sql:157-161  bucket knowledge-originals ON CONFLICT DO UPDATE
+-- It only reads. The migrations (main @1b94ce5) would otherwise adopt or overwrite things that already exist:
+--   * supabase/migrations/20261023000100_g1_workspace_host.sql:79-102  an existing aicp_migrator / knowledge_runtime is
+--     reused as-is (no ALTER ROLE any more) or rejected with *_ROLE_UNSAFE; aicp_migrator then takes ownership of
+--     schema aicp and its objects (:110-121). A role that is not ours must never be adopted: checks 10-12.
+--   * supabase/migrations/20261023000100_g1_workspace_host.sql:126-138  bucket knowledge-originals: ON CONFLICT DO UPDATE
+--     when the runner can SELECT storage.buckets, otherwise a plain INSERT that fails on a duplicate id
 --   * scripts/seed-local.mjs:32-33  ALTER ROLE knowledge_runtime LOGIN PASSWORD ...
 --   * supabase/migrations/20261022000100_knowledge.sql:1  CREATE SCHEMA IF NOT EXISTS aicp, then plain CREATE TABLE (fails on a name clash)
---   * supabase/migrations/20261103000200_host_hardening_revoke.sql and 20261104000100_knowledge_visibility.sql create
---     functions, triggers and a column by plain CREATE/ADD (no IF NOT EXISTS); check 21 below only looks for name clashes
+--   * supabase/migrations/20261023000100_g1_workspace_host.sql:37 (aicp.current_auth_uid), 20261103000100_host_hardening.sql,
+--     20261103000200_host_hardening_revoke.sql and 20261104000100_knowledge_visibility.sql create functions, triggers and
+--     a column by plain CREATE/ADD (no IF NOT EXISTS); check 21 below only looks for name clashes
+--   * Reads the runner may not be allowed (UNVERIFIED on hosted; D-20261105-04 measured only INSERT/UPDATE on
+--     storage.buckets, not SELECT, and nothing on storage.objects or SELECT on auth.users) are looked up first by the
+--     DO block below, so a missing privilege shows up as a labelled row instead of aborting the whole check.
 --
 -- How to read the result: rows 1-3 identify the server you are connected to (compare with the GO, see runbook).
 -- Every other row has status OK / INFO / STOP. ANY row with status STOP means: do not apply, do not seed,
@@ -28,6 +34,32 @@
 \set ON_ERROR_STOP on
 
 BEGIN READ ONLY;
+
+DO $$
+DECLARE bucket_state text; bucket_objects text; total_users int; synthetic_users int;
+BEGIN
+  IF to_regclass('storage.buckets') IS NOT NULL AND has_table_privilege(current_user, 'storage.buckets', 'SELECT') THEN
+    SELECT format('EXISTS public=%s file_size_limit=%s mimes=%s', public, file_size_limit, allowed_mime_types)
+      INTO bucket_state FROM storage.buckets WHERE id = 'knowledge-originals';
+    bucket_state := COALESCE(bucket_state, 'ABSENT');
+  ELSE
+    bucket_state := 'UNREADABLE';
+  END IF;
+  IF to_regclass('storage.objects') IS NOT NULL AND has_table_privilege(current_user, 'storage.objects', 'SELECT') THEN
+    SELECT count(*)::text INTO bucket_objects FROM storage.objects WHERE bucket_id = 'knowledge-originals';
+  ELSE
+    bucket_objects := 'unreadable';
+  END IF;
+  IF to_regclass('auth.users') IS NOT NULL AND has_table_privilege(current_user, 'auth.users', 'SELECT') THEN
+    SELECT count(*), count(*) FILTER (WHERE email ILIKE '%@example.test') INTO total_users, synthetic_users FROM auth.users;
+  ELSE
+    total_users := -1; synthetic_users := -1;
+  END IF;
+  PERFORM set_config('e2e.bucket', bucket_state, true);
+  PERFORM set_config('e2e.bucket_objects', bucket_objects, true);
+  PERFORM set_config('e2e.users', total_users::text, true);
+  PERFORM set_config('e2e.synthetic_users', synthetic_users::text, true);
+END $$;
 
 WITH
 roles AS (
@@ -58,10 +90,7 @@ public_functions AS (
   SELECT count(*) AS n FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public'
 ),
 bucket AS (
-  SELECT id, public, file_size_limit, allowed_mime_types FROM storage.buckets WHERE id = 'knowledge-originals'
-),
-bucket_objects AS (
-  SELECT count(*) AS n FROM storage.objects WHERE bucket_id = 'knowledge-originals'
+  SELECT current_setting('e2e.bucket') AS state, current_setting('e2e.bucket_objects') AS objects
 ),
 -- UNVERIFIED: on hosted Supabase the Data API schema list is believed to be stored as the
 -- pgrst.db_schemas setting of role authenticator. The dashboard (Settings > API > Exposed schemas) is the authority.
@@ -76,7 +105,7 @@ new_name_clashes AS (
   SELECT 'function ' || p.proname AS name FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'aicp' AND p.proname IN ('revoke_knowledge_version', 'archive_knowledge_source',
         'protect_knowledge_source_identity', 'protect_knowledge_version_visibility',
-        'assert_active_knowledge_writer', 'approve_knowledge_version')
+        'assert_active_knowledge_writer', 'approve_knowledge_version', 'current_auth_uid')
   UNION ALL
   SELECT 'trigger ' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = 'aicp' AND NOT t.tgisinternal
@@ -86,8 +115,7 @@ new_name_clashes AS (
   WHERE n.nspname = 'aicp' AND c.relname = 'knowledge_versions' AND a.attname = 'visibility' AND a.attnum > 0 AND NOT a.attisdropped
 ),
 auth_state AS (
-  SELECT (SELECT count(*) FROM auth.users) AS users,
-         (SELECT count(*) FROM auth.users WHERE email ILIKE '%@example.test') AS synthetic_users
+  SELECT current_setting('e2e.users')::int AS users, current_setting('e2e.synthetic_users')::int AS synthetic_users
 ),
 prereq AS (
   SELECT (SELECT count(*) FROM pg_roles WHERE rolname = 'authenticated') AS authenticated_role,
@@ -103,12 +131,12 @@ checks(ord, check_name, status, detail) AS (
   UNION ALL
   SELECT 10, 'role aicp_migrator exists',
          CASE WHEN EXISTS (SELECT 1 FROM roles WHERE rolname = 'aicp_migrator') THEN 'STOP' ELSE 'OK' END,
-         COALESCE((SELECT format('EXISTS login=%s super=%s bypassrls=%s -> migration line 76 would ALTER it to NOLOGIN', rolcanlogin, rolsuper, rolbypassrls)
+         COALESCE((SELECT format('EXISTS login=%s super=%s bypassrls=%s createrole=%s -> g1:79-90 would reuse it (or raise AICP_MIGRATOR_ROLE_UNSAFE) and hand it schema aicp', rolcanlogin, rolsuper, rolbypassrls, rolcreaterole)
                    FROM roles WHERE rolname = 'aicp_migrator'), 'absent (migration will create it)')
   UNION ALL
   SELECT 11, 'role knowledge_runtime exists',
          CASE WHEN EXISTS (SELECT 1 FROM roles WHERE rolname = 'knowledge_runtime') THEN 'STOP' ELSE 'OK' END,
-         COALESCE((SELECT format('EXISTS login=%s super=%s bypassrls=%s -> migration line 98 would ALTER it; seed would set LOGIN PASSWORD', rolcanlogin, rolsuper, rolbypassrls)
+         COALESCE((SELECT format('EXISTS login=%s super=%s bypassrls=%s createrole=%s -> g1:91-102 would reuse it (or raise KNOWLEDGE_RUNTIME_ROLE_UNSAFE); seed would set LOGIN PASSWORD', rolcanlogin, rolsuper, rolbypassrls, rolcreaterole)
                    FROM roles WHERE rolname = 'knowledge_runtime'), 'absent (migration will create it)')
   UNION ALL
   SELECT 12, 'objects already owned by either role',
@@ -125,10 +153,13 @@ checks(ord, check_name, status, detail) AS (
          COALESCE((SELECT string_agg(name, ', ') FROM new_name_clashes), 'none')
   UNION ALL
   SELECT 30, 'storage bucket knowledge-originals exists',
-         CASE WHEN EXISTS (SELECT 1 FROM bucket) THEN 'STOP' ELSE 'OK' END,
-         COALESCE((SELECT format('EXISTS public=%s file_size_limit=%s mimes=%s objects=%s -> migration would overwrite public/limit/mimes',
-                                 public, file_size_limit, allowed_mime_types, (SELECT n FROM bucket_objects)) FROM bucket),
-                  'absent (migration will create it)')
+         CASE WHEN (SELECT state FROM bucket) LIKE 'EXISTS%' THEN 'STOP'
+              WHEN (SELECT state FROM bucket) = 'UNREADABLE' THEN 'INFO' ELSE 'OK' END,
+         CASE WHEN (SELECT state FROM bucket) LIKE 'EXISTS%'
+              THEN (SELECT state || ' objects=' || objects FROM bucket) || ' -> migration would overwrite public/limit/mimes (or fail on the duplicate id if it cannot SELECT storage.buckets)'
+              WHEN (SELECT state FROM bucket) = 'UNREADABLE'
+              THEN 'cannot read storage.buckets here (no SELECT, UNVERIFIED) -> look at the dashboard Storage page by hand; without SELECT the migration uses a plain INSERT and fails closed if the id exists'
+              ELSE 'absent (migration will create it)' END
   UNION ALL
   SELECT 40, 'aicp already in Data API exposed schemas',
          CASE WHEN EXISTS (SELECT 1 FROM exposed WHERE setting ~ '(^|[=, ])aicp([, ]|$)') THEN 'STOP' ELSE 'INFO' END,
@@ -143,9 +174,11 @@ checks(ord, check_name, status, detail) AS (
          'INFO', (SELECT n FROM public_functions)::text || ' functions'
   UNION ALL
   SELECT 60, 'auth.users present',
-         CASE WHEN (SELECT users FROM auth_state) > (SELECT synthetic_users FROM auth_state) THEN 'STOP' ELSE 'OK' END,
-         format('users=%s of which @example.test=%s; any non-synthetic user means this is NOT a disposable project',
-                (SELECT users FROM auth_state), (SELECT synthetic_users FROM auth_state))
+         CASE WHEN (SELECT users FROM auth_state) < 0 OR (SELECT users FROM auth_state) > (SELECT synthetic_users FROM auth_state) THEN 'STOP' ELSE 'OK' END,
+         CASE WHEN (SELECT users FROM auth_state) < 0
+              THEN 'auth.users is not readable here (no SELECT): cannot show that the project is disposable'
+              ELSE format('users=%s of which @example.test=%s; any non-synthetic user means this is NOT a disposable project',
+                          (SELECT users FROM auth_state), (SELECT synthetic_users FROM auth_state)) END
   UNION ALL
   SELECT 70, 'platform prerequisites (authenticated role, auth and storage schemas)',
          CASE WHEN (SELECT authenticated_role * storage_schema * auth_schema FROM prereq) = 1 THEN 'OK' ELSE 'STOP' END,
