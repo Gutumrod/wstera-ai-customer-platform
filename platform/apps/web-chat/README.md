@@ -16,5 +16,6 @@ Customer web chat UI rendering, safe origin binding, signed session management, 
 
 ## Pending
 
-- End-to-end wiring to live `SupportOrchestrator` after Chunk 1 (`audience` support in orchestrator) merges.
+- A real app host that mounts `createWebChatRoutes` and `createWebChatHost`; only composition code and tests call them today.
+- Durable conversation storage (HANDOFF-002); conversations are in memory only.
 - Cross-origin iframe embed packaging (Phase 1 currently enforces `frame-ancestors 'none'`).
