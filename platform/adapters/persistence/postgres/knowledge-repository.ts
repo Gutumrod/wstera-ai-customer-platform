@@ -438,6 +438,20 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     });
   }
 
+  async findDuplicateContent(workspace: TrustedWorkspaceContext, content: string, excludeSourceId: string): Promise<string | null> {
+    return this.scoped(workspace, async (query) => {
+      const result = await query.query<{ source_id: string }>(
+        `SELECT source_id FROM aicp.knowledge_versions
+         WHERE workspace_id = $1 AND source_id <> $2
+           AND status NOT IN ('revoked', 'failed')
+           AND regexp_replace(content, '^[[:space:]]+|[[:space:]]+$', '', 'g') = $3
+         LIMIT 1`,
+        [workspace.workspaceId, excludeSourceId, content.trim()],
+      );
+      return result.rows[0]?.source_id ?? null;
+    });
+  }
+
   async listSources(workspace: TrustedWorkspaceContext): Promise<readonly KnowledgeSource[]> {
     return this.scoped(workspace, async (query) => {
       const result = await query.query<SourceRow>(

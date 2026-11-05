@@ -165,6 +165,43 @@ test("upload rejects oversized, wrong content type and unknown fields before wri
   assert.deepEqual(await harness.rowCounts(), emptyCounts);
 });
 
+test("duplicate FAQ is rejected without creating rows; same idempotency key returns the original version", async () => {
+  const retry = await routes.createSource(uploadRequest(faqFields, { "idempotency-key": "synthetic-retry-key-0001" }));
+  assert.equal(retry.status, 201);
+  const replay = await routes.createSource(uploadRequest(faqFields, { "idempotency-key": "synthetic-retry-key-0001" }));
+  assert.equal(replay.status, 201);
+  assert.equal(((await replay.json()) as { data: { sourceId: string; versionId: string } }).data.versionId,
+    ((await retry.json()) as { data: { versionId: string } }).data.versionId);
+
+  const before = await harness.rowCounts();
+  await expectError(await routes.createSource(uploadRequest({ ...faqFields, content: ` ${faqFields.content}\n` })), 409, "DUPLICATE_KNOWLEDGE_CONTENT");
+  assert.deepEqual(await harness.rowCounts(), before);
+});
+
+test("revoked FAQ can be uploaded again and identical content is isolated by workspace", async () => {
+  const original = await uploadFaq();
+  assert.equal((await routes.approveVersion(approveRequest(), params(original.sourceId, original.versionId))).status, 200);
+  assert.equal((await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "ข้อมูลใหม่" })), params(original.sourceId, original.versionId))).status, 200);
+  assert.equal((await routes.createSource(uploadRequest(faqFields))).status, 201);
+
+  harness.session.userId = OWNER_B;
+  assert.equal((await routes.createSource(uploadRequest(faqFields))).status, 201);
+  const shopB = await harness.database.query<{ workspace_id: string }>(
+    "SELECT workspace_id FROM aicp.knowledge_sources WHERE workspace_id = 'shop-b'");
+  assert.equal(shopB.rows.length, 1);
+});
+
+test("duplicate extracted CSV leaves no source row or original file behind", async () => {
+  const csv = new File(["question,answer\nreturn,within 7 days"], "returns.csv", { type: "text/csv" });
+  const first = await routes.createSource(uploadRequest({ kind: "csv", title: "Returns", file: csv }));
+  assert.equal(first.status, 201);
+  const before = await harness.rowCounts();
+  const duplicate = await routes.createSource(uploadRequest({ kind: "csv", title: "Returns copy", file: csv }));
+  await expectError(duplicate, 409, "DUPLICATE_KNOWLEDGE_CONTENT");
+  assert.deepEqual(await harness.rowCounts(), before);
+  assert.equal(harness.objects.size, 1, "only the first upload keeps its original object");
+});
+
 test("search rejects oversized, malformed, wrong content type and unknown fields", async () => {
   await expectError(await routes.search(searchRequest(JSON.stringify({ query: "x".repeat(5_000) }))), 413, "REQUEST_TOO_LARGE");
   await expectError(await routes.search(searchRequest("{not json")), 400, "JSON_BODY_INVALID");
@@ -242,7 +279,7 @@ test("rate limits answer 429 per identity before reading the request and write n
   assert.deepEqual(await harness.rowCounts(), before);
 
   harness.session.userId = STAFF_A;
-  assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: "Staff" }))).status, 201, "another identity has its own budget");
+  assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: "Staff", content: faqFields.content + " staff" }))).status, 201, "another identity has its own budget");
 
   harness.session.userId = OWNER_A;
   assert.equal((await routes.search(searchRequest(JSON.stringify({ query: "x" })))).status, 200);
@@ -333,9 +370,9 @@ test("F6: an approval that committed answers 200 even when the read-back fails",
 
 test("the source list reports each version's visibility, and an upload without one stays internal", async () => {
   for (const visibility of ["customer", "internal"]) {
-    assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: visibility, visibility }))).status, 201);
+    assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: visibility, visibility, content: faqFields.content + " " + visibility }))).status, 201);
   }
-  assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: "omitted" }))).status, 201);
+  assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: "omitted", content: faqFields.content + " omitted" }))).status, 201);
   const list = await (await routes.listSources(new Request(url("sources"), { headers: { origin: APP_ORIGIN } }))).json() as
     { data: Array<{ source: { title: string }; versions: Array<{ visibility?: string }> }> };
   const byTitle = Object.fromEntries(list.data.map((group) => [group.source.title, group.versions[0]?.visibility]));

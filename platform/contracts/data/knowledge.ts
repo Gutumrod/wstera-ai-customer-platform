@@ -8,6 +8,7 @@ export type KnowledgeErrorCode =
   | "SOURCE_NOT_FOUND"
   | "SOURCE_CONFLICT"
   | "SOURCE_ARCHIVED"
+  | "DUPLICATE_KNOWLEDGE_CONTENT"
   | "APPROVED_VERSION_EXISTS"
   | "VERSION_NOT_FOUND"
   | "VERSION_CONFLICT"
@@ -182,6 +183,8 @@ export interface KnowledgeRepositoryPort {
   /** List only sources in the authenticated workspace for merchant review. */
   listSources(workspace: TrustedWorkspaceContext): Awaitable<readonly KnowledgeSource[]>;
   getSource(workspace: TrustedWorkspaceContext, sourceId: string): Awaitable<KnowledgeSource | null>;
+  /** Return only the matching source identity, never its content; ignore this request's idempotent source. */
+  findDuplicateContent(workspace: TrustedWorkspaceContext, content: string, excludeSourceId: string): Awaitable<string | null>;
   archiveSource(workspace: TrustedWorkspaceContext, sourceId: string): Awaitable<KnowledgeSource>;
   /** Persist only an uploaded draft and reject conflicting source/version IDs. */
   createVersion(workspace: TrustedWorkspaceContext, version: KnowledgeVersionDraft): Awaitable<KnowledgeVersion>;
