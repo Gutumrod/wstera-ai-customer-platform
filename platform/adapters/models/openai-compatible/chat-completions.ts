@@ -222,7 +222,7 @@ function parseUsage(value: unknown): Readonly<{ inputTokens: number; outputToken
   return Object.freeze({ inputTokens: inputTokens as number, outputTokens: outputTokens as number, totalTokens: totalTokens as number });
 }
 
-function parseCompletion(value: unknown, usage: NonNullable<ReturnType<typeof parseUsage>>): CompletionResult | null {
+function parseCompletion(value: unknown): CompletionResult | null {
   if (!isRecord(value) || !Array.isArray(value.choices) || value.choices.length !== 1) return null;
   const choice = value.choices[0];
   if (!isRecord(choice) || !isRecord(choice.message) || typeof choice.message.content !== "string") return null;
@@ -257,6 +257,8 @@ function parseAnswer(text: string, evidence: readonly SupportEvidence[]): unknow
     const answerText = value.text;
     const refs = value.citationRefs;
     const evidenceRefs = new Set(evidence.map((item) => item.referenceId));
+    // Explicit decline (the prompt's "evidence does not support an answer"): pass it on so the orchestrator hands off.
+    if (answerText === "" && Array.isArray(refs) && refs.length === 0) return Object.freeze({ text: "", citationRefs: Object.freeze([]) });
     if (typeof answerText !== "string" || answerText.trim().length === 0 || answerText.length > MAX_ANSWER_CHARS
       || !Array.isArray(refs) || refs.length === 0 || refs.length > evidence.length
       || !refs.every((ref) => typeof ref === "string" && ref.length > 0 && ref.length <= MAX_REFERENCE_CHARS && evidenceRefs.has(ref))) return null;
@@ -392,7 +394,11 @@ export class OpenAICompatibleChatAdapter implements AnswerabilityPort, GroundedA
         } catch {
           throw new ModelAdapterError("INVALID_PROVIDER_RESPONSE");
         }
-        const usage = isRecord(parsed) ? parseUsage(parsed.usage) : null;
+        if (!isRecord(parsed)) throw new ModelAdapterError("INVALID_PROVIDER_RESPONSE");
+        // A provider that sends no usage at all is recorded as null (never guessed); a malformed usage object is rejected.
+        const usage = parsed.usage === undefined || parsed.usage === null
+          ? Object.freeze({ inputTokens: null, outputTokens: null, totalTokens: null })
+          : parseUsage(parsed.usage);
         if (!usage) throw new ModelAdapterError("INVALID_PROVIDER_RESPONSE");
         try {
           await waitWithAbort(this.usageRecord(Object.freeze({
@@ -408,7 +414,7 @@ export class OpenAICompatibleChatAdapter implements AnswerabilityPort, GroundedA
           if (controller.signal.aborted) throw new ModelAdapterError("TIMEOUT");
           throw new ModelAdapterError("USAGE_RECORDING_FAILED");
         }
-        const completion = parseCompletion(parsed, usage);
+        const completion = parseCompletion(parsed);
         if (!completion) throw new ModelAdapterError("INVALID_PROVIDER_RESPONSE");
         return Object.freeze({ content: completion.content });
       } catch (error) {

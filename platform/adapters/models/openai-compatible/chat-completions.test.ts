@@ -185,8 +185,13 @@ test("oversized, malformed, and usage-free responses fail closed", async (t) => 
     const { adapter } = harness(async () => new Response("not json", { status: 200 }));
     await assert.rejects(adapter.assess({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { code: "INVALID_PROVIDER_RESPONSE" });
   });
-  await t.test("missing token usage", async () => {
-    const { adapter } = harness(async () => completion('{"kind":"answerable"}', { usage: null }));
+  await t.test("absent token usage is recorded as null, never guessed", async () => {
+    const { adapter, usage } = harness(async () => completion('{"kind":"answerable"}', { usage: null }));
+    assert.deepEqual(await adapter.assess({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { kind: "answerable" });
+    assert.deepEqual([usage[0]?.inputTokens, usage[0]?.outputTokens, usage[0]?.totalTokens], [null, null, null]);
+  });
+  await t.test("malformed token usage", async () => {
+    const { adapter } = harness(async () => completion('{"kind":"answerable"}', { usage: { prompt_tokens: "x" } }));
     await assert.rejects(adapter.assess({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { code: "INVALID_PROVIDER_RESPONSE" });
   });
   await t.test("usage persistence failure", async () => {
@@ -213,8 +218,14 @@ test("malformed assessment and fabricated citation references never reach caller
     const { adapter } = harness(async () => completion('{"text":"คำตอบ","citationRefs":["other"]}'));
     await assert.rejects(adapter.generate({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { code: "INVALID_PROVIDER_RESPONSE" });
   });
-  await t.test("empty answer", async () => {
+  await t.test("explicit decline is passed on for handoff, never as an answer", async () => {
     const { adapter } = harness(async () => completion('{"text":"","citationRefs":[]}'));
-    await assert.rejects(adapter.generate({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { code: "INVALID_PROVIDER_RESPONSE" });
+    assert.deepEqual(await adapter.generate({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { text: "", citationRefs: [] });
+  });
+  await t.test("empty text with citations or blank text is rejected", async () => {
+    for (const body of ['{"text":"","citationRefs":["evidence-1"]}', '{"text":"  ","citationRefs":["evidence-1"]}', '{"text":"x","citationRefs":[]}']) {
+      const { adapter } = harness(async () => completion(body));
+      await assert.rejects(adapter.generate({ workspaceId: "shop-1", query: "ส่งของกี่วัน", evidence }), { code: "INVALID_PROVIDER_RESPONSE" });
+    }
   });
 });

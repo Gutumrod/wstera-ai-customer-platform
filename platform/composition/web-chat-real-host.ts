@@ -9,7 +9,9 @@ import { PostgresConversationMessages } from "../adapters/persistence/postgres/c
 import { KnowledgeRetriever, areKnowledgeCitationsCurrent } from "../modules/knowledge/index.js";
 import type { PostgresDatabasePort } from "../adapters/persistence/postgres/knowledge-repository.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
+import { PostgresModelSpendLedger } from "../adapters/persistence/postgres/model-usage.js";
 import { createWebChatHost } from "./web-chat-host.js";
+import { createModelPathFactory, readModelPathSettings } from "./model-path.js";
 import { knowledgeDatabaseTls, requiredKnowledgeDatabaseUrl } from "./knowledge-database-url.js";
 
 type RuntimeDatabase = PostgresDatabasePort & Readonly<{ assertLeastPrivilege(): Promise<void> }>;
@@ -27,14 +29,30 @@ function runtimeDatabase(): RuntimeDatabase {
   return shared.__merchantKnowledgeDatabase;
 }
 /** Real read-only PostgreSQL knowledge/config host. Optional DB injection is for PGlite route integration tests. */
-export async function createWebChatRealHost(database: RuntimeDatabase = runtimeDatabase()) {
+export async function createWebChatRealHost(
+  database: RuntimeDatabase = runtimeDatabase(),
+  modelPath: Readonly<{ env?: Readonly<Record<string, string | undefined>>; fetch?: typeof fetch; log?: Parameters<typeof readModelPathSettings>[1] }> = {},
+) {
   await database.assertLeastPrivilege();
   const configuration = new PostgresWebChatConfiguration(database);
   // Empty actor id makes every repository write fail closed; this host only reads approved knowledge.
   const repository = new PostgresKnowledgeRepository(database, "");
   const conversations = new PostgresConversationRepository(database);
 
+  // Off unless AICP_MODEL_ANSWERS_ENABLED=true and every model setting is valid; answers then stay extractive.
+  const modelSettings = readModelPathSettings(modelPath.env ?? process.env, modelPath.log);
   const host = createWebChatHost({
+    ...(modelSettings ? {
+      model: {
+        enabled: true,
+        createModelPort: createModelPathFactory({
+          settings: modelSettings,
+          ledger: new PostgresModelSpendLedger(database),
+          ...(modelPath.fetch ? { fetch: modelPath.fetch } : {}),
+          ...(modelPath.log ? { log: modelPath.log } : {}),
+        }),
+      },
+    } : {}),
     conversations,
     retrieval: new KnowledgeRetriever(repository),
     evidenceFreshness: {
