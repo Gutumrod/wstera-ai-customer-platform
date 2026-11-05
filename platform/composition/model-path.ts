@@ -8,6 +8,7 @@ import {
 } from "../adapters/answers/model/governed-model-answer-port.js";
 import type { ModelSpendLedgerPort, ModelSpendLimits, ModelUsagePort } from "../contracts/models/index.js";
 import type { GroundedAnswerPort } from "../modules/ai-engine/support-orchestrator.js";
+import { selectSupportingEvidence } from "../adapters/answers/extractive/extractive-answerability-port.js";
 
 /**
  * Environment (names only; values are the host's):
@@ -113,7 +114,11 @@ export function createModelPathFactory(options: Readonly<{
   fetch?: typeof fetch;
   log?: ModelPathLog;
 }>): (context: Readonly<{ conversationId: string }>) => GroundedAnswerPort {
-  const fallback = createExtractiveAnswerPort();
+  const extractive = createExtractiveAnswerPort();
+  const fallback: GroundedAnswerPort = { async generate(input) {
+    const evidence = selectSupportingEvidence(input.query, input.evidence);
+    return evidence.length ? extractive.generate({ ...input, evidence }) : null;
+  } };
   return (context) => createGovernedModelAnswerPort({
     providerId: options.settings.providerId,
     model: options.settings.model,
@@ -126,4 +131,36 @@ export function createModelPathFactory(options: Readonly<{
     fallback,
     ...(options.log ? { log: options.log } : {}),
   });
+}
+
+/** One separately reserved semantic triage call; malformed/provider/ledger failures fail closed. */
+export function createModelGate(options: Readonly<{
+  settings: ModelPathSettings; ledger: ModelSpendLedgerPort; fetch?: typeof fetch; log?: ModelPathLog;
+}>): (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly import("../modules/ai-engine/support-orchestrator.js").SupportEvidence[] }>) => Promise<unknown | null> {
+  const log = options.log ?? defaultModelPathLog;
+  return async (input) => {
+    const bytes = new TextEncoder().encode(input.query + input.evidence.map((e) => e.text + e.sourceLabel).join("" )).byteLength;
+    const reserveCostMicros = Math.ceil(2 * bytes * options.settings.pricing.inputMicrosPerToken
+      + options.settings.maxCompletionTokens * options.settings.pricing.outputMicrosPerToken);
+    let reservation;
+    try { reservation = await options.ledger.reserve({ workspaceId: input.workspaceId, conversationId: input.conversationId,
+      providerId: options.settings.providerId, model: options.settings.model, operation: "answerability",
+      reserveCostMicros, limits: options.settings.limits }); }
+    catch { log("model_path.triage_fallback", { reason: "LEDGER_UNAVAILABLE" }); return null; }
+    if (reservation.kind === "limit") { log("model_path.triage_fallback", { reason: reservation.reason }); return null; }
+    let settled = false;
+    const usage: ModelUsagePort = { async record(value) {
+      const costMicros = value.inputTokens === null || value.outputTokens === null ? reserveCostMicros
+        : Math.ceil(value.inputTokens * options.settings.pricing.inputMicrosPerToken + value.outputTokens * options.settings.pricing.outputMicrosPerToken);
+      await options.ledger.settle({ workspaceId: input.workspaceId, callId: reservation.callId, usage: value, costMicros }); settled = true;
+    } };
+    try {
+      const adapter = adapterFor(options.settings, usage, options.fetch) as ReturnType<typeof adapterFor> & { triage(input: unknown): Promise<unknown> };
+      return await adapter.triage({ workspaceId: input.workspaceId, query: input.query, evidence: input.evidence });
+    } catch (error) {
+      if (!settled) await options.ledger.fail({ workspaceId: input.workspaceId, callId: reservation.callId }).catch(() => undefined);
+      log("model_path.triage_fallback", { reason: error instanceof Error && "code" in error ? String((error as { code: unknown }).code) : "UNEXPECTED" });
+      return null;
+    }
+  };
 }

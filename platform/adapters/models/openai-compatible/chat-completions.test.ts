@@ -80,11 +80,31 @@ test("answerability sends bounded JSON-mode request and records per-workspace to
 });
 
 test("grounded answer returns only bounded text and evidence references", async () => {
-  const { adapter, usage } = harness(async () => completion('{"text":"ส่งภายใน 2 วันทำการ","citationRefs":["evidence-1"]}'));
+  let requestBody = "";
+  const { adapter, usage } = harness(async (_input, init) => {
+    requestBody = String(init?.body);
+    return completion('{"text":"ส่งภายใน 2 วันทำการ","citationRefs":["evidence-1"]}');
+  });
   const result = await adapter.generate({ workspaceId: "shop-2", query: "ส่งของกี่วัน", evidence });
   assert.deepEqual(result, { text: "ส่งภายใน 2 วันทำการ", citationRefs: ["evidence-1"] });
+  const payload = JSON.parse(requestBody);
+  assert.match(payload.messages[0].content, /same language as the user's query/u);
+  assert.match(payload.messages[0].content, /For Thai replies, end with ครับ/u);
   assert.equal(usage[0]?.workspaceId, "shop-2");
   assert.equal(usage[0]?.operation, "grounded_answer");
+});
+
+test("generated-answer prompt requests one polite response language and Thai ครับ endings", async () => {
+  let requestBody = "";
+  const { adapter } = harness(async (_input, init) => {
+    requestBody = String(init?.body);
+    return completion('{"text":"ส่งภายใน 2 วันทำการ ครับ","citationRefs":["evidence-1"]}');
+  });
+  await adapter.generate({ workspaceId: "shop-2", query: "ส่งของกี่วัน", evidence });
+  const payload = JSON.parse(requestBody);
+  assert.match(payload.messages[0].content, /Reply in the same language as the user's query/u);
+  assert.match(payload.messages[0].content, /use polite wording/u);
+  assert.match(payload.messages[0].content, /For Thai replies, end with ครับ/u);
 });
 
 test("configuration rejects missing credentials, unsafe URLs and invalid HTTP endpoints", () => {
