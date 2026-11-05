@@ -6,6 +6,7 @@ import type { PostgresDatabasePort, PostgresRow } from "./knowledge-repository.j
 type MessageRow = PostgresRow & { id: string; body: string; role: string; created_at: Date | string };
 type CursorRow = PostgresRow & { id: string; created_at: Date | string };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const nextCreatedAt = `GREATEST(clock_timestamp(), COALESCE((SELECT max(created_at) FROM aicp.conversation_messages WHERE workspace_id=$1::text AND conversation_id=$2::text), '-infinity'::timestamptz) + interval '1 microsecond')`;
 function cursorEncode(row: CursorRow): string { return Buffer.from(`${new Date(row.created_at).toISOString()}|${row.id}`).toString("base64url"); }
 function cursorDecode(value: string | null): { timestamp: string; id: string } | null {
   if (value === null) return null;
@@ -22,10 +23,11 @@ export class PostgresConversationMessages implements ConversationMessagePort {
 
   async appendTurn(input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; customerText: string; botText: string }>): Promise<void> {
     if (input.customerText.length > 5000 || input.botText.length > 5000) throw new Error("MESSAGE_TOO_LONG");
+    // created_at rises strictly within a conversation (never ties, even on a coarse clock), so ORDER BY created_at, id keeps customer before bot.
     await this.database.transaction(async (query) => {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [input.workspace.workspaceId]);
-      await query.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body) VALUES ($1,$2,'customer',$3)", [input.workspace.workspaceId, input.conversationId, input.customerText]);
-      await query.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, delivery_id) VALUES ($1,$2,'bot',$3,$4)", [input.workspace.workspaceId, input.conversationId, input.botText, randomUUID()]);
+      await query.query(`INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, created_at) VALUES ($1,$2,'customer',$3,${nextCreatedAt})`, [input.workspace.workspaceId, input.conversationId, input.customerText]);
+      await query.query(`INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, delivery_id, created_at) VALUES ($1,$2,'bot',$3,$4,${nextCreatedAt})`, [input.workspace.workspaceId, input.conversationId, input.botText, randomUUID()]);
     });
   }
 

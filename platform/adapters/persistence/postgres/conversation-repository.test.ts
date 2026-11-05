@@ -46,3 +46,11 @@ test("conversation message turns persist and customer updates reveal only staff 
   const next = await messages.staffUpdates({ workspace, conversationId: "thread-messages", after: first.cursor, limit: 100 });
   assert.deepEqual(next.messages.map((item) => item.text), ["คำตอบใหม่"]);
 });
+
+test("appendTurn stores the customer message strictly before the bot reply, whatever the random ids are", async () => {
+  await new PostgresConversationRepository(runtimePort(database)).create(workspace, "thread-order");
+  const messages = new PostgresConversationMessages(runtimePort(database));
+  for (let i = 0; i < 25; i += 1) await messages.appendTurn({ workspace, conversationId: "thread-order", customerText: `q${i}`, botText: `a${i}` });
+  const rows = await database.query<{ body: string }>("SELECT body FROM aicp.conversation_messages WHERE workspace_id='shop-a' AND conversation_id='thread-order' ORDER BY created_at, id");
+  assert.deepEqual(rows.rows.map((r) => r.body), Array.from({ length: 25 }, (_, i) => [`q${i}`, `a${i}`]).flat());
+});

@@ -276,6 +276,9 @@ export function renderChatPage(params: RenderChatPageParams): string {
       const handoffBtn = document.getElementById("handoff-btn");
       let updateCursor = null;
       const seenStaffMessages = new Set();
+      // A poll answer is stale if a handoff request started or finished after the poll began, or is still in flight.
+      let handoffGen = 0;
+      let handoffInFlight = 0;
 
       const STORAGE_KEY = "aicp-webchat:" + connectionId;
       const MAX_STORED_MESSAGES = 50;
@@ -366,7 +369,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
               appendMessage(data.text || "", false, data.citations);
             } else if (data.kind === "uncertain") {
               appendMessage(data.text || "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ สามารถกดปุ่มขอคุยกับพนักงานได้ครับ", false);
-              if (data.handoff === true) handoffBtn.disabled = true;
+              if (data.handoff === true) { handoffGen += 1; handoffBtn.disabled = true; }
             } else {
               appendMessage(data.text || "ได้รับข้อความแล้ว", false);
             }
@@ -402,6 +405,8 @@ export function renderChatPage(params: RenderChatPageParams): string {
 
       handoffBtn.addEventListener("click", async function () {
         handoffBtn.disabled = true;
+        handoffInFlight += 1;
+        handoffGen += 1;
         let sent = false;
         messagesContainer.setAttribute("aria-busy", "true");
 
@@ -437,12 +442,15 @@ export function renderChatPage(params: RenderChatPageParams): string {
           }
         } finally {
           messagesContainer.removeAttribute("aria-busy");
+          handoffInFlight -= 1;
+          handoffGen += 1;
           if (!sent) handoffBtn.disabled = false;
         }
       });
 
       async function pollStaffMessages() {
         if (document.visibilityState !== "visible") return;
+        const gen = handoffGen;
         const suffix = updateCursor ? "?after=" + encodeURIComponent(updateCursor) : "";
         try {
           const response = await fetch("/chat/updates" + suffix, { method: "GET", cache: "no-store" });
@@ -454,7 +462,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
             seenStaffMessages.add(message.id);
             appendMessage(message.text, false, undefined, true, message.id);
           });
-          if (typeof result.handoffOpen === "boolean") handoffBtn.disabled = result.handoffOpen;
+          if (typeof result.handoffOpen === "boolean" && gen === handoffGen && handoffInFlight === 0) handoffBtn.disabled = result.handoffOpen;
           if (typeof result.cursor === "string") updateCursor = result.cursor;
         } catch (err) { /* polling resumes on the next interval */ }
       }
