@@ -32,6 +32,14 @@ ALTER TABLE aicp.workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE aicp.workspace_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE aicp.workspace_connections ENABLE ROW LEVEL SECURITY;
 
+-- This narrowly scoped SECURITY DEFINER wrapper is owned by the migration caller,
+-- which can use auth.uid() without giving the product owner access to auth.
+CREATE FUNCTION aicp.current_auth_uid() RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$ SELECT auth.uid() $$;
+REVOKE ALL ON FUNCTION aicp.current_auth_uid() FROM PUBLIC;
+
 CREATE FUNCTION aicp.is_active_workspace_member(target_workspace_id text)
 RETURNS boolean
 LANGUAGE sql
@@ -44,7 +52,7 @@ AS $$
     FROM aicp.workspace_memberships AS membership
     JOIN aicp.workspaces AS workspace USING (workspace_id)
     WHERE membership.workspace_id = target_workspace_id
-      AND membership.user_id = (SELECT auth.uid())
+      AND membership.user_id = (SELECT aicp.current_auth_uid())
       AND membership.status = 'active'
       AND workspace.status = 'active'
   )
@@ -68,15 +76,38 @@ GRANT USAGE ON SCHEMA aicp TO authenticated;
 GRANT SELECT ON aicp.workspaces, aicp.workspace_memberships, aicp.workspace_connections TO authenticated;
 
 -- Product-owned schema role; credentials are provisioned outside migrations.
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aicp_migrator') THEN
-    CREATE ROLE aicp_migrator NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT;
+DO $$
+DECLARE existing_role record;
+BEGIN
+  SELECT rolsuper, rolbypassrls, rolcanlogin, rolcreatedb, rolcreaterole, rolreplication, rolinherit
+    INTO existing_role FROM pg_roles WHERE rolname = 'aicp_migrator';
+  IF NOT FOUND THEN
+    EXECUTE 'CREATE ROLE aicp_migrator NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT';
+  ELSIF existing_role.rolsuper OR existing_role.rolbypassrls OR existing_role.rolcanlogin
+     OR existing_role.rolcreatedb OR existing_role.rolcreaterole OR existing_role.rolreplication OR existing_role.rolinherit THEN
+    RAISE EXCEPTION 'AICP_MIGRATOR_ROLE_UNSAFE: expected NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOINHERIT' USING ERRCODE = '42501';
   END IF;
 END $$;
-ALTER ROLE aicp_migrator NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT;
-ALTER SCHEMA aicp OWNER TO aicp_migrator;
+DO $$
+DECLARE existing_role record;
+BEGIN
+  SELECT rolsuper, rolbypassrls, rolcanlogin, rolcreatedb, rolcreaterole, rolreplication, rolinherit
+    INTO existing_role FROM pg_roles WHERE rolname = 'knowledge_runtime';
+  IF NOT FOUND THEN
+    EXECUTE 'CREATE ROLE knowledge_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT';
+  ELSIF existing_role.rolsuper OR existing_role.rolbypassrls OR existing_role.rolcreatedb
+     OR existing_role.rolcreaterole OR existing_role.rolreplication OR existing_role.rolinherit THEN
+    RAISE EXCEPTION 'KNOWLEDGE_RUNTIME_ROLE_UNSAFE: expected NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOINHERIT' USING ERRCODE = '42501';
+  END IF;
+END $$;
 
--- Product schema objects belong to the product migrator; the runtime role remains grant-only.
+-- Request SET only for this migration and for the original login, even under SET ROLE.
+DO $$ BEGIN
+  EXECUTE format('GRANT aicp_migrator TO %I WITH ADMIN FALSE, INHERIT FALSE, SET TRUE', session_user);
+END $$;
+
+-- The hosted migration caller owns these objects before this handoff.
+GRANT USAGE, CREATE ON SCHEMA aicp TO aicp_migrator;
 ALTER TABLE aicp.knowledge_sources OWNER TO aicp_migrator;
 ALTER TABLE aicp.knowledge_versions OWNER TO aicp_migrator;
 ALTER TABLE aicp.knowledge_chunks OWNER TO aicp_migrator;
@@ -86,16 +117,32 @@ ALTER TABLE aicp.workspace_connections OWNER TO aicp_migrator;
 ALTER FUNCTION aicp.protect_knowledge_version_identity() OWNER TO aicp_migrator;
 ALTER FUNCTION aicp.guard_knowledge_chunk_insert() OWNER TO aicp_migrator;
 ALTER FUNCTION aicp.is_active_workspace_member(text) OWNER TO aicp_migrator;
-GRANT SELECT ON aicp.workspaces, aicp.workspace_memberships TO aicp_migrator;
-GRANT USAGE ON SCHEMA auth TO aicp_migrator;
+GRANT EXECUTE ON FUNCTION aicp.current_auth_uid() TO aicp_migrator;
+ALTER SCHEMA aicp OWNER TO aicp_migrator;
 
--- Dedicated direct-Postgres runtime role. Local setup grants a password only to the ignored local role.
+-- Keep the bucket private. The hosted migration role can INSERT/UPDATE but may not
+-- have SELECT on storage.buckets; use the upsert only when its ACL permits it.
+-- Without SELECT, a conflicting pre-existing id fails closed instead of widening grants.
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'knowledge_runtime') THEN
-    CREATE ROLE knowledge_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT;
+  IF has_table_privilege(session_user, 'storage.buckets', 'SELECT') THEN
+    INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    VALUES ('knowledge-originals', 'knowledge-originals', false, 5242880,
+            ARRAY['application/pdf', 'text/csv', 'text/plain', 'application/vnd.ms-excel'])
+    ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 5242880,
+      allowed_mime_types = EXCLUDED.allowed_mime_types;
+  ELSE
+    INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    VALUES ('knowledge-originals', 'knowledge-originals', false, 5242880,
+            ARRAY['application/pdf', 'text/csv', 'text/plain', 'application/vnd.ms-excel']);
   END IF;
 END $$;
-ALTER ROLE knowledge_runtime NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT;
+
+SET ROLE aicp_migrator;
+DO $$ BEGIN
+  EXECUTE format('GRANT USAGE ON SCHEMA aicp TO %I', session_user);
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE ON aicp.workspaces, aicp.workspace_memberships, aicp.workspace_connections TO %I', session_user);
+END $$;
+
 GRANT USAGE ON SCHEMA aicp TO knowledge_runtime;
 GRANT SELECT ON aicp.knowledge_sources, aicp.knowledge_versions, aicp.knowledge_chunks TO knowledge_runtime;
 GRANT INSERT (workspace_id, source_id, kind, title, created_at) ON aicp.knowledge_sources TO knowledge_runtime;
@@ -153,9 +200,7 @@ CREATE POLICY knowledge_quarantine_workspace_policy ON aicp.knowledge_quarantine
 GRANT SELECT, INSERT ON aicp.knowledge_quarantine_records TO knowledge_runtime;
 GRANT UPDATE (object_path) ON aicp.knowledge_quarantine_records TO knowledge_runtime;
 
--- Private originals are accessible only to the server-side adapter using the local secret service key.
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('knowledge-originals', 'knowledge-originals', false, 5242880,
-        ARRAY['application/pdf', 'text/csv', 'text/plain', 'application/vnd.ms-excel'])
-ON CONFLICT (id) DO UPDATE SET public = false, file_size_limit = 5242880,
-  allowed_mime_types = EXCLUDED.allowed_mime_types;
+RESET ROLE;
+DO $$ BEGIN
+  EXECUTE format('REVOKE aicp_migrator FROM %I', session_user);
+END $$;

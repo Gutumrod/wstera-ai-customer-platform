@@ -1,6 +1,23 @@
 -- HOST-002: split approval from ingest, re-check membership inside write transactions,
 -- hide LINE connections from members, and allow one active web connection per workspace.
 
+DO $$
+DECLARE role_state record;
+BEGIN
+  SELECT rolsuper, rolbypassrls, rolcanlogin, rolcreatedb, rolcreaterole, rolreplication, rolinherit
+    INTO role_state FROM pg_roles WHERE rolname = 'aicp_migrator';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'AICP_MIGRATOR_ROLE_MISSING' USING ERRCODE = '42501';
+  END IF;
+  IF role_state.rolsuper OR role_state.rolbypassrls OR role_state.rolcanlogin
+     OR role_state.rolcreatedb OR role_state.rolcreaterole OR role_state.rolreplication OR role_state.rolinherit THEN
+    RAISE EXCEPTION 'AICP_MIGRATOR_ROLE_UNSAFE' USING ERRCODE = '42501';
+  END IF;
+  EXECUTE format('GRANT aicp_migrator TO %I WITH ADMIN FALSE, INHERIT FALSE, SET TRUE', session_user);
+END $$;
+
+SET ROLE aicp_migrator;
+
 -- Runs inside each knowledge write. FOR SHARE makes a concurrent revocation or suspension wait for this
 -- transaction to finish; it needs privileges the runtime role must not hold, hence SECURITY DEFINER rather
 -- than a SELECT grant plus a new RLS policy. The actor comes from the server's verified session.
@@ -27,7 +44,6 @@ BEGIN
   RETURN actor_role;
 END;
 $$;
-ALTER FUNCTION aicp.assert_active_knowledge_writer(text, text) OWNER TO aicp_migrator;
 REVOKE ALL ON FUNCTION aicp.assert_active_knowledge_writer(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION aicp.assert_active_knowledge_writer(text, text) TO knowledge_runtime;
 
@@ -40,7 +56,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, aicp
 AS $$
 DECLARE
-  approver text := (SELECT auth.uid())::text;
+  approver text := (SELECT aicp.current_auth_uid())::text;
   source_status text;
   version_status text;
 BEGIN
@@ -87,7 +103,6 @@ EXCEPTION WHEN unique_violation THEN
   RAISE EXCEPTION 'APPROVED_VERSION_EXISTS' USING ERRCODE = 'AC001';
 END;
 $$;
-ALTER FUNCTION aicp.approve_knowledge_version(text, text, text) OWNER TO aicp_migrator;
 REVOKE ALL ON FUNCTION aicp.approve_knowledge_version(text, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION aicp.approve_knowledge_version(text, text, text) TO authenticated;
 
@@ -102,3 +117,8 @@ CREATE POLICY workspace_connections_member_read ON aicp.workspace_connections
 CREATE UNIQUE INDEX workspace_one_active_web_connection
   ON aicp.workspace_connections (workspace_id)
   WHERE channel = 'web' AND status = 'active';
+
+RESET ROLE;
+DO $$ BEGIN
+  EXECUTE format('REVOKE aicp_migrator FROM %I', session_user);
+END $$;
