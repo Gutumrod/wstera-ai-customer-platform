@@ -1,6 +1,6 @@
 # Task G1-HOST-001 — Authenticated knowledge host
 
-**Status: APPROVED FOR LOCAL SYNTHETIC IMPLEMENTATION.** On 2026-10-23, the Owner approved Node.js + Next.js + Supabase Auth/Postgres/Private Storage and authorized local-only synthetic data. Hosted setup, deployment, production data and spend remain unauthorized. This is the next implementation slice toward G1, not a claim that the one-shop Web MVP is complete.
+**Status: MERGED via PR #18 (local synthetic only); hardened by HOST-002 (PR #26, PR #28).** On 2026-10-23, the Owner approved Node.js + Next.js + Supabase Auth/Postgres/Private Storage and authorized local-only synthetic data. Hosted setup, deployment, production data and spend remain unauthorized. This was a slice toward G1, not a claim that the one-shop Web MVP is complete. Visitor Web Chat landed later as WEBCHAT-001 (PR #30–#33), still without a real host.
 
 ## Goal
 

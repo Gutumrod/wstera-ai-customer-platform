@@ -1,6 +1,6 @@
 # Execution Status
 
-Updated: 2026-11-02 against `main` at `e47bb57a68e68c69e0093b5b3eff85eeed843194`. This records merged repository state, not product or release approval.
+Updated: 2026-11-05 against `main` at `b080d57` (PR #33 merge). Earlier text below was recorded at `e47bb57` and `9b4f997`. This records merged repository state, not product or release approval.
 
 ## Current milestone
 
@@ -16,6 +16,12 @@ PR #16 merged the consolidated Phase 0C and G1 foundation work. On 2026-10-25, P
 | Verification | Prior PR #16 evidence: 129 tests and 30 synthetic retrieval queries. PR #18 candidate evidence: 145 tests, build and audit; independent review left M1–M3 open | Fresh unified CI on `9b4f997`; browser-to-`wstera-lab` host E2E; real one-shop upload → cited answer → durable human handoff trace and independent security acceptance |
 
 PR #19 provides a pure PromptPay EMVCo payload builder; it is not wired to a payment flow and has no real banking-app scan proof. PR #20 provides typed action contracts and a pure lifecycle reducer; it does not include an executor or business writes. PR #21 records provenance and pilot criteria. P3A executor and P4 PromptPay wiring remain planned and unauthorized tasks.
+
+## Merged since 2026-11-02 (BUILD_PASS only)
+
+PR #25 (HOST-004: lab mode fails closed) and PR #23 (AICP objects in schema `aicp`) are merged. PR #26 and PR #28 merged HOST-002: route tests, per-identity rate limits, transactional membership revalidation and M1–M3 closed in code, with revoke/archive moved behind authenticated RPCs. PR #29 merged Core Contract v0.1 as a DRAFT with no independent review. PR #30–#33 merged WEBCHAT-001: per-version `visibility` and retrieval `audience`, the visitor chat page with signed session and rate limits, extractive answer and answerability ports, merchant intake `visibility`, and the wire to `SupportOrchestrator`. `npm run check` in the review worktree reports 425 tests, 425 pass, 0 fail.
+
+What this does not show: the migrations (including `20261104000100_knowledge_visibility.sql`) have never run on Supabase, all database evidence is PGlite, no real host serves the visitor chat, no model is enabled, durable handoff (HANDOFF-002) is not built, and the browser-to-`wstera-lab` E2E was not run. CI runs recorded for HOST-002 cover `250bb67` and `acb0e9e`; a unified CI result for `b080d57` is not asserted here. Nothing above is `PRODUCTION_READY`.
 
 ## Owner decisions 2026-10-25
 

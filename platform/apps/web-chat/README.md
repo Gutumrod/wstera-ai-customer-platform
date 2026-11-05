@@ -1,6 +1,6 @@
 # Web AI Chat Widget
 
-**Status:** PARTIAL IMPLEMENTATION (WEBCHAT-001 Chunk 2; awaiting Chunk 1 merge for live SupportOrchestrator wiring). **Planned phase:** Phase 1.
+**Status:** MERGED, BUILD_PASS only (WEBCHAT-001 PR #30–#33 on `main` @ `b080d57`); the page, session, routes and `SupportOrchestrator` wiring exist as code and local tests, but no real host or hosted deployment serves them. **Planned phase:** Phase 1.
 
 ## Responsibility
 
