@@ -12,6 +12,7 @@ import type {
 import { SupportOrchestrator } from "../modules/ai-engine/support-orchestrator.js";
 import { createConversation, requestHandoff as requestConversationHandoff } from "../modules/conversation/index.js";
 import { createAnswerPort } from "../adapters/answers/answer-port-factory.js";
+import { createExtractiveAnswerPort } from "../adapters/answers/extractive/extractive-answer-port.js";
 import { isInjectionOrMarkup, selectSupportingEvidence } from "../adapters/answers/extractive/extractive-answerability-port.js";
 import type { SupportResponder } from "./web-chat-routes.js";
 
@@ -171,11 +172,11 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
           const retrieval = { async search() { return bounded.length ? Object.freeze({ kind: "evidence" as const, hits: Object.freeze(bounded) })
             : Object.freeze({ kind: "no_answer" as const, reason: "NO_APPROVED_EVIDENCE" as const }); } };
           const answerability = { async assess() { return Object.freeze({ kind }); } };
+          const gateAnswer = deps.model?.enabled === true && deps.model.createModelPort
+            ? deps.model.createModelPort({ conversationId })
+            : deps.answer ? withSupportingEvidence(deps.answer) : createExtractiveAnswerPort();
           const orchestrator = new SupportOrchestrator({ conversations: deps.conversations, retrieval,
-            evidenceFreshness: deps.evidenceFreshness, answerability, answer: withSupportingEvidence(deps.answer ?? createAnswerPort({
-              modelEnabled: deps.model?.enabled === true,
-              ...(deps.model?.createModelPort ? { createModelPort: () => deps.model!.createModelPort!({ conversationId }) } : {}),
-            })), handoff: deps.handoff }, 8);
+            evidenceFreshness: deps.evidenceFreshness, answerability, answer: gateAnswer, handoff: deps.handoff }, 8);
           return orchestrator.respond({ workspace, conversationId, query: asked, audience: "customer" });
         }
       } catch { gateFailed = true; /* Gate failure deliberately rejoins the unchanged legacy path below. */ }

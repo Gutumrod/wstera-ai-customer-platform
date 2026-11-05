@@ -8,6 +8,7 @@ import {
 } from "../adapters/answers/model/governed-model-answer-port.js";
 import type { ModelSpendLedgerPort, ModelSpendLimits, ModelUsagePort } from "../contracts/models/index.js";
 import type { GroundedAnswerPort } from "../modules/ai-engine/support-orchestrator.js";
+import { selectSupportingEvidence } from "../adapters/answers/extractive/extractive-answerability-port.js";
 
 /**
  * Environment (names only; values are the host's):
@@ -113,7 +114,11 @@ export function createModelPathFactory(options: Readonly<{
   fetch?: typeof fetch;
   log?: ModelPathLog;
 }>): (context: Readonly<{ conversationId: string }>) => GroundedAnswerPort {
-  const fallback = createExtractiveAnswerPort();
+  const extractive = createExtractiveAnswerPort();
+  const fallback: GroundedAnswerPort = { async generate(input) {
+    const evidence = selectSupportingEvidence(input.query, input.evidence);
+    return evidence.length ? extractive.generate({ ...input, evidence }) : null;
+  } };
   return (context) => createGovernedModelAnswerPort({
     providerId: options.settings.providerId,
     model: options.settings.model,

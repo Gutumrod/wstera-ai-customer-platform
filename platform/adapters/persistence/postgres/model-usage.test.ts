@@ -88,6 +88,10 @@ test("real host: flag off never calls the provider; flag on answers with citatio
   try {
     const repository = new PostgresKnowledgeRepository(runtimePort(database), NO_ACTOR_FOR_SCHEMA_TESTS);
     await addFaq(database, repository, "shipping", "จัดส่งใช้เวลา 2 วันทำการ", "customer");
+    await addFaq(database, repository, "services", "มีบริการติดตั้งฟรีในเขตกรุงเทพมหานคร และบริการห่อของขวัญ", "customer");
+    await addFaq(database, repository, "price-a", "สินค้า Alpha ราคา 900 บาท", "customer");
+    await addFaq(database, repository, "price-b", "สินค้า Beta ราคา 1,200 บาท", "customer");
+    await addFaq(database, repository, "warranty", "สินค้ารับ warranty 2 ปีเต็มนับจากวันที่ซื้อ", "customer");
     await addFaq(database, repository, "internal", "จัดส่งแบบ VIP ใช้เวลา 30 นาที ต้นทุนลับ 999", "internal");
     const port: PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } = { ...runtimePort(database), async assertLeastPrivilege() {} };
     const { createWebChatRealHost } = await import("../../../composition/web-chat-real-host.js");
@@ -99,7 +103,14 @@ test("real host: flag off never calls the provider; flag on answers with citatio
       const body = String(init.body);
       requests.push(body);
       const isTriage = body.includes("Classify the customer query");
-      return new Response(JSON.stringify({ choices: [{ message: { content: isTriage ? JSON.stringify({ kind: triage }) : reply } }], usage: { prompt_tokens: 70, completion_tokens: 12, total_tokens: 82 } }), { status: 200 });
+      const request = JSON.parse(body) as { messages: Array<{ content: string }> };
+      const userPayload = JSON.parse(request.messages[1]!.content) as { query: string; evidence: Array<{ referenceId: string; text: string }> };
+      const result = isTriage
+        ? JSON.stringify({ kind: userPayload.query.includes("นายชื่อไร") ? "small_talk" : userPayload.query.includes("สาขา") ? "insufficient_evidence" : triage })
+        : userPayload.query.includes("ราคาสองสินค้า")
+          ? JSON.stringify({ text: "Alpha 900 บาท; Beta 1,200 บาท", citationRefs: userPayload.evidence.filter((item) => /Alpha|Beta/u.test(item.text)).map((item) => item.referenceId) })
+          : reply;
+      return new Response(JSON.stringify({ choices: [{ message: { content: result } }], usage: { prompt_tokens: 70, completion_tokens: 12, total_tokens: 82 } }), { status: 200 });
     }) as typeof fetch;
     const log = (event: string, fields: Readonly<Record<string, string | number>>) => logs.push(JSON.stringify({ event, ...fields }));
     const env = {
@@ -150,5 +161,31 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     reply = '{"text":"","citationRefs":[]}';
     const declined = await ask(host, "conv-decline");
     assert.equal(declined.kind, "handoff_requested");
+
+    // Each additional case gets a fresh local daily window; the fake fetch never contacts a provider.
+    await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+    const beforeName = requests.length;
+    const name = await ask(host, "conv-name", "นายชื่อไร");
+    assert.equal(name.kind, "small_talk");
+    assert.match(name.text ?? "", /ผู้ช่วยของร้าน/u);
+    assert.equal(requests.length, beforeName + 1, "small-talk triage does not generate customer text");
+
+    triage = "answerable";
+    reply = '{"text":"สรุปข้อมูลจากเอกสารร้าน","citationRefs":["evidence-1"]}';
+    for (const [id, query] of [["conv-services", "มีบริการอะไรบ้างครับ"], ["conv-offers", "มีอะไรเสนอไหม"], ["conv-warranty", "สินค้ารับ warranty กี่ปี"]] as const) {
+      await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+      const answer = await ask(host, id, query);
+      assert.equal(answer.kind, "answer", query);
+      assert.ok((answer.citations?.length ?? 0) > 0, `${query} is source cited`);
+    }
+    await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+    reply = '{"text":"Alpha 900 บาท; Beta 1,200 บาท","citationRefs":[]}';
+    const prices = await ask(host, "conv-prices", "ราคาสองสินค้า Alpha กับ Beta เท่าไหร่");
+    assert.equal(prices.kind, "answer");
+    assert.deepEqual(new Set(prices.citations?.map((citation) => citation.sourceId)), new Set(["price-a", "price-b"]));
+    await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+    const unknown = await ask(host, "conv-unknown", "มีสาขาไหม");
+    assert.equal(unknown.kind, "handoff_requested");
+    assert.equal((await database.query("SELECT 1 FROM aicp.model_usage WHERE conversation_id='conv-unknown'")).rows.length, 1);
   } finally { await database.close(); }
 });
