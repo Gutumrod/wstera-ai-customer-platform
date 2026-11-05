@@ -19,6 +19,9 @@ const CUSTOMER_TEXT = "จัดส่งภายใน 2 วันทำกา
 
 function databasePort(database: PGlite): PostgresDatabasePort {
   return {
+    async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
+      return { rows: (await database.query<Row>(sql, [...values])).rows };
+    },
     async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
       return database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");

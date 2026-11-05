@@ -14,6 +14,9 @@ const hostPath = resolve(process.cwd(), "supabase/migrations/20261023000100_g1_w
 
 function runtimePort(database: PGlite): PostgresDatabasePort {
   return {
+    async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
+      return { rows: (await database.query<Row>(sql, [...values])).rows };
+    },
     async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
       return database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");

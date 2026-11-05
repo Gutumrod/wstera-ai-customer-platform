@@ -16,8 +16,8 @@ const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
 const secret = "local-synthetic-web-chat-secret-32-bytes-minimum";
 
-function client(database: Awaited<ReturnType<typeof createMigratedDatabase>>): PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } {
-  return { ...runtimePort(database), async assertLeastPrivilege() {} };
+function client(database: Awaited<ReturnType<typeof createMigratedDatabase>>, statements?: string[]): PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } {
+  return { ...runtimePort(database, statements), async assertLeastPrivilege() {} };
 }
 
 async function addApprovedFaq(repository: PostgresKnowledgeRepository, database: Awaited<ReturnType<typeof createMigratedDatabase>>, workspace: typeof shopA, sourceId: string, text: string, visibility: "customer" | "internal") {
@@ -57,7 +57,8 @@ test("web chat host resolves active web connection and limits configuration read
       INSERT INTO aicp.workspace_connections (workspace_id, connection_id, channel, status)
         VALUES ('shop-a', 'disabled-web', 'web', 'disabled');
     `);
-    const config = new PostgresWebChatConfiguration(runtimePort(database));
+    const configurationStatements: string[] = [];
+    const config = new PostgresWebChatConfiguration(runtimePort(database, configurationStatements));
     assert.equal(await config.resolveConnection("missing", "web"), null);
     assert.equal(await config.resolveConnection("disabled-web", "web"), null);
     assert.equal(await config.resolveConnection("line-a", "web"), null);
@@ -66,6 +67,9 @@ test("web chat host resolves active web connection and limits configuration read
     assert.deepEqual(await config.allowedOrigins(shopB), ["https://shop-b.example"]);
     assert.deepEqual(await config.queryAliases(shopA), [["ส่งของ", "จัดส่ง"]]);
     assert.deepEqual(await config.queryAliases(shopB), []);
+    assert.equal(configurationStatements.filter((sql) => sql === "BEGIN").length, 0, "configuration reads do not open a transaction");
+    assert.equal(configurationStatements.length, 8, "each valid read is one database command");
+    assert.equal(configurationStatements.some((sql) => sql.includes("set_config('app.workspace_id'")), false);
     const runtime = runtimePort(database);
     await assert.rejects(runtime.transaction((query) => query.query("UPDATE aicp.workspace_connections SET allowed_origins = ARRAY['https://evil.example'] WHERE connection_id = 'web-a'")));
     await assert.rejects(runtime.transaction((query) => query.query("INSERT INTO aicp.workspace_connections (workspace_id, connection_id, channel) VALUES ('shop-a','web-x','web')")));
@@ -108,15 +112,21 @@ test("real host answers approved knowledge and persists customer handoff to its 
     await addApprovedFaq(repository, database, shopA, "internal", "ส่งของ VIP ใช้เวลา 30 นาที", "internal");
     await database.exec(`UPDATE aicp.workspaces SET query_aliases = '[["ส่งของ","จัดส่ง"]]'::jsonb WHERE workspace_id = 'shop-a'`);
     const { createWebChatRealHost } = await import("../../../composition/web-chat-real-host.js");
-    const host = await createWebChatRealHost(client(database));
+    const countedStatements: string[] = [];
+    const host = await createWebChatRealHost(client(database, countedStatements));
     const citation = { workspaceId: "shop-a", sourceId: "shipping", sourceVersionId: "v1", chunkId: "shipping:v1:0", locator: { kind: "span", chunkIndex: 0, start: 0, end: 1 } } as KnowledgeCitation;
     assert.deepEqual(await host.describeCitation(shopA, citation), { title: "shipping" });
     assert.equal(await host.describeCitation(shopA, { ...citation, sourceId: "internal", chunkId: "internal:v1:0" }), null);
+    countedStatements.length = 0;
+    assert.deepEqual(await host.describeCitations!(shopA, [citation, { ...citation, workspaceId: "shop-b" }, citation]), [
+      { title: "shipping" }, null, { title: "shipping" },
+    ]);
+    assert.equal(countedStatements.filter((sql) => sql === "BEGIN").length, 1, "citation title lookup uses one scoped read for every row");
     const routes = createWebChatRoutes({
       messageEndpoint: "/chat/message", resolveConnection: host.resolveConnection, allowedOrigins: host.allowedOrigins,
       sessionSecret: secret, responder: host.responder, requestHandoff: host.requestHandoff,
       persistTurn: host.persistTurn, staffUpdates: host.staffUpdates,
-      describeCitation: host.describeCitation, clientKey: () => "test-client",
+      describeCitation: host.describeCitation, describeCitations: host.describeCitations, clientKey: () => "test-client",
     });
     process.env.WEB_CHAT_SESSION_SECRET = secret;
     (globalThis as typeof globalThis & { __webChatRoutes?: Promise<ReturnType<typeof createWebChatRoutes>> }).__webChatRoutes = Promise.resolve(routes);
@@ -132,7 +142,12 @@ test("real host answers approved knowledge and persists customer handoff to its 
       body: JSON.stringify({ connectionId: "web-b", text: "ส่งของใช้เวลากี่วัน" }),
     }));
     assert.equal(crossWorkspace.status, 401);
+    countedStatements.length = 0;
     const aliasAnswer = await POST(chatRequest("ส่งของใช้เวลากี่วัน", session));
+    const closedFlagCommands = countedStatements.length;
+    const closedFlagTransactions = countedStatements.filter((sql) => sql === "BEGIN").length;
+    assert.ok(closedFlagCommands <= 37, `flag-off DB command ceiling: ${closedFlagCommands}`);
+    console.log("CHAT_DB_COMMANDS_FLAG_OFF", closedFlagCommands, closedFlagTransactions);
     const answerBody = await aliasAnswer.json() as { kind: string; text?: string };
     assert.equal(answerBody.kind, "answer");
     assert.match(answerBody.text ?? "", /จัดส่งใช้เวลา 2 วันทำการ/u);

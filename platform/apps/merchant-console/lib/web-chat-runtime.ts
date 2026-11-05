@@ -29,6 +29,7 @@ function configuredRoutes(): Promise<ReturnType<typeof createWebChatRoutes>> | n
       persistTurn: host.persistTurn,
       staffUpdates: host.staffUpdates,
       describeCitation: host.describeCitation,
+      describeCitations: host.describeCitations,
       secureCookie: process.env.APP_ENV !== "local",
       clientKey(request) {
         if (trustedIpHeader) {

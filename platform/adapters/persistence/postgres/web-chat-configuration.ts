@@ -28,47 +28,41 @@ export class PostgresWebChatConfiguration {
 
   async resolveConnection(connectionId: string, channel: "web"): Promise<TrustedWorkspaceContext | null> {
     if (typeof connectionId !== "string" || !idPattern.test(connectionId)) return null;
-    return this.database.transaction(async (query) => {
-      const result = await query.query<PostgresRow & { workspace_id: string; connection_id: string; channel: string }>(
-        `SELECT connection.workspace_id, connection.connection_id, connection.channel
+    const result = await this.database.query<PostgresRow & { workspace_id: string; connection_id: string; channel: string }>(
+      `SELECT connection.workspace_id, connection.connection_id, connection.channel
          FROM aicp.workspace_connections AS connection
          JOIN aicp.workspaces AS workspace USING (workspace_id)
          WHERE connection.connection_id = $1 AND connection.channel = $2
            AND connection.status = 'active' AND workspace.status = 'active'
          LIMIT 1`,
-        [connectionId, channel],
-      );
-      const row = result.rows[0];
-      if (!row || !idPattern.test(row.workspace_id) || !idPattern.test(row.connection_id) || row.channel !== "web") return null;
-      return Object.freeze({ workspaceId: row.workspace_id, connectionId: row.connection_id, channel: "web" as const });
-    });
+      [connectionId, channel],
+    );
+    const row = result.rows[0];
+    if (!row || !idPattern.test(row.workspace_id) || !idPattern.test(row.connection_id) || row.channel !== "web") return null;
+    return Object.freeze({ workspaceId: row.workspace_id, connectionId: row.connection_id, channel: "web" as const });
   }
 
   async allowedOrigins(workspace: TrustedWorkspaceContext): Promise<readonly string[]> {
-    return this.database.transaction(async (query) => {
-      const result = await query.query<PostgresRow & { allowed_origins: unknown }>(
-        `SELECT connection.allowed_origins
+    const result = await this.database.query<PostgresRow & { allowed_origins: unknown }>(
+      `SELECT connection.allowed_origins
          FROM aicp.workspace_connections AS connection
          JOIN aicp.workspaces AS workspace USING (workspace_id)
          WHERE connection.workspace_id = $1 AND connection.connection_id = $2
            AND connection.channel = 'web' AND connection.status = 'active' AND workspace.status = 'active'
          LIMIT 1`,
-        [workspace.workspaceId, workspace.connectionId],
-      );
-      const origins = result.rows[0]?.allowed_origins;
-      if (!Array.isArray(origins) || origins.some((origin) => typeof origin !== "string")) return Object.freeze([]);
-      return Object.freeze([...origins]);
-    });
+      [workspace.workspaceId, workspace.connectionId],
+    );
+    const origins = result.rows[0]?.allowed_origins;
+    if (!Array.isArray(origins) || origins.some((origin) => typeof origin !== "string")) return Object.freeze([]);
+    return Object.freeze([...origins]);
   }
 
   async queryAliases(workspace: TrustedWorkspaceContext): Promise<readonly (readonly [string, string])[]> {
-    return this.database.transaction(async (query) => {
-      const result = await query.query<PostgresRow & { query_aliases: unknown }>(
-        `SELECT query_aliases FROM aicp.workspaces WHERE workspace_id = $1 AND status = 'active' LIMIT 1`,
-        [workspace.workspaceId],
-      );
-      return parseAliases(result.rows[0]?.query_aliases);
-    });
+    const result = await this.database.query<PostgresRow & { query_aliases: unknown }>(
+      `SELECT query_aliases FROM aicp.workspaces WHERE workspace_id = $1 AND status = 'active' LIMIT 1`,
+      [workspace.workspaceId],
+    );
+    return parseAliases(result.rows[0]?.query_aliases);
   }
 
   async describeCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Promise<Readonly<{ title: string }> | null> {
@@ -88,5 +82,33 @@ export class PostgresWebChatConfiguration {
       const title = result.rows[0]?.title;
       return typeof title === "string" && title.trim() ? Object.freeze({ title }) : null;
     });
+  }
+
+  async describeCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Promise<readonly (Readonly<{ title: string }> | null)[]> {
+    const eligible = citations.map((citation) => citation.workspaceId === workspace.workspaceId
+      && idPattern.test(citation.sourceId) && idPattern.test(citation.sourceVersionId) ? citation : null);
+    const valid = eligible.filter((citation): citation is KnowledgeCitation => citation !== null);
+    if (valid.length === 0) return Object.freeze(citations.map(() => null));
+    const titles = await this.database.transaction(async (query) => {
+      await query.query("SELECT set_config('app.workspace_id', $1, true)", [workspace.workspaceId]);
+      const sourceIds = valid.map((citation) => citation.sourceId);
+      const versionIds = valid.map((citation) => citation.sourceVersionId);
+      const result = await query.query<PostgresRow & { source_id: string; version_id: string; title: string }>(
+        `SELECT version.source_id, version.version_id, version.title
+         FROM aicp.knowledge_versions AS version
+         JOIN unnest($2::text[], $3::text[]) AS citation(source_id, version_id)
+           ON citation.source_id = version.source_id AND citation.version_id = version.version_id
+         JOIN aicp.knowledge_sources AS source ON source.workspace_id = version.workspace_id AND source.source_id = version.source_id
+         WHERE version.workspace_id = $1
+           AND version.status = 'approved' AND version.visibility = 'customer' AND source.status = 'active'`,
+        [workspace.workspaceId, sourceIds, versionIds],
+      );
+      return new Map(result.rows.map((row) => [`${row.source_id}\u0000${row.version_id}`, row.title]));
+    });
+    return Object.freeze(eligible.map((citation) => {
+      if (!citation) return null;
+      const title = titles.get(`${citation.sourceId}\u0000${citation.sourceVersionId}`);
+      return typeof title === "string" && title.trim() ? Object.freeze({ title }) : null;
+    }));
   }
 }

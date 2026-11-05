@@ -26,6 +26,8 @@ export interface PostgresQueryPort {
 
 /** The host must pin one connection and commit/rollback the callback atomically. */
 export interface PostgresDatabasePort {
+  /** One parameterized statement without opening a transaction. Use only for read-only, non-RLS host configuration. */
+  query<Row extends PostgresRow = PostgresRow>(sql: string, values?: readonly unknown[]): Promise<PostgresQueryResult<Row>>;
   transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T>;
 }
 
@@ -741,10 +743,40 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     if (citations.length === 0 || citations.some((citation) => citation.workspaceId !== workspace.workspaceId)) return false;
     const resolvedAudience = resolveKnowledgeAudience(audience);
     return this.scoped(workspace, async (query) => {
-      for (const citation of citations) {
-        if (!await this.isCurrentCitationIn(query, workspace, citation, resolvedAudience)) return false;
-      }
-      return true;
+      const unique = [...new Map(citations.map((citation) => [JSON.stringify(citation), citation])).values()];
+      const rows = unique.map((citation, index) => {
+        const locator = citation.locator;
+        const chunkIndex = locator.kind === "span" || locator.kind === "chunk" ? locator.chunkIndex : locator.chunkIndex ?? 0;
+        const position = locator.kind === "page" ? locator.page : locator.kind === "row" ? locator.row : null;
+        const start = locator.kind === "span" ? locator.start : null;
+        const end = locator.kind === "span" ? locator.end : null;
+        const base = index * 8;
+        return `($${base + 1}::text, $${base + 2}::text, $${base + 3}::text, $${base + 4}::text, $${base + 5}::int, $${base + 6}::int, $${base + 7}::int, $${base + 8}::int)`;
+      });
+      const values = unique.flatMap((citation) => {
+        const locator = citation.locator;
+        const chunkIndex = locator.kind === "span" || locator.kind === "chunk" ? locator.chunkIndex : locator.chunkIndex ?? 0;
+        const position = locator.kind === "page" ? locator.page : locator.kind === "row" ? locator.row : null;
+        return [citation.sourceId, citation.sourceVersionId, citation.chunkId, locator.kind, chunkIndex,
+          locator.kind === "span" ? locator.start : null, locator.kind === "span" ? locator.end : null, position];
+      });
+      const result = await query.query<PostgresRow & { citation_index: number }>(
+        `WITH citations(source_id, version_id, chunk_id, locator_kind, chunk_index, start_offset, end_offset, position) AS (VALUES ${rows.join(",")})
+         SELECT count(*)::int AS count
+           FROM citations
+           JOIN aicp.knowledge_sources AS source ON source.workspace_id = $${unique.length * 8 + 1}
+             AND source.source_id = citations.source_id AND source.status = 'active'
+           JOIN aicp.knowledge_versions AS version ON version.workspace_id = source.workspace_id
+             AND version.source_id = source.source_id AND version.version_id = citations.version_id AND version.status = 'approved'
+           JOIN aicp.knowledge_chunks AS chunk ON chunk.workspace_id = version.workspace_id
+             AND chunk.source_id = version.source_id AND chunk.version_id = version.version_id AND chunk.chunk_id = citations.chunk_id
+           WHERE chunk.locator_kind = citations.locator_kind AND chunk.locator_chunk_index = citations.chunk_index
+             AND (citations.locator_kind <> 'span' OR (chunk.start_offset = citations.start_offset AND chunk.end_offset = citations.end_offset))
+             AND chunk.locator_position IS NOT DISTINCT FROM citations.position
+             AND ($${unique.length * 8 + 2}::text = 'staff' OR version.visibility = 'customer')`,
+        [...values, workspace.workspaceId, resolvedAudience],
+      );
+      return Number(result.rows[0]?.count) === unique.length;
     }, "repeatable read");
   }
 

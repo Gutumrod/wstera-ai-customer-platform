@@ -75,5 +75,7 @@ export async function createWebChatRealHost(
     allowedOrigins: (workspace: Parameters<typeof configuration.allowedOrigins>[0]) => configuration.allowedOrigins(workspace),
     describeCitation: (workspace: Parameters<typeof configuration.describeCitation>[0], citation: Parameters<typeof configuration.describeCitation>[1]) =>
       configuration.describeCitation(workspace, citation),
+    describeCitations: (workspace: Parameters<typeof configuration.describeCitations>[0], citations: Parameters<typeof configuration.describeCitations>[1]) =>
+      configuration.describeCitations(workspace, citations),
   });
 }

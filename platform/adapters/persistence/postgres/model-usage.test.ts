@@ -96,7 +96,8 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     await addFaq(database, repository, "warranty", "สินค้ารับ warranty 2 ปีเต็มนับจากวันที่ซื้อ", "customer");
     await addFaq(database, repository, "internal", "จัดส่งแบบ VIP ใช้เวลา 30 นาที ต้นทุนลับ 999", "internal");
     await addFaq(database, repository, "other-shop", "รหัสเฉพาะร้านอีกแห่งคือ FOREIGN-ONLY-7319", "customer", shopB);
-    const port: PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } = { ...runtimePort(database), async assertLeastPrivilege() {} };
+    const countedStatements: string[] = [];
+    const port: PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } = { ...runtimePort(database, countedStatements), async assertLeastPrivilege() {} };
     const { createWebChatRealHost } = await import("../../../composition/web-chat-real-host.js");
     const requests: string[] = [];
     const logs: string[] = [];
@@ -138,7 +139,12 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     assert.equal((await database.query("SELECT 1 FROM aicp.model_usage")).rows.length, 0);
 
     const host = await createWebChatRealHost(port, { env, fetch: fetcher, log });
+    countedStatements.length = 0;
     const answer = await ask(host, "conv-on");
+    const openFlagCommands = countedStatements.length;
+    const openFlagTransactions = countedStatements.filter((sql) => sql === "BEGIN").length;
+    assert.ok(openFlagCommands <= 50, `flag-on DB command ceiling: ${openFlagCommands}`);
+    console.log("CHAT_DB_COMMANDS_FLAG_ON", openFlagCommands, openFlagTransactions);
     assert.equal(answer.kind, "answer");
     assert.equal(answer.text, "จัดส่งใช้เวลา 2 วันทำการ ครับ");
     assert.deepEqual(answer.citations?.map((c) => c.sourceId), ["shipping"]);
@@ -189,6 +195,7 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     // A ledger outage fails closed before the provider and rejoins the extractive path.
     const outagePort: PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } = {
       ...port,
+      async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) { return port.query<Row>(sql, values); },
       async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>) {
         return port.transaction((query) => operation({ async query<Row extends PostgresRow>(sql: string, values?: readonly unknown[]) {
           if (sql.includes("aicp.model_usage")) throw new Error("synthetic ledger outage");

@@ -13,6 +13,9 @@ const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
 function databasePort(database: PGlite, failOnChunkInsert = false, statements?: string[]): PostgresDatabasePort {
   return {
+    async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
+      return { rows: (await database.query<Row>(sql, [...values])).rows };
+    },
     async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
       return database.transaction(async (transaction) => {
         await transaction.exec("SET LOCAL ROLE knowledge_runtime");
@@ -142,9 +145,10 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation, currentCitation], "staff"), true);
       assert.equal(isolationStatements.filter((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)).length, 1);
       const isolationIndex = isolationStatements.findIndex((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql));
-      const firstCitationReadIndex = isolationStatements.findIndex((sql) => /SELECT 1 AS current/i.test(sql));
-      const secondCitationReadIndex = isolationStatements.findIndex((sql, index) => index > firstCitationReadIndex && /SELECT 1 AS current/i.test(sql));
-      assert.ok(isolationIndex >= 0 && firstCitationReadIndex > isolationIndex && secondCitationReadIndex > firstCitationReadIndex);
+      const citationReadIndex = isolationStatements.findIndex((sql) => /SELECT count\(\*\)::int AS count/i.test(sql));
+      assert.ok(isolationIndex >= 0 && citationReadIndex > isolationIndex);
+      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation, { ...currentCitation, workspaceId: shopB.workspaceId }], "staff"), false);
+      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation, currentCitation], "staff"), true, "duplicate citations are checked once without changing the result");
       const approved = eligible[0]!.version;
       assert.equal(eligible.filter((row) => row.version.versionId === approved.versionId).length, 1);
       const multiChunkDraft = createFaqVersion({
@@ -178,6 +182,10 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
         workspaceId: shopA.workspaceId, sourceId: approved.sourceId, sourceVersionId: approved.versionId,
         chunkId: approvedRow.chunk.chunkId, locator: approvedRow.chunk.locator,
       }, "staff"), false);
+      assert.equal(await repository.areCurrentCitations(shopA, [{
+        workspaceId: shopA.workspaceId, sourceId: approved.sourceId, sourceVersionId: approved.versionId,
+        chunkId: approvedRow.chunk.chunkId, locator: approvedRow.chunk.locator,
+      }], "staff"), false, "a citation revoked before freshness validation fails closed");
       await repository.revokeVersion(shopA, "multi-chunk", "v1", {
         revokedBy: "staff-1", reason: "superseded", revokedAt: "2026-10-16T02:00:00.000Z",
       });

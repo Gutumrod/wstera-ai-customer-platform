@@ -96,6 +96,11 @@ export class PgPostgresDatabase implements PostgresDatabasePort {
     }
   }
 
+  async query<Row extends PostgresRow = PostgresRow>(sql: string, values: readonly unknown[] = []) {
+    const result = await this.pool.query<Row>(sql, [...values]);
+    return { rows: result.rows };
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }
