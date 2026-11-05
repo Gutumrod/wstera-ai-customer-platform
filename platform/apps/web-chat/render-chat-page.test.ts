@@ -154,6 +154,19 @@ test("page script: citations show title only, once, and history survives a refre
   assert.equal(second["handoff-btn"].disabled, true);
 });
 
+test("page script: the staff button comes back once the bot answers again after a release", async () => {
+  for (const reply of [{ kind: "answer", text: "ตอบ", citations: [] }, { kind: "greeting", text: "สวัสดี" }]) {
+    const storage = new Map<string, string>();
+    const page = runPage(storage, reply);
+    await page["handoff-btn"].listeners["click"]();
+    assert.equal(page["handoff-btn"].disabled, true);
+    page["chat-input"].value = "ถาม";
+    await page["chat-form"].listeners["submit"]({ preventDefault() {} });
+    assert.equal(page["handoff-btn"].disabled, false);
+    assert.equal(runPage(storage, {})["handoff-btn"].disabled, false);
+  }
+});
+
 test("page script: works with blocked storage, caps stored history at 50, and never stores connection errors", async () => {
   const blocked = runPage(null, { kind: "greeting", text: "สวัสดีครับ" });
   blocked["chat-input"].value = "สวัสดี";

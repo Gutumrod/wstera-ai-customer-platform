@@ -287,6 +287,14 @@ export function renderChatPage(params: RenderChatPageParams): string {
         } catch (err) { /* storage unavailable: the chat still works, it just will not survive a refresh */ }
       }
 
+      // The bot only answers while no staff member owns the chat, so a released conversation gets the button back.
+      function unlockHandoff() {
+        if (!state.h) return;
+        handoffBtn.disabled = false;
+        state.h = false;
+        saveState();
+      }
+
       function lockHandoff() {
         handoffBtn.disabled = true;
         state.h = true;
@@ -369,11 +377,13 @@ export function renderChatPage(params: RenderChatPageParams): string {
           if (response.ok) {
             if (data.kind === "answer") {
               appendMessage(data.text || "", false, data.citations);
+              unlockHandoff();
             } else if (data.kind === "uncertain") {
               appendMessage(data.text || "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ สามารถกดปุ่มขอคุยกับพนักงานได้ครับ", false);
               if (data.handoff === true) lockHandoff();
             } else {
               appendMessage(data.text || "ได้รับข้อความแล้ว", false);
+              if (data.kind === "greeting") unlockHandoff();
             }
           } else {
             // Map HTTP status codes to polite Thai messages without exposing internal error codes
