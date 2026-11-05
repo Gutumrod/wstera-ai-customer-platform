@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ConversationRepositoryPort } from "../contracts/data/conversation.js";
-import type { KnowledgeRetrievalHit, KnowledgeRetrievalQuery, KnowledgeRetrievalResult } from "../contracts/data/knowledge.js";
+import type { KnowledgeCitation, KnowledgeRetrievalHit, KnowledgeRetrievalQuery, KnowledgeRetrievalResult } from "../contracts/data/knowledge.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import type { SupportHandoffReason } from "../modules/ai-engine/support-orchestrator.js";
 import {
@@ -88,6 +88,7 @@ type Harness = Readonly<{
   createCalls: () => number;
   createdConversations: () => number;
   handoffReasons: readonly SupportHandoffReason[];
+  describedCitations: readonly KnowledgeCitation[];
   host: ReturnType<typeof createWebChatHost>;
   openSession: (connectionId: string) => Readonly<{ cookie: string; conversationId: string }>;
   send: (connectionId: string, cookie: string, text: string) => Promise<Response>;
@@ -132,6 +133,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
   });
 
   const handoffReasons: SupportHandoffReason[] = [];
+  const describedCitations: KnowledgeCitation[] = [];
   const retriever = new KnowledgeRetriever(repository);
 
   const host = createWebChatHost({
@@ -160,6 +162,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     responder: host.responder,
     requestHandoff: host.requestHandoff,
     describeCitation: async (workspace, citation) => {
+      describedCitations.push(citation);
       const source = repository.getSource(workspace, citation.sourceId);
       const version = repository.getVersion(workspace, citation.sourceId, citation.sourceVersionId);
       return source && version?.status === "approved" ? { title: source.title } : null;
@@ -197,6 +200,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
     createCalls: () => createCalls,
     createdConversations: () => createdConversations,
     handoffReasons,
+    describedCitations,
     host,
     openSession,
     send: (connectionId: string, cookie: string, text: string) => post(connectionId, cookie, { text }),
@@ -209,7 +213,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
 type AnswerResponse = Readonly<{
   kind: "answer";
   text: string;
-  citations: readonly Readonly<{ title: string; sourceVersionId: string; position: string; locator: { kind: string } }>[];
+  citations: readonly Readonly<{ title: string }>[];
 }>;
 
 type UncertainResponse = Readonly<{ kind: "uncertain"; text: string }>;
@@ -227,14 +231,21 @@ test("end-to-end: a customer document is answered with a citation that resolves 
 
   const returnChip = body.citations.find((chip) => chip.title === "นโยบายการคืนสินค้า");
   assert.ok(returnChip, "the return-policy citation must resolve to its source title");
-  assert.equal(returnChip.sourceVersionId, "v1");
-  assert.equal(returnChip.locator.kind, "span");
+  // The browser sees titles only; version and position stay server-side.
+  assert.deepEqual(Object.keys(returnChip), ["title"]);
+  assert.doesNotMatch(JSON.stringify(body), /sourceVersionId|locator|position|"v1"/u);
+
+  // The citation integrity proof now reads what the route described, not the JSON.
+  const citation = harness.describedCitations.find((candidate) => candidate.sourceId === "faq-return");
+  assert.ok(citation, "the route must have described the return-policy citation");
+  assert.equal(citation.sourceVersionId, "v1");
+  assert.equal(citation.locator.kind, "span");
 
   const workspace = workspaceFor("conn-answer");
   const version = harness.repository.getVersion(workspace, "faq-return", "v1");
   assert.ok(version);
   const chunk = version.chunks.find((candidate) =>
-    JSON.stringify(candidate.locator) === JSON.stringify(returnChip.locator));
+    JSON.stringify(candidate.locator) === JSON.stringify(citation.locator));
   assert.ok(chunk, "citation locator must point at a chunk in the approved version");
   assert.equal(harness.repository.isCurrentCitation(workspace, {
     workspaceId: SHOP,
@@ -520,4 +531,78 @@ test("end-to-end: two first messages on one conversation create it once and both
   assert.ok(conversation);
   assert.equal(conversation.status, "ai_active");
   assert.equal(conversation.version, 0);
+});
+
+test("end-to-end: a bare greeting or thanks gets a short reply with no handoff and no orchestrator call", async () => {
+  let searches = 0;
+  const harness = createHarness({
+    retrieval: { async search(): Promise<KnowledgeRetrievalResult> { searches += 1; return { kind: "no_evidence" } as unknown as KnowledgeRetrievalResult; } },
+  });
+  const session = harness.openSession("conn-hello");
+  for (const text of ["ฮัลโล", "สวัสดีครับ", "สวัสดี ค่ะ", "หวัดดี", "hello", "Hi", "ขอบคุณครับ"]) {
+    const response = await harness.send("conn-hello", session.cookie, text);
+    assert.equal(response.status, 200, text);
+    const body = await response.json() as UncertainResponse;
+    assert.equal(body.kind, "greeting", text);
+    assert.doesNotMatch(body.text, /ไม่พบข้อมูล|พนักงาน/u);
+  }
+  assert.equal(searches, 0);
+  assert.deepEqual(harness.handoffReasons, []);
+});
+
+test("end-to-end: a greeting followed by a question walks the normal path", async () => {
+  const harness = createHarness();
+  const session = harness.openSession("conn-hello-q");
+  const response = await harness.send("conn-hello-q", session.cookie, "สวัสดีครับ ร้านเปิดกี่โมง");
+  const body = await response.json() as AnswerResponse;
+  assert.equal(body.kind, "answer");
+  assert.match(body.text, /09:00-18:00/u);
+});
+
+test("end-to-end: after handoff a greeting is not small talk and the customer is told staff will reply", async () => {
+  const harness = createHarness();
+  const session = harness.openSession("conn-after-handoff");
+  assert.equal((await harness.sendHandoff("conn-after-handoff", session.cookie)).status, 200);
+  const response = await harness.send("conn-after-handoff", session.cookie, "สวัสดี");
+  const body = await response.json() as UncertainResponse & { handoff?: boolean };
+  assert.equal(body.kind, "uncertain");
+  assert.equal(body.handoff, true);
+  assert.match(body.text, /รอพนักงานตอบ/u);
+  assert.doesNotMatch(body.text, /ไม่พบข้อมูล|กดปุ่ม/u);
+});
+
+test("end-to-end: no-evidence handoff tells the customer staff were notified", async () => {
+  const harness = createHarness();
+  const session = harness.openSession("conn-no-evidence");
+  const body = await (await harness.send("conn-no-evidence", session.cookie, "ต้นทุนสินค้าและกำไรขั้นต้นเท่าไหร่")).json() as UncertainResponse & { handoff?: boolean };
+  assert.equal(body.kind, "uncertain");
+  assert.equal(body.handoff, undefined);
+  assert.match(body.text, /ส่งเรื่องให้พนักงานแล้ว/u);
+});
+
+test("end-to-end: short everyday questions answer from the synthetic shop", async () => {
+  const harness = createHarness();
+  const session = harness.openSession("conn-short");
+  for (const [question, expected] of [
+    ["ปิดวันไหนบ้าง", /09:00-18:00/u],
+    ["รับประกันนานแค่ไหน", /1 ปี/u],
+    ["ชำระเงินได้ทางไหนบ้าง", /บัตรเครดิต/u],
+  ] as const) {
+    const body = await (await harness.send("conn-short", session.cookie, question)).json() as AnswerResponse;
+    assert.equal(body.kind, "answer", question);
+    assert.match(body.text, expected, question);
+  }
+});
+
+test("end-to-end: queryAliases is workspace data that lets 'คืนเงิน' reach the return policy; without it the gate refuses", async () => {
+  const withAlias = createHarness({ hostOverrides: { queryAliases: () => [["คืนเงิน", "คืนสินค้า"]] } });
+  const session = withAlias.openSession("conn-alias");
+  const body = await (await withAlias.send("conn-alias", session.cookie, "คืนเงินได้กี่วัน")).json() as AnswerResponse;
+  assert.equal(body.kind, "answer");
+  assert.match(body.text, /7 วัน/u);
+
+  const without = createHarness();
+  const other = without.openSession("conn-no-alias");
+  const refused = await (await without.send("conn-no-alias", other.cookie, "คืนเงินได้กี่วัน")).json() as UncertainResponse;
+  assert.equal(refused.kind, "uncertain");
 });

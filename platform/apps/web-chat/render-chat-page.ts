@@ -242,9 +242,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
       aria-relevant="additions"
       aria-label="ประวัติการสนทนา"
     >
-      <div class="message-item message-bot">
-        สวัสดีครับ ยินดีต้อนรับสู่ระบบบริการลูกค้า มีอะไรให้ช่วยเหลือสามารถพิมพ์สอบถามได้เลยครับ
-      </div>
+      <div class="message-item message-bot">สวัสดีครับ ยินดีต้อนรับสู่ระบบบริการลูกค้า มีอะไรให้ช่วยเหลือสามารถพิมพ์สอบถามได้เลยครับ</div>
     </div>
 
     <form id="chat-form" class="input-area" action="#" method="post">
@@ -277,39 +275,67 @@ export function renderChatPage(params: RenderChatPageParams): string {
       const sendBtn = document.getElementById("send-btn");
       const handoffBtn = document.getElementById("handoff-btn");
 
-      function appendMessage(text, isUser, citations) {
+      const STORAGE_KEY = "aicp-webchat:" + connectionId;
+      const MAX_STORED_MESSAGES = 50;
+      const state = { m: [], h: false };
+
+      function saveState() {
+        try {
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (err) { /* storage unavailable: the chat still works, it just will not survive a refresh */ }
+      }
+
+      function lockHandoff() {
+        handoffBtn.disabled = true;
+        state.h = true;
+        saveState();
+      }
+
+      // persist=false for connection errors, which must not come back after a refresh.
+      function appendMessage(text, isUser, citations, persist) {
         const item = document.createElement("div");
         item.className = isUser ? "message-item message-user" : "message-item message-bot";
         item.textContent = text;
 
-        if (Array.isArray(citations) && citations.length > 0) {
+        const titles = [];
+        if (Array.isArray(citations)) {
+          citations.forEach(function (cit) {
+            if (cit && typeof cit.title === "string" && titles.indexOf(cit.title) < 0) titles.push(cit.title);
+          });
+        }
+        if (titles.length > 0) {
           const citationContainer = document.createElement("div");
           citationContainer.className = "citation-list";
           citationContainer.setAttribute("aria-label", "แหล่งที่มาอ้างอิง");
-
-          citations.forEach(function (cit) {
-            if (!cit || typeof cit.title !== "string") return;
+          titles.forEach(function (title) {
             const chip = document.createElement("span");
             chip.className = "citation-chip";
-            let label = cit.title;
-            if (cit.sourceVersionId) {
-              label += " (" + cit.sourceVersionId + ")";
-            }
-            if (cit.position) {
-              label += " " + cit.position;
-            }
-            chip.textContent = label;
+            chip.textContent = "ที่มา: " + title;
             citationContainer.appendChild(chip);
           });
-
-          if (citationContainer.childNodes.length > 0) {
-            item.appendChild(citationContainer);
-          }
+          item.appendChild(citationContainer);
         }
 
         messagesContainer.appendChild(item);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        if (persist !== false) {
+          state.m.push([text, isUser ? 1 : 0, titles]);
+          if (state.m.length > MAX_STORED_MESSAGES) state.m.splice(0, state.m.length - MAX_STORED_MESSAGES);
+          saveState();
+        }
       }
+
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
+        if (saved && Array.isArray(saved.m)) {
+          saved.m.slice(-MAX_STORED_MESSAGES).forEach(function (entry) {
+            if (Array.isArray(entry) && typeof entry[0] === "string") {
+              appendMessage(entry[0], entry[1] === 1, Array.isArray(entry[2]) ? entry[2].filter(function (t) { return typeof t === "string"; }).map(function (t) { return { title: t }; }) : []);
+            }
+          });
+          if (saved.h === true) lockHandoff();
+        }
+      } catch (err) { /* ignore unreadable saved chat */ }
 
       chatForm.addEventListener("submit", async function (event) {
         event.preventDefault();
@@ -343,6 +369,7 @@ export function renderChatPage(params: RenderChatPageParams): string {
               appendMessage(data.text || "", false, data.citations);
             } else if (data.kind === "uncertain") {
               appendMessage(data.text || "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ สามารถกดปุ่มขอคุยกับพนักงานได้ครับ", false);
+              if (data.handoff === true) lockHandoff();
             } else {
               appendMessage(data.text || "ได้รับข้อความแล้ว", false);
             }
@@ -360,14 +387,14 @@ export function renderChatPage(params: RenderChatPageParams): string {
             } else if (response.status === 503) {
               errorMessage = "ระบบไม่สามารถให้บริการได้ในขณะนี้ กรุณาลองใหม่ในภายหลัง";
             }
-            appendMessage(errorMessage, false);
+            appendMessage(errorMessage, false, undefined, false);
           }
         } catch (err) {
           clearTimeout(timeoutId);
           if (err && err.name === "AbortError") {
-            appendMessage("การเชื่อมต่อใช้เวลานานเกินกำหนด กรุณาลองใหม่อีกครั้ง", false);
+            appendMessage("การเชื่อมต่อใช้เวลานานเกินกำหนด กรุณาลองใหม่อีกครั้ง", false, undefined, false);
           } else {
-            appendMessage("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง", false);
+            appendMessage("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง", false, undefined, false);
           }
         } finally {
           messagesContainer.removeAttribute("aria-busy");
@@ -399,19 +426,20 @@ export function renderChatPage(params: RenderChatPageParams): string {
           const data = await response.json();
           if (response.ok && data.kind === "handoff_recorded") {
             appendMessage("ส่งคำขอคุยกับพนักงานเรียบร้อยแล้วครับ เจ้าหน้าที่จะติดต่อกลับโดยเร็ว", false);
+            lockHandoff();
           } else {
-            appendMessage("ไม่สามารถส่งคำขอคุยกับพนักงานได้ในขณะนี้", false);
+            appendMessage("ไม่สามารถส่งคำขอคุยกับพนักงานได้ในขณะนี้", false, undefined, false);
           }
         } catch (err) {
           clearTimeout(timeoutId);
           if (err && err.name === "AbortError") {
-            appendMessage("การเชื่อมต่อใช้เวลานานเกินกำหนด กรุณาลองใหม่อีกครั้ง", false);
+            appendMessage("การเชื่อมต่อใช้เวลานานเกินกำหนด กรุณาลองใหม่อีกครั้ง", false, undefined, false);
           } else {
-            appendMessage("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง", false);
+            appendMessage("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง", false, undefined, false);
           }
         } finally {
           messagesContainer.removeAttribute("aria-busy");
-          handoffBtn.disabled = false;
+          if (!state.h) handoffBtn.disabled = false;
         }
       });
     })();

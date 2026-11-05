@@ -91,3 +91,80 @@ test("renderChatPage safely escapes connectionId and endpoint against script inj
   // Must not have any inline event handlers (rvC 8)
   assert.equal(/<[a-z0-9-]+\s+[^>]*\bon[a-z]+\s*=/i.test(html), false, "HTML must contain no inline event handlers like onclick or onload");
 });
+
+test("welcome bubble is one tight line because the bubble uses pre-wrap", () => {
+  const html = renderChatPage({ connectionId: "c", nonce: "n", messageEndpoint: "/m" });
+  assert.match(html, /<div class="message-item message-bot">สวัสดีครับ[^<\n]*ครับ<\/div>/u);
+});
+
+/** Runs the page script against a tiny fake DOM to exercise history, citations and the handoff lock. */
+function runPage(storage: Map<string, string> | null, fetchReply: unknown): Record<string, any> {
+  const html = renderChatPage({ connectionId: "conn-1", nonce: "n", messageEndpoint: "/m" });
+  const script = /<script\b[^>]*>([\s\S]*?)<\/script>/i.exec(html)![1]!;
+  const make = (): Record<string, any> => {
+    const el: Record<string, any> = { children: [], listeners: {}, attrs: {}, textContent: "", value: "", disabled: false };
+    el.appendChild = (child: unknown) => { el.children.push(child); };
+    el.addEventListener = (name: string, fn: unknown) => { el.listeners[name] = fn; };
+    el.setAttribute = (k: string, v: string) => { el.attrs[k] = v; };
+    el.removeAttribute = (k: string) => { delete el.attrs[k]; };
+    Object.defineProperty(el, "childNodes", { get: () => el.children });
+    el.focus = () => {};
+    return el;
+  };
+  const ids = ["messages", "chat-form", "chat-input", "send-btn", "handoff-btn"];
+  const els: Record<string, any> = Object.fromEntries(ids.map((id) => [id, make()]));
+  const document = { getElementById: (id: string) => els[id], createElement: () => make() };
+  const sessionStorage = storage === null ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } } : {
+    getItem: (k: string) => storage.get(k) ?? null,
+    setItem: (k: string, v: string) => { storage.set(k, v); },
+  };
+  const fetch = async (_url: string, init: { body: string }) => ({
+    ok: true,
+    status: 200,
+    json: async () => (init.body.includes("handoff") ? { kind: "handoff_recorded" } : fetchReply),
+  });
+  new Function("document", "sessionStorage", "fetch", "AbortController", "setTimeout", "clearTimeout", script)(
+    document, sessionStorage, fetch, AbortController, setTimeout, clearTimeout,
+  );
+  return els;
+}
+
+const texts = (els: Record<string, any>) => els["messages"].children.map((c: any) => c.textContent);
+
+test("page script: citations show title only, once, and history survives a refresh with the handoff lock", async () => {
+  const storage = new Map<string, string>();
+  const first: Record<string, any> = runPage(storage, {
+    kind: "answer",
+    text: "ตอบ",
+    citations: [{ title: "วิธีชำระเงิน" }, { title: "วิธีชำระเงิน" }, { title: "การรับประกัน" }],
+  });
+  first["chat-input"].value = "ถาม";
+  await first["chat-form"].listeners["submit"]({ preventDefault() {} });
+  const bot = first["messages"].children[1];
+  assert.deepEqual(bot.children[0].children.map((c: any) => c.textContent), ["ที่มา: วิธีชำระเงิน", "ที่มา: การรับประกัน"]);
+
+  await first["handoff-btn"].listeners["click"]();
+  assert.equal(first["handoff-btn"].disabled, true);
+  assert.equal(storage.size, 1);
+  assert.ok([...storage.keys()][0]!.endsWith("conn-1"));
+
+  // "refresh": new page, same storage
+  const second = runPage(storage, {});
+  assert.deepEqual(texts(second).slice(0, 2), ["ถาม", "ตอบ"]);
+  assert.equal(second["handoff-btn"].disabled, true);
+});
+
+test("page script: works with blocked storage, caps stored history at 50, and never stores connection errors", async () => {
+  const blocked = runPage(null, { kind: "greeting", text: "สวัสดีครับ" });
+  blocked["chat-input"].value = "สวัสดี";
+  await blocked["chat-form"].listeners["submit"]({ preventDefault() {} });
+  assert.deepEqual(texts(blocked), ["สวัสดี", "สวัสดีครับ"]);
+
+  const storage = new Map<string, string>();
+  const page = runPage(storage, { kind: "greeting", text: "x" });
+  for (let i = 0; i < 30; i += 1) {
+    page["chat-input"].value = `q${i}`;
+    await page["chat-form"].listeners["submit"]({ preventDefault() {} });
+  }
+  assert.equal(JSON.parse([...storage.values()][0]!).m.length, 50);
+});

@@ -29,6 +29,12 @@ export type WebChatHostDeps = Readonly<{
   answer?: GroundedAnswerPort;
   /** Only consulted when `answer` is omitted; a model port is built only when enabled === true. */
   model?: Readonly<{ enabled?: boolean; createModelPort?: () => GroundedAnswerPort }>;
+  /**
+   * Per-workspace [from, to] phrase swaps applied to the question before it
+   * reaches the orchestrator (e.g. a shop's word for what its documents call
+   * something else). Shop vocabulary lives in workspace data, never in code.
+   */
+  queryAliases?: (workspace: TrustedWorkspaceContext) => readonly (readonly [string, string])[] | Promise<readonly (readonly [string, string])[]>;
   /** Server clock for conversation timestamps. Returns an ISO-8601 string. */
   now?: () => string;
 }>;
@@ -37,6 +43,19 @@ export type WebChatHost = Readonly<{
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
 }>;
+
+const greetingPattern = /^(?:สวัสดี|หวัดดี|ฮัลโหล|ฮัลโล|ฮาโลว?|hello|hi|hey)(?:ครับ|ค่ะ|คะ|คับ|จ้า|จ้ะ|ฮะ)?(?:นะ)?$/u;
+const thanksPattern = /^(?:ขอบคุณ|ขอบใจ|thanks?|thankyou)(?:มาก|มากๆ)?(?:ครับ|ค่ะ|คะ|คับ|จ้า|จ้ะ)?(?:นะ)?$/u;
+
+const leadingGreetingPattern = /^(?:สวัสดี|หวัดดี|ฮัลโหล|ฮัลโล|hello|hi)(?:ครับ|ค่ะ|คะ|คับ)?[\s,]+/iu;
+
+/** A message that is only a greeting or thanks (whole message, not a sentence that starts with one). */
+function smallTalkReply(query: string): string | null {
+  const bare = query.normalize("NFKC").toLowerCase().replace(/[\s!.~ๆ]+/gu, "");
+  if (greetingPattern.test(bare)) return "สวัสดีครับ มีอะไรให้ช่วยสอบถามได้เลยครับ";
+  if (thanksPattern.test(bare)) return "ยินดีครับ หากมีคำถามเพิ่มเติมสอบถามได้เลยครับ";
+  return null;
+}
 
 /**
  * The gate and the answer port must agree on what the supporting evidence is.
@@ -99,7 +118,21 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
 
   const responder: SupportResponder = async ({ workspace, conversationId, query }) => {
     await ensureConversation(workspace, conversationId);
-    return orchestrator.respond({ workspace, conversationId, query, audience: "customer" });
+    // Small talk is answered only while the AI owns the conversation; once handed off, the normal path decides.
+    const text = smallTalkReply(query);
+    if (text !== null && (await deps.conversations.load(workspace, conversationId))?.status === "ai_active") {
+      return Object.freeze({ kind: "small_talk", text });
+    }
+    // A greeting in front of a real question is not part of the question.
+    let asked = query.replace(leadingGreetingPattern, "") || query;
+    try {
+      for (const [from, to] of (await deps.queryAliases?.(workspace)) ?? []) {
+        if (from.length > 0) asked = asked.split(from).join(to);
+      }
+    } catch {
+      asked = query.replace(leadingGreetingPattern, "") || query;
+    }
+    return orchestrator.respond({ workspace, conversationId, query: asked, audience: "customer" });
   };
 
   return Object.freeze({

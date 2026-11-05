@@ -12,19 +12,20 @@ import { analyzeText } from "../../../modules/knowledge/index.js";
  * 0.9-1.0, while questions that only ride along on one shared topic stay at
  * 0.78 or below. When in doubt this port refuses rather than answers.
  */
-export const MIN_QUERY_TERM_COVERAGE = 0.85;
+export const MIN_QUERY_TERM_COVERAGE = 0.8;
 
 /** A single matching bigram/SKU is not enough for a multi-term question. */
 export const MIN_MATCHED_KEY_TERMS = 2;
 
 /**
- * A question must say more than one bare topic word. Thai is written without
- * spaces, so "at least two content words" is approximated with a floor on
- * distinct content bigrams: a bare topic ("จัดส่ง") yields 5, a real question
- * ("ค่าจัดส่ง") yields 8. A question that names a product code is exempt
- * because the code itself identifies the subject.
+ * A question must say more than one bare topic word. `Intl.Segmenter("th")`
+ * cuts a bare topic ("จัดส่ง") into 2 words and a plain statement-shaped
+ * question ("ค่าจัดส่ง") into 3, so a question with no question word needs at
+ * least this many distinct content words. A question that carries a question
+ * word (ไหน, บ้าง, กี่, เท่าไหร่ ...) or names a product code is exempt: the
+ * question word says it is a question and the code identifies the subject.
  */
-export const MIN_QUERY_KEY_TERMS = 6;
+export const MIN_QUERY_KEY_TERMS = 3;
 
 /** Retrieval caps questions at 500 characters before answerability runs. */
 export const MAX_ANSWERABILITY_QUERY_CHARS = 500;
@@ -34,7 +35,7 @@ const MAX_EVIDENCE_TEXT_CHARS = 20_000;
 const zeroWidthPattern = /[\u200B-\u200D\uFEFF]/gu;
 const thaiRunPattern = /[\u0E00-\u0E7F]+/gu;
 const tokenPattern = /[a-z0-9]+(?:[-_./][a-z0-9]+)*|[\u0E00-\u0E7F]+/gu;
-const thaiBigramPattern = /^[\u0E00-\u0E7F]{2}$/u;
+const thaiSegmenter = new Intl.Segmenter("th", { granularity: "word" });
 const latinTermPattern = /^[a-z0-9]+(?:[-_./][a-z0-9]+)*$/u;
 const digitsOnlyPattern = /^[0-9]+$/u;
 const skuLikePattern = /^(?=.*[a-z])(?=.*\d)[a-z0-9]+(?:[-_./][a-z0-9]+)*$/u;
@@ -80,6 +81,12 @@ const THAI_NON_CONTENT_PHRASES: readonly string[] = Object.freeze([
   "ยังไง",
   "ทำไม",
   "ที่ไหน",
+  "นานแค่ไหน",
+  "นานเท่าไหร่",
+  "นานเท่าไร",
+  "แค่ไหน",
+  "ไหน",
+  "บ้าง",
   "เมื่อไหร่",
   "ขอทราบ",
   "สอบถาม",
@@ -130,9 +137,19 @@ const sortedThaiEdgeParticles = Object.freeze(
   [...THAI_EDGE_PARTICLES].sort((a, b) => b.length - a.length),
 );
 
+/** Whole-word fillers left after segmentation ("ได้", "มี", "ทาง" carry no topic). */
+const THAI_STOP_WORDS: ReadonlySet<string> = new Set(["ได้", "มี", "ทาง"]);
+
+/** Question words: they make a short question a question, but are never topic terms. */
+const questionWordPattern = /ไหม|หรือ|เท่าไ(?:หร่|ร)|กี่|อะไร|ใคร|ไหน|บ้าง|ยังไง|อย่างไร|ทำไม|เมื่อไหร่/u;
+
 type KeyTermAnalysis = Readonly<{
+  /** Latin words and product codes. */
   terms: ReadonlySet<string>;
+  /** Thai words from Intl.Segmenter, compared with the document as substrings. */
+  thaiWords: ReadonlySet<string>;
   skuKeys: ReadonlySet<string>;
+  asksQuestion: boolean;
 }>;
 
 const EMPTY_SELECTION: readonly SupportEvidence[] = Object.freeze([]);
@@ -183,26 +200,35 @@ function stripNonContentTerms(text: string): string {
 }
 
 /**
- * Reuses the retrieval analyzer but keeps only term shapes that are stable
- * across Thai spacing: Thai character bigrams and Latin/SKU word forms. Whole
- * unspaced Thai runs are phrases, so they are not counted as key terms;
- * digits alone are weak signals and never justify an answer.
+ * Reuses the retrieval analyzer for Latin words and product codes only; digits
+ * alone are weak signals and never justify an answer. Thai words come from
+ * `analyzeQueryTerms`, because retrieval's character bigrams count the seams
+ * between words and punish short questions.
  */
 function analyzeKeyTerms(text: string): KeyTermAnalysis {
   const analysis = analyzeText(normalizeForAnalysis(text));
   const terms = new Set<string>();
   for (const term of analysis.terms) {
-    if (digitsOnlyPattern.test(term)) continue;
-    if (thaiBigramPattern.test(term) || latinTermPattern.test(term)) terms.add(term);
+    if (!digitsOnlyPattern.test(term) && latinTermPattern.test(term)) terms.add(term);
   }
   return Object.freeze({
     terms,
+    thaiWords: new Set<string>(),
     skuKeys: Object.freeze(new Set(analysis.skuCodes.map(compactSku))),
+    asksQuestion: false,
   });
 }
 
 function analyzeQueryTerms(query: string): KeyTermAnalysis {
-  return analyzeKeyTerms(stripNonContentTerms(normalizeForAnalysis(query)));
+  const normalized = normalizeForAnalysis(query);
+  const base = analyzeKeyTerms(stripNonContentTerms(normalized));
+  const thaiWords = new Set<string>();
+  for (const run of stripNonContentTerms(normalized).match(thaiRunPattern) ?? []) {
+    for (const part of thaiSegmenter.segment(run)) {
+      if (part.isWordLike && part.segment.length >= 2 && !THAI_STOP_WORDS.has(part.segment)) thaiWords.add(part.segment);
+    }
+  }
+  return Object.freeze({ ...base, thaiWords, asksQuestion: questionWordPattern.test(normalized) });
 }
 
 function isInjectionOrMarkup(query: string): boolean {
@@ -216,8 +242,15 @@ type EvidenceMatch = Readonly<{
   containsQuerySkus: boolean;
 }>;
 
-function matchEvidence(query: KeyTermAnalysis, text: string): EvidenceMatch {
-  const evidence = analyzeKeyTerms(text);
+function termCount(query: KeyTermAnalysis): number {
+  return query.terms.size + query.thaiWords.size;
+}
+
+function matchEvidence(query: KeyTermAnalysis, text: string, label: string): EvidenceMatch {
+  // The document title is shop data too ("วิธีชำระเงิน"); the answer itself is still quoted from `text` only.
+  const searchable = `${text} ${label}`;
+  const evidence = analyzeKeyTerms(searchable);
+  const haystack = normalizeForAnalysis(searchable);
   let matched = 0;
   for (const term of query.terms) {
     if (evidence.terms.has(term)) {
@@ -227,6 +260,9 @@ function matchEvidence(query: KeyTermAnalysis, text: string): EvidenceMatch {
     // Retrievers already accept compact SKU variants (e.g. "ZX650" for "ZX-650").
     if (skuLikePattern.test(term) && evidence.skuKeys.has(compactSku(term))) matched += 1;
   }
+  for (const word of query.thaiWords) {
+    if (haystack.includes(word)) matched += 1;
+  }
   let containsQuerySkus = true;
   for (const sku of query.skuKeys) {
     if (!evidence.skuKeys.has(sku)) {
@@ -234,8 +270,9 @@ function matchEvidence(query: KeyTermAnalysis, text: string): EvidenceMatch {
       break;
     }
   }
+  const total = termCount(query);
   return Object.freeze({
-    coverage: query.terms.size === 0 ? 0 : matched / query.terms.size,
+    coverage: total === 0 ? 0 : matched / total,
     matched,
     containsQuerySkus,
   });
@@ -261,12 +298,14 @@ export function selectSupportingEvidence(
     if (!Array.isArray(evidence)) return EMPTY_SELECTION;
 
     const queryAnalysis = analyzeQueryTerms(trimmedQuery);
-    if (queryAnalysis.terms.size === 0) return EMPTY_SELECTION;
-    const singleSkuQuestion = queryAnalysis.terms.size === 1 && queryAnalysis.skuKeys.size === 1;
-    // A named product code identifies the subject on its own.
+    const queryTermCount = termCount(queryAnalysis);
+    if (queryTermCount === 0) return EMPTY_SELECTION;
+    const singleSkuQuestion = queryTermCount === 1 && queryAnalysis.skuKeys.size === 1;
+    // A named product code identifies the subject on its own; a question word
+    // makes a short question a question.
     const specificEnough = singleSkuQuestion
       || queryAnalysis.skuKeys.size > 0
-      || queryAnalysis.terms.size >= MIN_QUERY_KEY_TERMS;
+      || (queryAnalysis.asksQuestion ? queryTermCount >= 1 : queryTermCount >= MIN_QUERY_KEY_TERMS);
     if (!specificEnough) return EMPTY_SELECTION;
 
     const scored: Array<Readonly<{ item: SupportEvidence; coverage: number; matched: number; index: number }>> = [];
@@ -281,7 +320,7 @@ export function selectSupportingEvidence(
       const text = rawText.trim();
       if (text.length === 0) continue;
 
-      const match = matchEvidence(queryAnalysis, text);
+      const match = matchEvidence(queryAnalysis, text, typeof item.sourceLabel === "string" ? item.sourceLabel : "");
       if (!match.containsQuerySkus) continue;
       const matchedEnough = match.matched >= MIN_MATCHED_KEY_TERMS
         || (singleSkuQuestion && match.matched === 1);
@@ -347,7 +386,7 @@ function assessExtractiveAnswerability(input: unknown): AnswerabilityAssessment 
     }
   }
   if (evidence.length === 0) return Object.freeze({ kind: "insufficient_evidence" });
-  if (analyzeQueryTerms(trimmedQuery).terms.size === 0) return Object.freeze({ kind: "uncertain" });
+  if (termCount(analyzeQueryTerms(trimmedQuery)) === 0) return Object.freeze({ kind: "uncertain" });
 
   const selected = selectSupportingEvidence(trimmedQuery, evidence);
   return Object.freeze({ kind: selected.length > 0 ? "answerable" : "insufficient_evidence" });
