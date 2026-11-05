@@ -169,6 +169,7 @@ async function addApprovedDocument(repository: InMemoryKnowledgeRepository, docu
       title: document.title,
       content: document.content!,
       createdAt: "2026-01-01T00:00:00.000Z",
+      visibility: "customer",
     })
     : createImportedKnowledgeVersion({
       workspace,
@@ -178,6 +179,7 @@ async function addApprovedDocument(repository: InMemoryKnowledgeRepository, docu
       kind: document.kind,
       segments: document.segments!,
       createdAt: "2026-01-01T00:00:00.000Z",
+      visibility: "customer",
     });
   repository.createVersion(workspace, version);
   repository.transitionVersion(workspace, document.sourceId, "v1", "validating");
@@ -231,7 +233,7 @@ export async function runSyntheticKnowledgeBaseline(k = 3): Promise<SyntheticKno
   const rows: { id: string; category: string; expectedKeys: readonly string[]; returnedKeys: readonly string[]; citationValidity: readonly boolean[]; latencyMs: number }[] = [];
   for (const item of cases) {
     const startedAt = performance.now();
-    const result = await retriever.search({ workspace, query: item.query, limit: k });
+    const result = await retriever.search({ workspace, query: item.query, limit: k, audience: "customer" });
     const latencyMs = performance.now() - startedAt;
     const hits = result.kind === "evidence" ? result.hits : [];
     const returned = hits.map((hit) => ({

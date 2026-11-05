@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "./knowledge-repository.js";
-import { PostgresKnowledgeRepository } from "./knowledge-repository.js";
+import { NO_ACTOR_FOR_SCHEMA_TESTS, PostgresKnowledgeRepository } from "./knowledge-repository.js";
 import type { KnowledgeRepositoryPort } from "../../../contracts/data/knowledge.js";
 import { KnowledgeError, createFaqVersion, createImportedKnowledgeVersion, retrieveKnowledge } from "../../../modules/knowledge/index.js";
 import { InMemoryKnowledgeRepository } from "../../../modules/knowledge/testing/in-memory-repository.js";
@@ -13,6 +13,7 @@ import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
 const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
 const migrationPath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
+const visibilityMigrationPath = resolve(process.cwd(), "supabase/migrations/20261104000100_knowledge_visibility.sql");
 
 function databasePort(database: PGlite, failOnChunkInsert = false, statements?: string[]): PostgresDatabasePort {
   return {
@@ -40,6 +41,7 @@ async function createRepository() {
   await database.exec("CREATE ROLE knowledge_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS;");
   const migration = await readFile(migrationPath, "utf8");
   await database.exec(migration);
+  await database.exec(await readFile(visibilityMigrationPath, "utf8"));
   await database.exec(`
     GRANT USAGE ON SCHEMA aicp TO knowledge_runtime;
     GRANT SELECT ON aicp.knowledge_sources TO knowledge_runtime;
@@ -50,7 +52,7 @@ async function createRepository() {
     GRANT UPDATE (status, approved_at, approved_by, revoked_at, revoked_by, revocation_reason) ON aicp.knowledge_versions TO knowledge_runtime;
     GRANT SELECT, INSERT ON aicp.knowledge_chunks TO knowledge_runtime;
   `);
-  return { database, repository: new PostgresKnowledgeRepository(databasePort(database)) };
+  return { database, repository: new PostgresKnowledgeRepository(databasePort(database), NO_ACTOR_FOR_SCHEMA_TESTS) };
 }
 
 async function addIndexedFaq(repository: PostgresKnowledgeRepository, workspace = shopA, sourceId = "faq", versionId = "v1") {
@@ -124,7 +126,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const rejected = outcomes.find((entry) => entry.status === "rejected");
       assert.ok(rejected?.status === "rejected" && rejected.reason instanceof KnowledgeError);
       assert.equal(rejected.reason.code, "APPROVED_VERSION_EXISTS");
-      const eligible = await repository.listRetrievableChunks(shopA);
+      const eligible = await repository.listRetrievableChunks(shopA, undefined, "staff");
       assert.equal(eligible.length, 1);
       const approvedRow = eligible[0]!;
       const currentCitation = {
@@ -134,18 +136,18 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
         chunkId: approvedRow.chunk.chunkId,
         locator: approvedRow.chunk.locator,
       } as const;
-      assert.equal(await repository.isCurrentCitation(shopA, currentCitation), true);
-      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, chunkId: "missing" }), false);
-      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, workspaceId: shopB.workspaceId }), false);
-      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, locator: { kind: "chunk", chunkIndex: 99 } }), false);
-      assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, currentCitation]), true);
-      assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, { ...currentCitation, chunkId: "missing" }]), false);
+      assert.equal(await repository.isCurrentCitation(shopA, currentCitation, "staff"), true);
+      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, chunkId: "missing" }, "staff"), false);
+      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, workspaceId: shopB.workspaceId }, "staff"), false);
+      assert.equal(await repository.isCurrentCitation(shopA, { ...currentCitation, locator: { kind: "chunk", chunkIndex: 99 } }, "staff"), false);
+      assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, currentCitation], "staff"), true);
+      assert.equal(await repository.areCurrentCitations(shopA, [currentCitation, { ...currentCitation, chunkId: "missing" }], "staff"), false);
       const isolationStatements: string[] = [];
-      const isolationRepository = new PostgresKnowledgeRepository(databasePort(database, false, isolationStatements));
-      assert.equal(await isolationRepository.isCurrentCitation(shopA, currentCitation), true);
+      const isolationRepository = new PostgresKnowledgeRepository(databasePort(database, false, isolationStatements), NO_ACTOR_FOR_SCHEMA_TESTS);
+      assert.equal(await isolationRepository.isCurrentCitation(shopA, currentCitation, "staff"), true);
       assert.equal(isolationStatements.some((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)), false);
       isolationStatements.length = 0;
-      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation, currentCitation]), true);
+      assert.equal(await isolationRepository.areCurrentCitations(shopA, [currentCitation, currentCitation], "staff"), true);
       assert.equal(isolationStatements.filter((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql)).length, 1);
       const isolationIndex = isolationStatements.findIndex((sql) => /SET TRANSACTION ISOLATION LEVEL REPEATABLE READ/i.test(sql));
       const firstCitationReadIndex = isolationStatements.findIndex((sql) => /SELECT 1 AS current/i.test(sql));
@@ -163,7 +165,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       await repository.transitionVersion(shopA, "multi-chunk", "v1", "extracting");
       await repository.transitionVersion(shopA, "multi-chunk", "v1", "indexed");
       await repository.approveVersion(shopA, "multi-chunk", "v1", { approvedBy: "staff-1" });
-      const multiChunkRows = (await repository.listRetrievableChunks(shopA)).filter((entry) => entry.source.sourceId === "multi-chunk");
+      const multiChunkRows = (await repository.listRetrievableChunks(shopA, undefined, "staff")).filter((entry) => entry.source.sourceId === "multi-chunk");
       assert.ok(multiChunkRows.length > 1);
       assert.ok(multiChunkRows.every((entry) => entry.version.versionId === multiChunkRows[0]!.version.versionId));
       await assert.rejects(database.transaction(async (transaction) => {
@@ -183,11 +185,11 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       assert.equal(await repository.isCurrentCitation(shopA, {
         workspaceId: shopA.workspaceId, sourceId: approved.sourceId, sourceVersionId: approved.versionId,
         chunkId: approvedRow.chunk.chunkId, locator: approvedRow.chunk.locator,
-      }), false);
+      }, "staff"), false);
       await repository.revokeVersion(shopA, "multi-chunk", "v1", {
         revokedBy: "staff-1", reason: "superseded", revokedAt: "2026-10-16T02:00:00.000Z",
       });
-      assert.deepEqual(await repository.listRetrievableChunks(shopA), []);
+      assert.deepEqual(await repository.listRetrievableChunks(shopA, undefined, "staff"), []);
     });
 
     await t.test("archived source cannot approve an indexed version", async () => {
@@ -195,7 +197,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       await repository.archiveSource(shopA, "archived-approval");
       await assert.rejects(repository.approveVersion(shopA, "archived-approval", "v1", { approvedBy: "staff-1" }),
         (error: unknown) => error instanceof KnowledgeError && error.code === "APPROVAL_NOT_ELIGIBLE");
-      assert.deepEqual((await repository.listRetrievableChunks(shopA)).filter((row) => row.source.sourceId === "archived-approval"), []);
+      assert.deepEqual((await repository.listRetrievableChunks(shopA, undefined, "staff")).filter((row) => row.source.sourceId === "archived-approval"), []);
     });
 
     await t.test("FAQ, PDF page and CSV row citations round-trip exactly", async () => {
@@ -218,8 +220,8 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const pdfChunk = pdf.chunks[0]!;
       const pdfCitation = { workspaceId: shopA.workspaceId, sourceId: "manual", sourceVersionId: "pdf-v1", chunkId: pdfChunk.chunkId,
         locator: { kind: "page" as const, page: 1 } };
-      assert.equal(await repository.isCurrentCitation(shopA, pdfCitation), true);
-      assert.equal(await repository.areCurrentCitations(shopA, [pdfCitation]), true);
+      assert.equal(await repository.isCurrentCitation(shopA, pdfCitation, "staff"), true);
+      assert.equal(await repository.areCurrentCitations(shopA, [pdfCitation], "staff"), true);
 
       const csv = createImportedKnowledgeVersion({
         workspace: shopA, sourceId: "catalog", versionId: "csv-v1", title: "Catalog", kind: "csv",
@@ -236,8 +238,8 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
       const csvChunk = csv.chunks[0]!;
       const csvCitation = { workspaceId: shopA.workspaceId, sourceId: "catalog", sourceVersionId: "csv-v1", chunkId: csvChunk.chunkId,
         locator: { kind: "row" as const, row: 2 } };
-      assert.equal(await repository.isCurrentCitation(shopA, csvCitation), true);
-      assert.equal(await repository.areCurrentCitations(shopA, [csvCitation]), true);
+      assert.equal(await repository.isCurrentCitation(shopA, csvCitation, "staff"), true);
+      assert.equal(await repository.areCurrentCitations(shopA, [csvCitation], "staff"), true);
     });
 
     await t.test("PostgreSQL infers omitted continuation indexes for page and row locators", async () => {
@@ -286,7 +288,7 @@ test("PostgreSQL knowledge repository enforces persistence, RLS, lifecycle and c
     await t.test("failed chunk persistence rolls back its version row", async () => {
       await repository.createSource(shopA, { sourceId: "rollback", title: "Rollback", kind: "faq" });
       const draft = createFaqVersion({ workspace: shopA, sourceId: "rollback", versionId: "v1", title: "Rollback", content: "A short answer" });
-      const failingRepository = new PostgresKnowledgeRepository(databasePort(database, true));
+      const failingRepository = new PostgresKnowledgeRepository(databasePort(database, true), NO_ACTOR_FOR_SCHEMA_TESTS);
       await assert.rejects(failingRepository.createVersion(shopA, draft), { code: "INVALID_KNOWLEDGE_INPUT" });
       assert.equal(await repository.getVersion(shopA, "rollback", "v1"), null);
     });
@@ -366,18 +368,18 @@ test("retrieval candidates are shortlisted and bounded in SQL without carrying v
       }
     }
     const shortlisted = async (terms: string[], skuKeys: string[]) =>
-      (await repository.listRetrievableChunks(shopA, { terms, skuKeys })).map((row) => row.source.sourceId).sort();
+      (await repository.listRetrievableChunks(shopA, { terms, skuKeys }, "staff")).map((row) => row.source.sourceId).sort();
 
     assert.deepEqual(await shortlisted(["จัดส่ง"], []), ["shipping"]);
     assert.deepEqual(await shortlisted([], ["ab12"]), ["sku-dash", "sku-under"]);
     assert.deepEqual(await shortlisted(["full"], []), ["wide"]);
     assert.deepEqual(await shortlisted(["100%"], []), [], "terms match literally, never as LIKE patterns");
     assert.deepEqual(await shortlisted([], []), []);
-    assert.equal((await repository.listRetrievableChunks(shopA)).length, documents.length);
-    const row = (await repository.listRetrievableChunks(shopA, { terms: ["จัดส่ง"], skuKeys: [] }))[0]!;
+    assert.equal((await repository.listRetrievableChunks(shopA, undefined, "staff")).length, documents.length);
+    const row = (await repository.listRetrievableChunks(shopA, { terms: ["จัดส่ง"], skuKeys: [] }, "staff"))[0]!;
     assert.equal("content" in row.version, false, "a 100,000-character content must not ride on every chunk row");
 
-    const results = async (target: KnowledgeRepositoryPort, query: string) => retrieveKnowledge(target, { workspace: shopA, query, limit: 5 });
+    const results = async (target: KnowledgeRepositoryPort, query: string) => retrieveKnowledge(target, { workspace: shopA, query, limit: 5, audience: "staff" });
     for (const query of ["จัดส่งกี่วัน", "AB-12", "ab12", "xy99", "ＸＹ-99", "full width", "unrelated", "ไม่มีคำนี้ qqq"]) {
       assert.deepEqual(await results(repository, query), await results(memory, query), "SQL shortlist changed the answer for: " + query);
     }
@@ -388,8 +390,8 @@ test("retrieval candidates are shortlisted and bounded in SQL without carrying v
     await repository.createVersion(shopA, csv);
     for (const next of ["validating", "extracting", "indexed"] as const) await repository.transitionVersion(shopA, "catalog", "v1", next);
     await repository.approveVersion(shopA, "catalog", "v1", { approvedBy: "synthetic-owner" });
-    assert.equal((await repository.listRetrievableChunks(shopA, { terms: ["สินค้า"], skuKeys: [] })).length, 2_000);
-    assert.equal((await repository.listRetrievableChunks(shopA)).length, 2_000);
+    assert.equal((await repository.listRetrievableChunks(shopA, { terms: ["สินค้า"], skuKeys: [] }, "staff")).length, 2_000);
+    assert.equal((await repository.listRetrievableChunks(shopA, undefined, "staff")).length, 2_000);
   } finally {
     await database.close();
   }

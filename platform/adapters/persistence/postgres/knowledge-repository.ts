@@ -1,6 +1,7 @@
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import { KnowledgeError } from "../../../contracts/data/knowledge.js";
 import type {
+  KnowledgeAudience,
   KnowledgeChunk,
   KnowledgeCitation,
   KnowledgeCitationLocator,
@@ -10,8 +11,9 @@ import type {
   KnowledgeVersion,
   KnowledgeVersionDraft,
   KnowledgeVersionTransition,
+  KnowledgeVisibility,
 } from "../../../contracts/data/knowledge.js";
-import { canonicalizeKnowledgeVersionDraft } from "../../../modules/knowledge/index.js";
+import { canonicalizeKnowledgeVersionDraft, resolveKnowledgeAudience } from "../../../modules/knowledge/index.js";
 
 export type PostgresRow = Readonly<Record<string, unknown>>;
 export type PostgresQueryResult<Row extends PostgresRow = PostgresRow> = Readonly<{ rows: readonly Row[] }>;
@@ -45,6 +47,7 @@ type VersionRow = PostgresRow & {
   title: string;
   content: string;
   status: KnowledgeVersion["status"];
+  visibility: KnowledgeVisibility;
   created_at: Date | string;
   approved_at: Date | string | null;
   approved_by: string | null;
@@ -85,6 +88,7 @@ type RetrievableRow = PostgresRow & {
   source_created_at: Date | string;
   version_id: string;
   version_status: KnowledgeVersion["status"];
+  version_visibility: KnowledgeVisibility;
   chunk_id: string;
   chunk_index: number;
   text: string;
@@ -149,6 +153,7 @@ function mapVersion(row: VersionRow, chunks: readonly KnowledgeChunk[]): Knowled
     title: row.title,
     content: row.content,
     status: row.status,
+    visibility: row.visibility,
     chunks: Object.freeze([...chunks]),
     createdAt: asIso(row.created_at),
     ...(asNullableIso(row.approved_at) ? { approvedAt: asNullableIso(row.approved_at), approvedBy: row.approved_by! } : {}),
@@ -223,8 +228,8 @@ function locatorIdentity(locator: KnowledgeCitationLocator): string {
 }
 
 function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown): KnowledgeVersionDraft {
-  const fields = snapshotDataObject(value, ["workspaceId", "sourceId", "versionId", "kind", "title", "content", "chunks", "createdAt", "status"]);
-  if (!fields || (Object.keys(fields).length !== 8 && Object.keys(fields).length !== 9)
+  const fields = snapshotDataObject(value, ["workspaceId", "sourceId", "versionId", "kind", "title", "content", "chunks", "createdAt", "status", "visibility"]);
+  if (!fields || (Object.keys(fields).length !== 8 && Object.keys(fields).length !== 9 && Object.keys(fields).length !== 10)
     || typeof fields.workspaceId !== "string" || fields.workspaceId !== workspace.workspaceId) {
     throw new KnowledgeError("CROSS_WORKSPACE_ACCESS_DENIED");
   }
@@ -234,9 +239,11 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
     || typeof fields.kind !== "string" || !["faq", "pdf", "csv"].includes(fields.kind)
     || typeof fields.title !== "string" || fields.title.trim().length === 0 || fields.title.length > 200
     || typeof fields.content !== "string" || fields.content.trim().length === 0 || fields.content.length > 100_000
-    || typeof fields.createdAt !== "string" || !Number.isFinite(Date.parse(fields.createdAt))) {
+    || typeof fields.createdAt !== "string" || !Number.isFinite(Date.parse(fields.createdAt))
+    || (fields.visibility !== undefined && fields.visibility !== "internal" && fields.visibility !== "customer")) {
     throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
   }
+  const visibility: KnowledgeVisibility = fields.visibility === undefined ? "internal" : fields.visibility;
   const rawChunks = snapshotArray(fields.chunks, 100_000);
   if (!rawChunks || rawChunks.length === 0) throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
   const chunks: KnowledgeChunk[] = [];
@@ -250,6 +257,7 @@ function snapshotVersionDraft(workspace: TrustedWorkspaceContext, value: unknown
     title: fields.title,
     content: fields.content,
     createdAt: fields.createdAt,
+    visibility,
   };
   for (let index = 0; index < rawChunks.length; index += 1) {
     const fieldsChunk = snapshotDataObject(rawChunks[index], ["workspaceId", "sourceId", "versionId", "chunkId", "chunkIndex", "text", "locator", "start", "end"]);
@@ -344,9 +352,17 @@ function mapDatabaseError(error: unknown): never {
   throw new KnowledgeError("INVALID_KNOWLEDGE_INPUT");
 }
 
-/** Re-checks the verified actor inside the caller's write transaction. No actor means no signed-in user exists, as in the base-schema tests. */
-export async function assertActiveWriter(query: PostgresQueryPort, workspace: TrustedWorkspaceContext, actorUserId: string | undefined): Promise<void> {
-  if (actorUserId === undefined) return;
+/**
+ * Explicit opt-out for base-schema tests that run without a signed-in user. Production wiring must pass a
+ * verified user id; a missing or empty actor fails closed.
+ */
+export const NO_ACTOR_FOR_SCHEMA_TESTS = Symbol("NO_ACTOR_FOR_SCHEMA_TESTS");
+export type KnowledgeWriterActor = string | typeof NO_ACTOR_FOR_SCHEMA_TESTS;
+
+/** Re-checks the verified actor inside the caller's write transaction. */
+export async function assertActiveWriter(query: PostgresQueryPort, workspace: TrustedWorkspaceContext, actorUserId: KnowledgeWriterActor): Promise<void> {
+  if (actorUserId === NO_ACTOR_FOR_SCHEMA_TESTS) return;
+  if (typeof actorUserId !== "string" || actorUserId.length === 0) throw new KnowledgeError("MEMBERSHIP_REQUIRED");
   try {
     await query.query("SELECT aicp.assert_active_knowledge_writer($1, $2)", [workspace.workspaceId, actorUserId]);
   } catch (error) {
@@ -362,7 +378,7 @@ export async function assertActiveWriter(query: PostgresQueryPort, workspace: Tr
  * approval columns); the merchant host approves through KnowledgeApprovalPort instead.
  */
 export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
-  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId?: string) {}
+  constructor(private readonly database: PostgresDatabasePort, private readonly actorUserId: KnowledgeWriterActor) {}
 
   private scopedWrite<T>(workspace: TrustedWorkspaceContext, operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
     return this.scoped(workspace, async (query) => {
@@ -467,11 +483,12 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
 
       const inserted = await query.query<VersionRow>(
         `INSERT INTO aicp.knowledge_versions
-         (workspace_id, source_id, version_id, kind, title, content, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
+         (workspace_id, source_id, version_id, kind, title, content, created_at, visibility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING workspace_id, source_id, version_id, kind, title, content, status, visibility, created_at,
                    approved_at, approved_by, revoked_at, revoked_by, revocation_reason`,
-        [workspace.workspaceId, safeVersion.sourceId, safeVersion.versionId, safeVersion.kind, safeVersion.title, safeVersion.content, safeVersion.createdAt],
+        [workspace.workspaceId, safeVersion.sourceId, safeVersion.versionId, safeVersion.kind, safeVersion.title, safeVersion.content,
+          safeVersion.createdAt, safeVersion.visibility ?? "internal"],
       );
       if (!inserted.rows[0]) throw new KnowledgeError("VERSION_CONFLICT");
 
@@ -515,7 +532,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
   async listVersions(workspace: TrustedWorkspaceContext, sourceId: string): Promise<readonly KnowledgeVersion[]> {
     return this.scoped(workspace, async (query) => {
       const result = await query.query<VersionRow>(
-        `SELECT workspace_id, source_id, version_id, kind, title, content, status, created_at,
+        `SELECT workspace_id, source_id, version_id, kind, title, content, status, visibility, created_at,
                 approved_at, approved_by, revoked_at, revoked_by, revocation_reason
          FROM aicp.knowledge_versions WHERE workspace_id = $1 AND source_id = $2
          ORDER BY created_at DESC, version_id LIMIT 50`,
@@ -539,7 +556,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       const updated = await query.query<VersionRow>(
         `UPDATE aicp.knowledge_versions SET status = $4
          WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 AND status = ANY($5::text[])
-         RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
+         RETURNING workspace_id, source_id, version_id, kind, title, content, status, visibility, created_at,
                    approved_at, approved_by, revoked_at, revoked_by, revocation_reason`,
         [workspace.workspaceId, sourceId, versionId, next, allowedFrom],
       );
@@ -576,7 +593,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
            AND EXISTS (SELECT 1 FROM aicp.knowledge_chunks AS chunk
                        WHERE chunk.workspace_id = version.workspace_id AND chunk.source_id = version.source_id
                          AND chunk.version_id = version.version_id)
-         RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
+         RETURNING workspace_id, source_id, version_id, kind, title, content, status, visibility, created_at,
                    approved_at, approved_by, revoked_at, revoked_by, revocation_reason`,
         [workspace.workspaceId, sourceId, versionId, approvedAt, input.approvedBy],
       );
@@ -602,7 +619,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
       const updated = await query.query<VersionRow>(
         `UPDATE aicp.knowledge_versions SET status = 'revoked', revoked_at = $4, revoked_by = $5, revocation_reason = $6
          WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3 AND status = 'approved'
-         RETURNING workspace_id, source_id, version_id, kind, title, content, status, created_at,
+         RETURNING workspace_id, source_id, version_id, kind, title, content, status, visibility, created_at,
                    approved_at, approved_by, revoked_at, revoked_by, revocation_reason`,
         [workspace.workspaceId, sourceId, versionId, input.revokedAt ?? new Date().toISOString(), input.revokedBy, input.reason],
       );
@@ -616,22 +633,29 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     });
   }
 
-  async isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Promise<boolean> {
+  async isCurrentCitation(workspace: TrustedWorkspaceContext, citation: KnowledgeCitation, audience: KnowledgeAudience): Promise<boolean> {
     if (citation.workspaceId !== workspace.workspaceId) return false;
-    return this.scoped(workspace, (query) => this.isCurrentCitationIn(query, workspace, citation));
+    const resolvedAudience = resolveKnowledgeAudience(audience);
+    return this.scoped(workspace, (query) => this.isCurrentCitationIn(query, workspace, citation, resolvedAudience));
   }
 
-  async areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[]): Promise<boolean> {
+  async areCurrentCitations(workspace: TrustedWorkspaceContext, citations: readonly KnowledgeCitation[], audience: KnowledgeAudience): Promise<boolean> {
     if (citations.length === 0 || citations.some((citation) => citation.workspaceId !== workspace.workspaceId)) return false;
+    const resolvedAudience = resolveKnowledgeAudience(audience);
     return this.scoped(workspace, async (query) => {
       for (const citation of citations) {
-        if (!await this.isCurrentCitationIn(query, workspace, citation)) return false;
+        if (!await this.isCurrentCitationIn(query, workspace, citation, resolvedAudience)) return false;
       }
       return true;
     }, "repeatable read");
   }
 
-  private async isCurrentCitationIn(query: PostgresQueryPort, workspace: TrustedWorkspaceContext, citation: KnowledgeCitation): Promise<boolean> {
+  private async isCurrentCitationIn(
+    query: PostgresQueryPort,
+    workspace: TrustedWorkspaceContext,
+    citation: KnowledgeCitation,
+    audience: KnowledgeAudience,
+  ): Promise<boolean> {
     const locator = citation.locator;
     let position: number | null = null;
     if (locator.kind === "page") position = locator.page;
@@ -651,24 +675,30 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
            AND version.version_id = $3 AND version.status = 'approved' AND chunk.chunk_id = $4
            AND chunk.locator_kind = $5 AND chunk.locator_chunk_index = $6
            AND ($5 <> 'span' OR (chunk.start_offset = $7 AND chunk.end_offset = $8))
-           AND chunk.locator_position IS NOT DISTINCT FROM $9`,
+           AND chunk.locator_position IS NOT DISTINCT FROM $9
+           AND ($10::text = 'staff' OR version.visibility = 'customer')`,
         [workspace.workspaceId, citation.sourceId, citation.sourceVersionId, citation.chunkId,
-          locator.kind, chunkIndex, start, end, position],
+          locator.kind, chunkIndex, start, end, position, audience],
     );
     return result.rows.length === 1;
   }
 
-  async listRetrievableChunks(workspace: TrustedWorkspaceContext, shortlist?: KnowledgeRetrievalShortlist): Promise<readonly Readonly<{
+  async listRetrievableChunks(
+    workspace: TrustedWorkspaceContext,
+    shortlist: KnowledgeRetrievalShortlist | undefined,
+    audience: KnowledgeAudience,
+  ): Promise<readonly Readonly<{
     source: KnowledgeSource;
-    version: Pick<KnowledgeVersion, "workspaceId" | "sourceId" | "versionId" | "status">;
+    version: Pick<KnowledgeVersion, "workspaceId" | "sourceId" | "versionId" | "status" | "visibility">;
     chunk: KnowledgeChunk;
   }>[]> {
+    const resolvedAudience = resolveKnowledgeAudience(audience);
     return this.scoped(workspace, async (query) => {
       // Folds text the way the retrieval tokenizer does, so every chunk the scorer could match stays a candidate.
       const result = await query.query<RetrievableRow>(
         `SELECT source.workspace_id, source.source_id, source.kind AS source_kind, source.title AS source_title,
                 source.status AS source_status, source.created_at AS source_created_at,
-                version.version_id, version.status AS version_status,
+                version.version_id, version.status AS version_status, version.visibility AS version_visibility,
                 chunk.chunk_id, chunk.chunk_index, chunk.text, chunk.locator_kind, chunk.locator_chunk_index,
                 chunk.locator_position, chunk.start_offset, chunk.end_offset
          FROM aicp.knowledge_sources AS source
@@ -682,14 +712,19 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
          ) AS hits
          WHERE source.workspace_id = $1 AND source.status = 'active' AND version.status = 'approved'
            AND ($2::text[] IS NULL OR hits.term_hits + hits.sku_hits > 0)
+           AND ($5::text = 'staff' OR version.visibility = 'customer')
          ORDER BY hits.sku_hits DESC, hits.term_hits DESC, source.source_id, version.version_id, chunk.chunk_index
          LIMIT $4`,
-        [workspace.workspaceId, shortlist ? [...shortlist.terms] : null, shortlist ? [...shortlist.skuKeys] : null, MAX_RETRIEVAL_CANDIDATES],
+        [workspace.workspaceId, shortlist ? [...shortlist.terms] : null, shortlist ? [...shortlist.skuKeys] : null,
+          MAX_RETRIEVAL_CANDIDATES, resolvedAudience],
       );
       return Object.freeze(result.rows.map((row) => Object.freeze({
         source: mapSource({ workspace_id: row.workspace_id, source_id: row.source_id, kind: row.source_kind,
           title: row.source_title, status: row.source_status, created_at: row.source_created_at } as SourceRow),
-        version: Object.freeze({ workspaceId: row.workspace_id, sourceId: row.source_id, versionId: row.version_id, status: row.version_status }),
+        version: Object.freeze({
+          workspaceId: row.workspace_id, sourceId: row.source_id, versionId: row.version_id,
+          status: row.version_status, visibility: row.version_visibility,
+        }),
         chunk: mapChunk({
           workspace_id: row.workspace_id, source_id: row.source_id, version_id: row.version_id,
           chunk_id: row.chunk_id, chunk_index: row.chunk_index, text: row.text, locator_kind: row.locator_kind,
@@ -707,7 +742,7 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
     versionId: string,
   ): Promise<KnowledgeVersion | null> {
     const result = await query.query<VersionRow>(
-      `SELECT workspace_id, source_id, version_id, kind, title, content, status, created_at,
+      `SELECT workspace_id, source_id, version_id, kind, title, content, status, visibility, created_at,
               approved_at, approved_by, revoked_at, revoked_by, revocation_reason
        FROM aicp.knowledge_versions WHERE workspace_id = $1 AND source_id = $2 AND version_id = $3`,
       [workspaceId, sourceId, versionId],
@@ -730,7 +765,8 @@ export class PostgresKnowledgeRepository implements KnowledgeRepositoryPort {
 function sameDraft(existing: KnowledgeVersion, draft: KnowledgeVersionDraft): boolean {
   return existing.workspaceId === draft.workspaceId && existing.sourceId === draft.sourceId
     && existing.versionId === draft.versionId && existing.kind === draft.kind && existing.title === draft.title
-    && existing.content === draft.content && existing.chunks.length === draft.chunks.length
+    && existing.content === draft.content && existing.visibility === (draft.visibility ?? "internal")
+    && existing.chunks.length === draft.chunks.length
     && existing.chunks.every((chunk, index) => {
       const candidate = draft.chunks[index];
       return Boolean(candidate) && chunk.chunkId === candidate!.chunkId && chunk.chunkIndex === candidate!.chunkIndex

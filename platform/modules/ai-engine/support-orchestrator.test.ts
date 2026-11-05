@@ -85,7 +85,11 @@ function harness(options: {
     },
   };
   const evidenceFreshness = {
-    async areCurrentAndApproved(receivedWorkspace: TrustedWorkspaceContext, citations: readonly KnowledgeRetrievalHit["citation"][]) {
+    async areCurrentAndApproved(
+      receivedWorkspace: TrustedWorkspaceContext,
+      citations: readonly KnowledgeRetrievalHit["citation"][],
+      _audience: "customer" | "staff",
+    ) {
       freshnessCalls.push({ workspace: receivedWorkspace, citations });
       if (options.freshnessFails) throw new Error("private freshness error");
       if (options.malformedFreshness) return { ok: false } as never;
@@ -121,7 +125,7 @@ function harness(options: {
 
 test("returns only a cited answer mapped from opaque evidence references", async () => {
   const { engine, calls, freshnessCalls } = harness();
-  const result = await engine.respond({ workspace, conversationId: "conversation-1", query: "ส่งของกี่วัน" });
+  const result = await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ส่งของกี่วัน" });
   assert.equal(result.kind, "answer");
   if (result.kind !== "answer") return;
   assert.equal(result.text, "ส่งภายใน 2 วันทำการ");
@@ -135,7 +139,7 @@ test("returns only a cited answer mapped from opaque evidence references", async
 
 test("no approved evidence requests handoff without invoking assessment or model", async () => {
   const { engine, calls } = harness({ result: { kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" } });
-  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "NO_APPROVED_EVIDENCE",
   });
   assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: ["NO_APPROVED_EVIDENCE"] });
@@ -149,7 +153,7 @@ test("insufficient, conflicting, and uncertain evidence fail closed to handoff",
   ] as const) {
     await t.test(kind, async () => {
       const { engine, calls } = harness({ assessment: { kind } });
-      assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+      assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
         kind: "handoff_requested", reason,
       });
       assert.equal(calls.generation, 0);
@@ -173,7 +177,7 @@ test("malformed assessment, provider errors, and bad citations never produce an 
   for (const item of cases) {
     await t.test(item.name, async () => {
       const { engine, calls } = harness(item.options);
-      assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+      assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
         kind: "handoff_requested", reason: item.reason,
       });
       assert.deepEqual(calls.handoff, [item.reason]);
@@ -183,16 +187,16 @@ test("malformed assessment, provider errors, and bad citations never produce an 
 
 test("retrieval and handoff failures are surfaced without leaking adapter errors", async () => {
   const retrievalFailure = harness({ retrievalFails: true });
-  assert.deepEqual(await retrievalFailure.engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await retrievalFailure.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
   });
 
   const malformedRetrieval = harness({ malformedRetrieval: true });
-  assert.deepEqual(await malformedRetrieval.engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await malformedRetrieval.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
   });
   const throwingRetrieval = harness({ throwingRetrievalGetter: true });
-  assert.deepEqual(await throwingRetrieval.engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await throwingRetrieval.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
   });
 
@@ -201,33 +205,33 @@ test("retrieval and handoff failures are surfaced without leaking adapter errors
     citation: Object.freeze({ ...hit.citation, workspaceId: "other-shop" }),
   });
   const foreignEvidence = harness({ result: { kind: "evidence", hits: [crossWorkspaceHit] } });
-  assert.deepEqual(await foreignEvidence.engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await foreignEvidence.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
   });
 
   const contextMutation = harness({ mutateWorkspaceDuringRetrieval: true });
-  assert.deepEqual(await contextMutation.engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await contextMutation.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
   });
 
   const handoffFailure = harness({ result: { kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" }, handoffFails: true });
-  assert.deepEqual(await handoffFailure.engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await handoffFailure.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_unavailable", reason: "NO_APPROVED_EVIDENCE",
   });
 });
 
 test("invalid request is rejected before any port is called", async () => {
   const { engine, calls } = harness();
-  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(5_001) }), { kind: "invalid_request" });
-  assert.deepEqual(await engine.respond({ workspace, conversationId: "bad id", query: "ถาม" }), { kind: "invalid_request" });
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "x".repeat(5_001) }), { kind: "invalid_request" });
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "bad id", query: "ถาม", audience: "customer" }), { kind: "invalid_request" });
   assert.deepEqual(await engine.respond(null as never), { kind: "invalid_request" });
-  assert.deepEqual(await engine.respond({ workspace: { workspaceId: 1 } as never, conversationId: "conversation-1", query: "ถาม" }), { kind: "invalid_request" });
+  assert.deepEqual(await engine.respond({ workspace: { workspaceId: 1 } as never, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "invalid_request" });
   assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
 });
 
 test("over-retrieval-limit customer messages hand off instead of being silently rejected", async () => {
   const { engine, calls } = harness();
-  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(501) }), {
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "x".repeat(501) }), {
     kind: "handoff_requested", reason: "QUERY_TOO_LONG",
   });
   assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: ["QUERY_TOO_LONG"] });
@@ -235,9 +239,9 @@ test("over-retrieval-limit customer messages hand off instead of being silently 
 
 test("support query accepts the 500-character retrieval boundary and routes the 5000-character ceiling", async () => {
   const accepted = harness();
-  assert.equal((await accepted.engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(500) })).kind, "answer");
+  assert.equal((await accepted.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "x".repeat(500) })).kind, "answer");
   const maximum = harness();
-  assert.deepEqual(await maximum.engine.respond({ workspace, conversationId: "conversation-1", query: "x".repeat(5_000) }), {
+  assert.deepEqual(await maximum.engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "x".repeat(5_000) }), {
     kind: "handoff_requested", reason: "QUERY_TOO_LONG",
   });
 });
@@ -253,7 +257,7 @@ test("freshness revalidates every chunk shown to the model, including uncited ev
     result: { kind: "evidence", hits: [hit, secondHit] },
     staleEvidence: true,
   });
-  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+  assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
     kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
   });
   assert.deepEqual(freshnessCalls[0]!.citations, [hit.citation, secondHit.citation]);
@@ -262,58 +266,58 @@ test("freshness revalidates every chunk shown to the model, including uncited ev
 test("paused conversations stop before retrieval and a handoff during generation suppresses the answer", async (t) => {
   await t.test("already paused", async () => {
     const { engine, calls } = harness({ conversationStatus: "human_active" });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "ai_paused" });
     assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
   });
   await t.test("handoff starts and is released while generating", async () => {
     const { engine } = harness({ takeoverAndReleaseAfterGeneration: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_changed" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "conversation_changed" });
   });
   await t.test("knowledge is revoked during generation", async () => {
     const { engine, calls } = harness({ staleEvidence: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
       kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
     });
     assert.deepEqual(calls.handoff, ["KNOWLEDGE_CHANGED"]);
   });
   await t.test("freshness check failure fails closed", async () => {
     const { engine } = harness({ freshnessFails: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
       kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
     });
   });
   await t.test("conversation takeover before a failure handoff returns paused without alerting an already-owned conversation", async () => {
     const { engine, calls } = harness({ freshnessFails: true, pauseAfterGeneration: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "ai_paused" });
     assert.deepEqual(calls.handoff, []);
   });
   await t.test("conversation version change before failure handoff returns changed without requesting handoff", async () => {
     const { engine, calls } = harness({ staleEvidence: true, takeoverAndReleaseAfterGeneration: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_changed" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "conversation_changed" });
     assert.deepEqual(calls.handoff, []);
   });
   await t.test("malformed freshness result fails closed", async () => {
     const { engine } = harness({ malformedFreshness: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
       kind: "handoff_requested", reason: "KNOWLEDGE_CHANGED",
     });
   });
   await t.test("handoff starts while generating", async () => {
     const { engine } = harness({ pauseAfterGeneration: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "ai_paused" });
   });
   await t.test("conversation state unavailable", async () => {
     const { engine } = harness({ conversationFails: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_unavailable" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "conversation_unavailable" });
   });
   await t.test("stateful conversation getter is rejected before retrieval", async () => {
     const { engine, calls } = harness({ changingConversationGetter: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "conversation_unavailable" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "conversation_unavailable" });
     assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: [] });
   });
   await t.test("stateful evidence getter is rejected before model use", async () => {
     const { engine, calls } = harness({ changingEvidenceGetter: true });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), {
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), {
       kind: "handoff_requested", reason: "RETRIEVAL_UNAVAILABLE",
     });
     assert.deepEqual(calls, { assessment: 0, generation: 0, handoff: ["RETRIEVAL_UNAVAILABLE"] });
@@ -326,7 +330,7 @@ test("paused conversations stop before retrieval and a handoff during generation
       workspaceId: "shop-1", conversationId: "conversation-1", status: "human_active", version: 1,
       createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z",
     }, { get(target, key, receiver) { return key === "status" ? "ai_active" : Reflect.get(target, key, receiver); } });
-    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", query: "ถาม" }), { kind: "ai_paused" });
+    assert.deepEqual(await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ถาม" }), { kind: "ai_paused" });
     ports.conversations.load = originalLoad;
   });
   await t.test("generated reference Proxy validates and uses the same descriptor value", async () => {
@@ -335,7 +339,7 @@ test("paused conversations stop before retrieval and a handoff during generation
     });
     const generated = { text: "ส่งภายใน 2 วันทำการ", citationRefs: references };
     const { engine } = harness({ generated });
-    const result = await engine.respond({ workspace, conversationId: "conversation-1", query: "ส่งของกี่วัน" });
+    const result = await engine.respond({ workspace, conversationId: "conversation-1", audience: "customer", query: "ส่งของกี่วัน" });
     assert.equal(result.kind, "answer");
     if (result.kind === "answer") assert.deepEqual(result.citations, [hit.citation]);
   });

@@ -1,7 +1,6 @@
 import { ingestKnowledgeVersion } from "../../../composition/knowledge-intake.js";
 import type { KnowledgeIntakeAuditPort } from "../../../contracts/data/knowledge-intake.js";
 import type { KnowledgeObjectStoragePort } from "../../../contracts/data/knowledge-storage.js";
-import { KnowledgeError } from "../../../contracts/data/knowledge.js";
 import type {
   KnowledgeApprovalPort,
   KnowledgeDocumentExtractorPort,
@@ -84,7 +83,17 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
         const { repository, extractor, storage, intakeAudit, identity } = await requireHost();
         enforce(uploadLimiter, identity.userId);
         const form = await parseBoundedFormData(request, 5 * 1024 * 1024 + 256 * 1024);
-        assertKnownFields(form, ["kind", "title", "content", "file"]);
+        assertKnownFields(form, ["kind", "title", "content", "file", "visibility"]);
+
+        const rawVisibility = form.get("visibility");
+        let visibility: "internal" | "customer" | undefined;
+        if (rawVisibility !== null) {
+          if (rawVisibility === "internal" || rawVisibility === "customer") {
+            visibility = rawVisibility;
+          } else {
+            throw new HttpError(400, "INVALID_KNOWLEDGE_INPUT");
+          }
+        }
 
         const kindValue = form.get("kind");
         const title = form.get("title");
@@ -104,6 +113,7 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
             title,
             kind,
             content,
+            ...(visibility !== undefined ? { visibility } : {}),
           });
         } else {
           const file = form.get("file");
@@ -121,6 +131,7 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
             bytes,
             filename: file.name,
             contentType: file.type,
+            ...(visibility !== undefined ? { visibility } : {}),
           });
         }
         return Response.json({ data: versionSummary(version) }, { status: 201, headers: noStore });
@@ -138,8 +149,14 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(sourceId)
           || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(versionId)) throw new HttpError(404, "VERSION_NOT_FOUND");
         await approval.approve(identity.workspace, sourceId, versionId);
-        const version = await repository.getVersion(identity.workspace, sourceId, versionId);
-        if (!version) throw new KnowledgeError("VERSION_NOT_FOUND");
+        // The approval has committed; a failed read-back must not turn it into an error the client would retry.
+        let version: Awaited<ReturnType<typeof repository.getVersion>> = null;
+        try {
+          version = await repository.getVersion(identity.workspace, sourceId, versionId);
+        } catch {
+          // fall through to the minimal answer below
+        }
+        if (!version) return Response.json({ data: { sourceId, versionId, status: "approved" } }, { headers: noStore });
         return Response.json({ data: versionSummary(version) }, { headers: noStore });
       } catch (error: unknown) {
         return routeErrorResponse(error);
@@ -156,9 +173,11 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
           || Object.keys(body).length !== 1 || !("query" in body) || typeof body.query !== "string") {
           throw new HttpError(400, "INVALID_RETRIEVAL_QUERY");
         }
-        const result = await retrieveKnowledge(repository, { workspace: identity.workspace, query: body.query, limit: 5 });
+        const result = await retrieveKnowledge(repository, {
+          workspace: identity.workspace, query: body.query, limit: 5, audience: "staff",
+        });
         if (result.kind !== "evidence") return Response.json({ data: result }, { headers: noStore });
-        const current = await areKnowledgeCitationsCurrent(repository, identity.workspace, result.hits.map((hit) => hit.citation));
+        const current = await areKnowledgeCitationsCurrent(repository, identity.workspace, result.hits.map((hit) => hit.citation), "staff");
         if (!current) throw new Error("CITATION_REVALIDATION_FAILED");
         return Response.json({ data: {
           kind: "evidence",
