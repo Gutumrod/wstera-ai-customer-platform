@@ -44,19 +44,15 @@ const markupPattern = /<\s*\/?\s*[a-z][^>]*>/iu;
 /**
  * Prompt-injection screening is an EARLY HEURISTIC ONLY, not a defence.
  *
- * The extractive answer path never executes instructions: evidence text is
- * copied verbatim as DATA and no model reads it, so the answer's safety comes
- * from the shape of the pipeline, not from this list. The list is deliberately
- * NOT expanded to chase phrasing. It must not be relied on if a model-backed
- * answer port is ever enabled — such a port needs its own instruction/response
- * hardening instead.
+ * Matching cannot detect every injection. The extractive adapter also screens
+ * evidence before showing it; model-backed paths need independent protections.
  */
 const instructionPatterns: readonly RegExp[] = Object.freeze([
   /\bignore\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above)\s+instructions?\b/iu,
   /\bdisregard\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above)\s+(?:instructions?|prompts?)\b/iu,
   /\b(?:reveal|show|print|output)\s+(?:the\s+)?(?:system|developer|hidden)\s+prompt\b/iu,
   /\byou\s+are\s+now\s+(?:an?\s+)?(?:admin|administrator|system)\b/iu,
-  /(?:เพิกเฉย|ลืม|ข้าม)\s*(?:คำสั่ง|คําสั่ง)(?:ทั้งหมด|ก่อนหน้า)?/u,
+  /(?:เพิกเฉย|ละเลย|ลืม|ข้าม)\s*(?:คำสั่ง|คําสั่ง)(?:ทั้งหมด|ก่อนหน้า)?/u,
   /(?:เปิดเผย|แสดง|บอก)\s*(?:system\s*prompt|พรอมป์ตระบบ|คำสั่งระบบ)/iu,
 ]);
 

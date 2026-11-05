@@ -1,4 +1,5 @@
 import type { GroundedAnswerPort, SupportEvidence } from "../../../modules/ai-engine/support-orchestrator.js";
+import { isInjectionOrMarkup } from "./extractive-answerability-port.js";
 
 export const MAX_EXTRACTIVE_EVIDENCE_ITEMS = 2;
 export const MAX_EXTRACTIVE_CHARS = 2_000;
@@ -20,8 +21,23 @@ function truncateSafely(str: string, maxLen: number): string {
 
 /**
  * Extractive answer port returning verbatim excerpts from approved evidence.
- * Evidence text is treated purely as untrusted data, never as instructions.
+ * Screens untrusted evidence before display. Pattern matching is a heuristic,
+ * not a guarantee against all prompt injection or harmful content.
  */
+function displayableEvidence(text: string): string {
+  const normalized = text.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/gu, "");
+  if (!isInjectionOrMarkup(normalized)) return text;
+  // Only keep a clean, explicitly separated prefix; never guess where an
+  // embedded instruction ends or reuse any text following it.
+  const segments = text.split(/\s+\/\s+|\r?\n/u);
+  const safe: string[] = [];
+  for (const segment of segments) {
+    if (isInjectionOrMarkup(segment.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/gu, ""))) break;
+    safe.push(segment);
+  }
+  return safe.join("\n").trim();
+}
+
 export class ExtractiveAnswerAdapter implements GroundedAnswerPort {
   async generate(input: Readonly<{
     workspaceId: string;
@@ -45,7 +61,8 @@ export class ExtractiveAnswerAdapter implements GroundedAnswerPort {
         continue;
       }
 
-      const trimmed = item.text.trim();
+      const cleanText = displayableEvidence(item.text);
+      const trimmed = cleanText.trim();
       if (trimmed.length === 0) {
         continue;
       }
@@ -54,13 +71,13 @@ export class ExtractiveAnswerAdapter implements GroundedAnswerPort {
       }
 
       const separatorLength = selected.length > 0 ? 2 : 0;
-      if (totalLength + separatorLength + item.text.length > MAX_EXTRACTIVE_CHARS) {
+      if (totalLength + separatorLength + cleanText.length > MAX_EXTRACTIVE_CHARS) {
         if (selected.length === 0) {
           // If the first evidence item exceeds the limit, take a bounded verbatim slice
           selected.push({
             ...item,
             referenceId: trimmedRef,
-            text: truncateSafely(item.text, MAX_EXTRACTIVE_CHARS),
+            text: truncateSafely(cleanText, MAX_EXTRACTIVE_CHARS),
           });
           seenRefs.add(trimmedRef);
         }
@@ -70,9 +87,10 @@ export class ExtractiveAnswerAdapter implements GroundedAnswerPort {
       selected.push({
         ...item,
         referenceId: trimmedRef,
+        text: cleanText,
       });
       seenRefs.add(trimmedRef);
-      totalLength += separatorLength + item.text.length;
+      totalLength += separatorLength + cleanText.length;
     }
 
     if (selected.length === 0) {
