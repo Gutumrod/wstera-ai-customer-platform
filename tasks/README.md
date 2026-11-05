@@ -17,7 +17,7 @@ Read [AGENTS.md](../AGENTS.md) and [Master Brief](../BRIEF.md) before editing.
 - HOST-004 — MERGED (PR #25, `acb0e9e`), BUILD_PASS only; `APP_ENV=lab` mode fails closed. No separate task brief file; no lab or hosted run is claimed.
 - [TASK-HOST-002-HOST-HARDENING.md](TASK-HOST-002-HOST-HARDENING.md) — MERGED (PR #26, fixes in PR #28), BUILD_PASS only; route tests, rate limiting, transactional membership revalidation, M1–M3. PGlite evidence; migrations not run on Supabase.
 - [TASK-WEBCHAT-001-VISITOR-CHAT.md](TASK-WEBCHAT-001-VISITOR-CHAT.md) — MERGED (PR #30–#33), BUILD_PASS only; visitor chat with extractive cited answers and the model path behind an off-by-default flag. No real host serves it yet.
-- [TASK-HANDOFF-002-DURABLE-HANDOFF.md](TASK-HANDOFF-002-DURABLE-HANDOFF.md) — PLANNED; durable pause/resume, staff authorization and atomic send.
+- [TASK-HANDOFF-002-DURABLE-HANDOFF.md](TASK-HANDOFF-002-DURABLE-HANDOFF.md) — implemented locally on `codex/aicp-handoff-002-20261105`; PGlite evidence only, hosted not run, independent review pending.
 - [TASK-G1-ACCEPT-001-ACCEPTANCE-TRACE.md](TASK-G1-ACCEPT-001-ACCEPTANCE-TRACE.md) — PLANNED; one-shop trace on `wstera-lab` and cross-workspace negative cases.
 
 Current PR status and merge gates: [Execution Status](../plans/EXECUTION-STATUS.md). Earlier PR references in task histories describe their original checkpoints.

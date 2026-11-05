@@ -25,8 +25,8 @@
 -- the preflight output and with the project named in the Owner GO. Pooled hosted databases are usually
 -- all called `postgres`, so the database name alone proves nothing.
 --
--- Ownership after the six migrations (includes 20261105000100_web_chat_host.sql): schema aicp, all 8 tables and 9 of the
--- 10 functions belong to aicp_migrator; aicp.current_auth_uid() belongs to the migration runner (the connecting
+-- Ownership after the seven migrations (includes 20261105000100_web_chat_host.sql and 20261105000200_durable_handoff.sql): schema aicp, all 12 tables and 10 of the
+-- 11 functions belong to aicp_migrator; aicp.current_auth_uid() belongs to the migration runner (the connecting
 -- `postgres` user). The runner is NOT a superuser, owns nothing else in aicp, and every migration file ends by
 -- revoking its SET option on aicp_migrator (it keeps only the ADMIN option it got when it created the role).
 -- So the runner cannot DROP SCHEMA aicp (not the owner) nor DROP OWNED BY a role it has no privileges of.
@@ -93,7 +93,7 @@ SELECT 'synthetic users' AS what, string_agg(email, ', ') AS name, count(*)::tex
 -- DANGER: DROP SCHEMA ... CASCADE also drops objects OUTSIDE aicp that depend on aicp objects
 -- (a view, rule, policy, trigger or foreign key in public or any other schema that references an aicp
 -- table or function). The block therefore refuses when:
---   * aicp holds anything other than exactly our 8 tables and our 10 functions (any view, sequence,
+--   * aicp holds anything other than exactly our 12 tables and our 11 functions (any view, sequence,
 --     partitioned table, foreign table, materialized view or extra function fails the check), or
 --   * any object outside aicp depends on an aicp object. Dependents of unknown kind also count as outside
 --     (fail closed), so a refusal can be a false alarm: read the listed objects, then decide as a separate step.
@@ -109,14 +109,16 @@ SELECT 'synthetic users' AS what, string_agg(email, ', ') AS name, count(*)::tex
 --     RAISE EXCEPTION 'schema aicp does not exist; nothing to drop'; END IF;
 --   SELECT array_agg(c.relname::text || ':' || c.relkind::text ORDER BY c.relname) INTO rels
 --     FROM pg_class c WHERE c.relnamespace = 'aicp'::regnamespace AND c.relkind <> 'i';
---   IF rels IS DISTINCT FROM ARRAY['knowledge_chunks:r','knowledge_original_objects:r','knowledge_quarantine_records:r',
---        'knowledge_sources:r','knowledge_versions:r','workspace_connections:r','workspace_memberships:r','workspaces:r'] THEN
---     RAISE EXCEPTION 'aicp does not contain exactly our 8 tables and nothing else (%); stop', rels; END IF;
+--   IF rels IS DISTINCT FROM ARRAY['conversation_events:r','conversation_messages:r','conversations:r','handoff_notifications:r',
+--        'knowledge_chunks:r','knowledge_original_objects:r','knowledge_quarantine_records:r','knowledge_sources:r',
+--        'knowledge_versions:r','workspace_connections:r','workspace_memberships:r','workspaces:r'] THEN
+--     RAISE EXCEPTION 'aicp does not contain exactly our 12 tables and nothing else (%); stop', rels; END IF;
 --   SELECT array_agg(p.proname::text ORDER BY p.proname) INTO funcs FROM pg_proc p WHERE p.pronamespace = 'aicp'::regnamespace;
 --   IF funcs IS DISTINCT FROM ARRAY['approve_knowledge_version','archive_knowledge_source','assert_active_knowledge_writer',
 --        'current_auth_uid','guard_knowledge_chunk_insert','is_active_workspace_member','protect_knowledge_source_identity',
---        'protect_knowledge_version_identity','protect_knowledge_version_visibility','revoke_knowledge_version'] THEN
---     RAISE EXCEPTION 'aicp does not contain exactly our 10 functions (%); stop', funcs; END IF;
+--        'protect_knowledge_version_identity','protect_knowledge_version_visibility','reject_conversation_event_mutation',
+--        'revoke_knowledge_version'] THEN
+--     RAISE EXCEPTION 'aicp does not contain exactly our 11 functions (%); stop', funcs; END IF;
 --   WITH aicp_objs AS (
 --     SELECT 'pg_class'::regclass::oid AS classid, oid FROM pg_class WHERE relnamespace = 'aicp'::regnamespace
 --     UNION ALL SELECT 'pg_proc'::regclass::oid, oid FROM pg_proc WHERE pronamespace = 'aicp'::regnamespace

@@ -1,6 +1,6 @@
 # Human Handoff Module
 
-**Status:** PARTIAL LOCAL CORE in `platform/modules/conversation/`; persistent handoff and channel delivery are not implemented. **Planned phase:** Phase 1 minimal; Phase 2 durable pilot.
+**Status:** HANDOFF-002 candidate implements durable local PostgreSQL state, staff Inbox actions and customer Web Chat staff updates. Hosted migration/apply and independent review are pending. **Scope:** local prototype only.
 
 ## Responsibility
 
@@ -12,4 +12,4 @@ A customer chat command must not silently release operator ownership. The runtim
 
 Do not add vendor SDK calls to core modules. Follow [the master brief](../../../BRIEF.md), [repository structure](../../../architecture/REPOSITORY-STRUCTURE.md) and [adapter contracts](../../../architecture/PORTS-AND-ADAPTERS.md); for deeply nested folders use repository-root paths.
 
-The local in-memory repository is test-only and does not establish a production handoff or delivered staff response.
+`PostgresConversationRepository` and the message/outbox adapters run under the local `knowledge_runtime` role in PGlite tests. The handoff notification outbox has no external dispatcher yet; no LINE or email is sent. Message retention duration and deletion workflow are not configured. This does not establish hosted or production delivery.
