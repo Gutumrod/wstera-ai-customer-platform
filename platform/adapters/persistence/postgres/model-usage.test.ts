@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
-import { NO_ACTOR_FOR_SCHEMA_TESTS, PostgresKnowledgeRepository, type PostgresDatabasePort } from "./knowledge-repository.js";
+import { NO_ACTOR_FOR_SCHEMA_TESTS, PostgresKnowledgeRepository, type PostgresDatabasePort, type PostgresQueryPort, type PostgresRow } from "./knowledge-repository.js";
 import { PostgresModelSpendLedger } from "./model-usage.js";
 import { createFaqVersion, type KnowledgeVersionDraft } from "../../../modules/knowledge/index.js";
 import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
-import { OWNER_A, authenticatedRpcClient, createMigratedDatabase, runtimePort } from "../../../composition/testing/merchant-host-harness.js";
+import { OWNER_A, OWNER_B, authenticatedRpcClient, createMigratedDatabase, runtimePort } from "../../../composition/testing/merchant-host-harness.js";
 import { SupabaseKnowledgeApproval } from "../supabase/knowledge-approval.js";
+import { PostgresConversationRepository } from "./conversation-repository.js";
 
 type Db = Awaited<ReturnType<typeof createMigratedDatabase>>;
 const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
+const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
 const KEY = "synthetic-key-for-tests-only";
 const limits = { maxDailyCostMicros: 1_000, maxDailyCalls: 3 };
 const reservation = (workspaceId: string, cost = 10, overrides: Partial<typeof limits> = {}) => ({
@@ -74,12 +76,12 @@ test("ledger enforces call and cost ceilings per workspace, atomically", async (
   } finally { await database.close(); }
 });
 
-async function addFaq(database: Db, repository: PostgresKnowledgeRepository, sourceId: string, text: string, visibility: "customer" | "internal") {
-  const version = createFaqVersion({ workspace: shopA, sourceId, versionId: "v1", title: sourceId, content: text, visibility });
-  await repository.createSource(shopA, { sourceId, title: sourceId, kind: "faq" });
-  await repository.createVersion(shopA, version as KnowledgeVersionDraft);
-  for (const to of ["validating", "extracting", "indexed"] as const) await repository.transitionVersion(shopA, sourceId, "v1", to);
-  await new SupabaseKnowledgeApproval(authenticatedRpcClient(database, OWNER_A)).approve(shopA, sourceId, "v1");
+async function addFaq(database: Db, repository: PostgresKnowledgeRepository, sourceId: string, text: string, visibility: "customer" | "internal", workspace = shopA) {
+  const version = createFaqVersion({ workspace, sourceId, versionId: "v1", title: sourceId, content: text, visibility });
+  await repository.createSource(workspace, { sourceId, title: sourceId, kind: "faq" });
+  await repository.createVersion(workspace, version as KnowledgeVersionDraft);
+  for (const to of ["validating", "extracting", "indexed"] as const) await repository.transitionVersion(workspace, sourceId, "v1", to);
+  await new SupabaseKnowledgeApproval(authenticatedRpcClient(database, workspace.workspaceId === "shop-b" ? OWNER_B : OWNER_A)).approve(workspace, sourceId, "v1");
 }
 
 test("real host: flag off never calls the provider; flag on answers with citations, records usage, respects caps and hides internal knowledge", async () => {
@@ -93,19 +95,23 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     await addFaq(database, repository, "price-b", "สินค้า Beta ราคา 1,200 บาท", "customer");
     await addFaq(database, repository, "warranty", "สินค้ารับ warranty 2 ปีเต็มนับจากวันที่ซื้อ", "customer");
     await addFaq(database, repository, "internal", "จัดส่งแบบ VIP ใช้เวลา 30 นาที ต้นทุนลับ 999", "internal");
+    await addFaq(database, repository, "other-shop", "รหัสเฉพาะร้านอีกแห่งคือ FOREIGN-ONLY-7319", "customer", shopB);
     const port: PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } = { ...runtimePort(database), async assertLeastPrivilege() {} };
     const { createWebChatRealHost } = await import("../../../composition/web-chat-real-host.js");
     const requests: string[] = [];
     const logs: string[] = [];
     let reply = '{"text":"จัดส่งใช้เวลา 2 วันทำการ ครับ","citationRefs":["evidence-1"]}';
     let triage = "answerable";
+    let gateFailure: "none" | "provider" | "malformed" = "none";
     const fetcher = (async (_url: unknown, init: RequestInit) => {
       const body = String(init.body);
       requests.push(body);
       const isTriage = body.includes("Classify the customer query");
+      if (isTriage && gateFailure === "provider") throw new Error("synthetic provider failure");
       const request = JSON.parse(body) as { messages: Array<{ content: string }> };
       const userPayload = JSON.parse(request.messages[1]!.content) as { query: string; evidence: Array<{ referenceId: string; text: string }> };
-      const result = isTriage
+      const result = isTriage && gateFailure === "malformed" ? "not-json"
+        : isTriage
         ? JSON.stringify({ kind: userPayload.query.includes("นายชื่อไร") ? "small_talk" : userPayload.query.includes("สาขา") ? "insufficient_evidence" : triage })
         : userPayload.query.includes("ราคาสองสินค้า")
           ? JSON.stringify({ text: "Alpha 900 บาท; Beta 1,200 บาท", citationRefs: userPayload.evidence.filter((item) => /Alpha|Beta/u.test(item.text)).map((item) => item.referenceId) })
@@ -144,16 +150,69 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     assert.ok(ledgerRows.every((row) => row.workspace_id === "shop-a" && row.conversation_id === "conv-on" && row.model === "test-model" && row.status === "settled" && row.input_tokens === 70 && row.output_tokens === 12));
     assert.equal(JSON.stringify(ledgerRows).includes("จัดส่ง"), false, "no message text in the ledger");
 
-    // a reply that cites nothing real falls back to the extractive answer (still cited), second call uses the last allowed slot
+    // The invalid citation reaches generation in a fresh window, then falls back without retry.
+    await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
     reply = '{"text":"ฟรีทุกออเดอร์","citationRefs":["evidence-9"]}';
+    const beforeInvalidCitation = requests.length;
     const bad = await ask(host, "conv-on");
     assert.equal(bad.text, "จัดส่งใช้เวลา 2 วันทำการ");
-    // ceiling reached: provider not called again, extractive still answers
+    assert.equal(requests.length, beforeInvalidCitation + 2, "triage and generation both run before the forged citation is rejected");
+    // Ceiling reached at the gate: no model call and extractive still answers.
+    const beforeCapped = requests.length;
     const capped = await ask(host, "conv-on");
     assert.equal(capped.text, "จัดส่งใช้เวลา 2 วันทำการ");
-    assert.equal(requests.length, 2);
+    assert.equal(requests.length, beforeCapped);
     assert.ok(logs.some((line) => line.includes("DAILY_CALL_LIMIT")));
     assert.equal(logs.join("").includes(KEY), false);
+
+    // A foreign shop's approved source is absent from both model payloads and the returned answer.
+    await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+    reply = '{"text":"จัดส่งใช้เวลา 2 วันทำการ ครับ","citationRefs":["evidence-1"]}';
+    const beforeIsolation = requests.length;
+    const isolated = await ask(host, "conv-isolation", "จัดส่งใช้เวลากี่วัน และรหัสเฉพาะร้านอีกแห่งคืออะไร");
+    assert.equal(isolated.text, "จัดส่งใช้เวลา 2 วันทำการ ครับ");
+    assert.equal(requests.length, beforeIsolation + 2);
+    assert.equal(requests.slice(beforeIsolation).join("").includes("FOREIGN-ONLY-7319"), false);
+    assert.equal(isolated.text?.includes("FOREIGN-ONLY-7319"), false);
+
+    // Every model-gate failure is terminal for model use; the legacy path remains extractive.
+    for (const failure of ["provider", "malformed"] as const) {
+      await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+      gateFailure = failure;
+      const beforeFailure: number = requests.length;
+      const fallback = await ask(host, `conv-gate-${failure}`);
+      assert.equal(fallback.text, "จัดส่งใช้เวลา 2 วันทำการ");
+      assert.equal(requests.length, beforeFailure + 1, `${failure} gate failure must not trigger a second model call`);
+    }
+    gateFailure = "none";
+
+    // A ledger outage fails closed before the provider and rejoins the extractive path.
+    const outagePort: PostgresDatabasePort & { assertLeastPrivilege(): Promise<void> } = {
+      ...port,
+      async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>) {
+        return port.transaction((query) => operation({ async query<Row extends PostgresRow>(sql: string, values?: readonly unknown[]) {
+          if (sql.includes("aicp.model_usage")) throw new Error("synthetic ledger outage");
+          return query.query<Row>(sql, values);
+        } }));
+      },
+    };
+    const outageHost = await createWebChatRealHost(outagePort, { env, fetch: fetcher, log });
+    const beforeOutage = requests.length;
+    const outage = await ask(outageHost, "conv-gate-ledger");
+    assert.equal(outage.text, "จัดส่งใช้เวลา 2 วันทำการ");
+    assert.equal(requests.length, beforeOutage, "ledger outage must not call the provider");
+    assert.equal((await database.query("SELECT 1 FROM aicp.model_usage WHERE conversation_id='conv-gate-ledger'")).rows.length, 0);
+
+    // A human-owned conversation bypasses both gate and generation and creates no model usage row.
+    const conversations = new PostgresConversationRepository(runtimePort(database));
+    await conversations.create(shopA, "conv-human-active");
+    await conversations.append(shopA, "conv-human-active", 0, { kind: "handoff_requested", reason: "customer_requested", occurredAt: new Date().toISOString() });
+    await conversations.append(shopA, "conv-human-active", 1, { kind: "operator_claimed", staffId: "staff-a", occurredAt: new Date().toISOString() });
+    const beforeHuman = requests.length;
+    const human = await ask(host, "conv-human-active");
+    assert.equal(human.kind, "ai_paused");
+    assert.equal(requests.length, beforeHuman);
+    assert.equal((await database.query("SELECT 1 FROM aicp.model_usage WHERE conversation_id='conv-human-active'")).rows.length, 0);
 
     // the model declining for lack of evidence becomes a handoff, not an answer
     await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
