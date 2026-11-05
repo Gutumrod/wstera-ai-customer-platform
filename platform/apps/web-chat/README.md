@@ -1,6 +1,6 @@
 # Web AI Chat Widget
 
-**Status:** PARTIAL IMPLEMENTATION (WEBCHAT-001 Chunk 2; awaiting Chunk 1 merge for live SupportOrchestrator wiring). **Planned phase:** Phase 1.
+**Status:** MERGED, BUILD_PASS only (WEBCHAT-001 PR #30–#33 on `main` @ `b080d57`); the page, session, routes and `SupportOrchestrator` wiring exist as code and local tests, but no real host or hosted deployment serves them. **Planned phase:** Phase 1.
 
 ## Responsibility
 
@@ -16,5 +16,6 @@ Customer web chat UI rendering, safe origin binding, signed session management, 
 
 ## Pending
 
-- End-to-end wiring to live `SupportOrchestrator` after Chunk 1 (`audience` support in orchestrator) merges.
+- A real app host that mounts `createWebChatRoutes` and `createWebChatHost`; only composition code and tests call them today.
+- Durable conversation storage (HANDOFF-002); conversations are in memory only.
 - Cross-origin iframe embed packaging (Phase 1 currently enforces `frame-ancestors 'none'`).

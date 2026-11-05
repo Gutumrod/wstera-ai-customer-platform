@@ -1,6 +1,6 @@
 # Task WEBCHAT-001 — Visitor Web Chat vertical slice
 
-**Status: PLANNED — do not start without Owner GO/dispatch and HOST-002 merged.** Base: `main` @ `9b4f997`. Owner decisions 2026-10-25: extractive cited answers are the default; the model-backed path stays behind an off-by-default flag.
+**Status: MERGED — BUILD_PASS only; no real host exists.** Delivered on `main` by PR #30 (version visibility and retrieval audience), PR #31 (Thai visitor chat page, signed session, rate limits, extractive answer port), PR #32 (merchant intake `visibility` field and absolute `messageEndpoint`) and PR #33 (wire to `SupportOrchestrator` with an extractive answerability gate); `main` @ `b080d57`. The visitor chat is composition code (`platform/composition/web-chat-host.ts`, `web-chat-routes.ts`) exercised by local tests only: there is no Next.js route or hosted deployment for it, the migration `20261104000100_knowledge_visibility.sql` has not been run on Supabase, no model is enabled, and durable handoff is still HANDOFF-002. This is not PRODUCTION_READY. Original base: `main` @ `9b4f997`. Owner decisions 2026-10-25: extractive cited answers are the default; the model-backed path stays behind an off-by-default flag.
 
 ## Goal
 
