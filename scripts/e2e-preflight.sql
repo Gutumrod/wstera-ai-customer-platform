@@ -7,6 +7,8 @@
 --   * supabase/migrations/20261023000100_g1_workspace_host.sql:157-161  bucket knowledge-originals ON CONFLICT DO UPDATE
 --   * scripts/seed-local.mjs:32-33  ALTER ROLE knowledge_runtime LOGIN PASSWORD ...
 --   * supabase/migrations/20261022000100_knowledge.sql:1  CREATE SCHEMA IF NOT EXISTS aicp, then plain CREATE TABLE (fails on a name clash)
+--   * supabase/migrations/20261103000200_host_hardening_revoke.sql and 20261104000100_knowledge_visibility.sql create
+--     functions, triggers and a column by plain CREATE/ADD (no IF NOT EXISTS); check 21 below only looks for name clashes
 --
 -- How to read the result: every row has status OK / INFO / STOP. ANY row with status STOP means:
 -- do not apply, do not seed, report to the Owner. A fresh disposable project should show no STOP.
@@ -61,6 +63,18 @@ exposed AS (
   CROSS JOIN LATERAL unnest(drs.setconfig) AS s(setting)
   WHERE s.setting LIKE 'pgrst.db_schemas=%'
 ),
+new_name_clashes AS (
+  SELECT 'function ' || p.proname AS name FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'aicp' AND p.proname IN ('revoke_knowledge_version', 'archive_knowledge_source',
+        'protect_knowledge_source_identity', 'protect_knowledge_version_visibility')
+  UNION ALL
+  SELECT 'trigger ' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'aicp' AND NOT t.tgisinternal
+    AND t.tgname IN ('knowledge_source_identity_guard', 'knowledge_version_visibility_guard')
+  UNION ALL
+  SELECT 'column knowledge_versions.visibility' FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'aicp' AND c.relname = 'knowledge_versions' AND a.attname = 'visibility' AND a.attnum > 0 AND NOT a.attisdropped
+),
 auth_state AS (
   SELECT (SELECT count(*) FROM auth.users) AS users,
          (SELECT count(*) FROM auth.users WHERE email ILIKE '%@example.test') AS synthetic_users
@@ -89,6 +103,10 @@ checks(ord, check_name, status, detail) AS (
          CASE WHEN EXISTS (SELECT 1 FROM aicp_schema) THEN 'STOP' ELSE 'OK' END,
          COALESCE((SELECT 'EXISTS owner=' || owner || ' relations=' || (SELECT n FROM aicp_relations) FROM aicp_schema),
                   'absent (migration 1 will create it)')
+  UNION ALL
+  SELECT 21, 'new function/trigger/column names already taken in aicp (read-only clash check)',
+         CASE WHEN (SELECT count(*) FROM new_name_clashes) > 0 THEN 'STOP' ELSE 'OK' END,
+         COALESCE((SELECT string_agg(name, ', ') FROM new_name_clashes), 'none')
   UNION ALL
   SELECT 30, 'storage bucket knowledge-originals exists',
          CASE WHEN EXISTS (SELECT 1 FROM bucket) THEN 'STOP' ELSE 'OK' END,

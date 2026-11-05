@@ -54,6 +54,7 @@ UNION ALL SELECT 'synthetic users', string_agg(email, ', '), count(*)::text FROM
 -- DELETE FROM auth.users WHERE email ILIKE '%@example.test';   -- repeat deliberately for each synthetic user you created
 
 -- Section 3: drop schema aicp. The guard refuses unless aicp holds exactly our 8 tables.
+-- CASCADE also covers the functions, triggers and the visibility column added by the 20261103000100/200 and 20261104000100 migrations.
 -- This deletes every product row. It also removes the grants we gave `authenticated` on this schema.
 -- DO $$ DECLARE found text[]; BEGIN
 --   IF current_setting('e2e.rollback_ack', true) IS DISTINCT FROM 'DISPOSABLE-TEST-PROJECT-ONLY' THEN
