@@ -1,6 +1,6 @@
 # Work Queue
 
-Updated: 2026-11-02 against `main` at `e47bb57`. Merged code and product acceptance are tracked separately.
+Updated: 2026-11-05 (evening) against `main` at `303312c`. ตารางด้านล่างบันทึกเมื่อ 2026-11-02 หัวข้อ "อัปเดต 2026-11-05" ท้ายไฟล์ชนะแถวที่ขัดกัน. Merged code and product acceptance are tracked separately.
 
 ## Done on main
 
@@ -27,3 +27,19 @@ Updated: 2026-11-02 against `main` at `e47bb57`. Merged code and product accepta
 | PromptPay | PR #19 pure payload builder merged; not wired to payments | Real bank-app scan and independent vector evidence before any separately approved wiring task |
 
 G2 real LINE sandbox follows G1. G3 onboarding and G4 commercial validation remain gated. Do not deploy, run hosted migrations, or incur provider spend without separate Owner approval.
+
+## อัปเดต 2026-11-05
+
+ระดับที่อ้างได้สูงสุด: รันครั้งเดียวบนโปรเจกต์ทดสอบด้วยข้อมูลสังเคราะห์ (หลักฐาน `evidence-aicp-20261105/` ใน vault)
+
+| งาน | สถานะ | ถัดไป |
+|---|---|---|
+| Authenticated host / knowledge upload / approval / search | E2E ระดับ API ผ่านบนโปรเจกต์ทดสอบ (26/26, ซ้ำ 25/26 จากสคริปต์) | Owner ลองฟอร์ม login และ knowledge console บนเบราว์เซอร์ |
+| Web Chat | merge แล้ว ลองมือบนหน้าแชตกับฐานทดสอบจริงผ่าน | วัดความเร็วบนโฮสต์จริง (ดู B-06) |
+| Durable handoff | merge แล้ว บั๊ก 3 ข้อแก้ใน PR #44 ลองซ้ำผ่าน (`50`, `51`) | Owner ลองหน้า `/handoffs` บนเบราว์เซอร์ |
+| Live model และ usage | เส้นโมเดลอยู่ใน main (PR #45) flag ปิดเป็นค่าเริ่มต้น; เรียกโมเดลจริง 7 ครั้งบนข้อมูลสังเคราะห์ ledger และเพดานตกกลับทำงาน | ปรับด่าน answerability (B-07) |
+| รายการใหม่จากการรัน | region 8 วินาทีต่อข้อความ (B-06), ด่าน answerability (B-07), ไม่มี route revoke (B-08), อัปโหลดเนื้อซ้ำไม่กัน (B-09), extractive แสดงคำสั่งซ่อน (B-10) | Owner จัดลำดับ |
+| เก็บกวาดโปรเจกต์ทดสอบ | ยังไม่ทำ; rollback ยังไม่เคยลอง | ลบค่าลับ ปิดโปรเจกต์ หรือใช้ `scripts/e2e-rollback.sql` |
+| G1 acceptance | ยังไม่ครบ ไม่มีการตรวจอิสระของหลักฐานชุดนี้ | ตรวจอิสระ + ลองเบราว์เซอร์ที่ค้าง |
+
+ไม่มีการ deploy ไม่มี traffic จริง ไม่มีค่าใช้จ่ายจริง G2 ถึง G4 ยังถูกกั้นด้วย G1
