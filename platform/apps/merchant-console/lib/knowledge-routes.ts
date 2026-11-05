@@ -55,15 +55,10 @@ export function createKnowledgeRoutes(requireHost: () => Promise<KnowledgeHostCo
       try {
         assertSameOriginRead(request);
         const { repository, intakeAudit, identity } = await requireHost();
-        const sources = await repository.listSources(identity.workspace);
-        const data = [];
-        for (const source of sources) {
-          const versions = await repository.listVersions(identity.workspace, source.sourceId);
-          data.push({
-            source: { sourceId: source.sourceId, title: source.title, kind: source.kind, status: source.status, createdAt: source.createdAt },
-            versions: versions.map(versionSummary),
-          });
-        }
+        const data = (await repository.listSourceSummaries(identity.workspace)).map(({ source, versions }) => ({
+          source: { sourceId: source.sourceId, title: source.title, kind: source.kind, status: source.status, createdAt: source.createdAt },
+          versions,
+        }));
         const quarantine = await intakeAudit.listQuarantine(identity.workspace);
         return Response.json({ data, quarantine: quarantine.map((record) => ({
           attemptId: record.attemptId,

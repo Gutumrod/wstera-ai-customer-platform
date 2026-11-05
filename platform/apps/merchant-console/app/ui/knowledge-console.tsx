@@ -206,6 +206,10 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
       setRevokingVersion(null);
       setRevokeReason("");
       setRevokeConfirmed(false);
+      if (viewingVersion === `${sourceId}:${versionId}`) {
+        setViewingVersion(null);
+        setVersionContent(null);
+      }
       await reload();
     } catch (error: unknown) {
       fail(error instanceof Error && error.message ? error.message : "ถอนเอกสารไม่สำเร็จ ลองใหม่อีกครั้ง");
@@ -285,7 +289,7 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
                 <span className="muted">{version.chunkCount} ส่วน</span>
               </div>
               {version.status === "indexed" && role === "owner" && <button className="button-small" disabled={busy} aria-busy={busy} onClick={() => void approve(source.sourceId, version.versionId)}>อนุมัติ</button>}
-              {(version.status === "indexed" || version.status === "approved") && role === "owner" && <button className="button-small button-quiet" disabled={busy} aria-busy={busy} onClick={() => void viewVersion(source.sourceId, version.versionId)}>{viewingVersion === `${source.sourceId}:${version.versionId}` ? "ปิดเนื้อหา" : "ดูเนื้อหา"}</button>}
+              {((version.status === "indexed" || version.status === "approved") || viewingVersion === `${source.sourceId}:${version.versionId}`) && role === "owner" && <button className="button-small button-quiet" disabled={busy} aria-busy={busy} onClick={() => void viewVersion(source.sourceId, version.versionId)}>{viewingVersion === `${source.sourceId}:${version.versionId}` ? "ปิดเนื้อหา" : "ดูเนื้อหา"}</button>}
               {version.status === "approved" && role === "owner" && revokingVersion !== `${source.sourceId}:${version.versionId}` && <button className="button-small button-danger" disabled={busy} onClick={() => { setRevokingVersion(`${source.sourceId}:${version.versionId}`); setRevokeReason(""); setRevokeConfirmed(false); }}>ถอนเอกสาร</button>}
               {role === "owner" && viewingVersion === `${source.sourceId}:${version.versionId}` && <div className="knowledge-preview" aria-live="polite">{versionContent ? <><p className="muted">เนื้อหาจะแสดงเป็นข้อความเท่านั้น</p><pre>{versionContent.content}</pre>{versionContent.truncated && <p className="hint">แสดง 20,000 ตัวอักษรแรก เนื้อหาถูกตัดบางส่วน</p>}</> : <p className="muted">กำลังโหลดเนื้อหา…</p>}</div>}
               {role === "owner" && revokingVersion === `${source.sourceId}:${version.versionId}` && <form className="revoke-form" onSubmit={(event) => void revoke(source.sourceId, version.versionId, event)}>
