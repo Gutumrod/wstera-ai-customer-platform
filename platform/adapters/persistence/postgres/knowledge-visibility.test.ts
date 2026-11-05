@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "./knowledge-repository.js";
@@ -12,12 +10,10 @@ import type {
 } from "../../../contracts/data/knowledge.js";
 import { createFaqVersion, retrieveKnowledge } from "../../../modules/knowledge/index.js";
 import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
+import { createMigratedDatabase } from "../../../composition/testing/merchant-host-harness.js";
 
 const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
-const basePath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
-const visibilityPath = resolve(process.cwd(), "supabase/migrations/20261104000100_knowledge_visibility.sql");
-
 const INTERNAL_TEXT = "รหัสลับภายใน INTERNAL-X1";
 const CUSTOMER_TEXT = "จัดส่งภายใน 2 วันทำการ";
 
@@ -37,10 +33,7 @@ function databasePort(database: PGlite): PostgresDatabasePort {
 }
 
 async function createRepository() {
-  const database = new PGlite();
-  await database.exec("CREATE ROLE knowledge_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS;");
-  await database.exec(await readFile(basePath, "utf8"));
-  await database.exec(await readFile(visibilityPath, "utf8"));
+  const database = await createMigratedDatabase();
   await database.exec(`
     GRANT USAGE ON SCHEMA aicp TO knowledge_runtime;
     GRANT SELECT ON aicp.knowledge_sources TO knowledge_runtime;

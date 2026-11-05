@@ -105,6 +105,7 @@ test("Supabase local migrations stay in sync and enforce workspace membership/st
        WHERE n.nspname = 'aicp' ORDER BY p.proname`,
     );
     assert.deepEqual(functionOwners.rows, [
+      { function_name: "current_auth_uid", owner: "postgres" },
       { function_name: "guard_knowledge_chunk_insert", owner: "aicp_migrator" },
       { function_name: "is_active_workspace_member", owner: "aicp_migrator" },
       { function_name: "protect_knowledge_version_identity", owner: "aicp_migrator" },
