@@ -1,6 +1,6 @@
 # Core Contract v0.1 (ร่าง รอผู้ตรวจอิสระ; Owner ตัดสิน 2 ข้อใน §4 แล้ว)
 
-**สถานะ:** DRAFT · docs-only · Owner ตัดสินข้อ 4.1 และ 4.2 แล้ว (D-20261104-06, 4 พ.ย. 2026) แต่ยังไม่มีผู้ตรวจอิสระ และ Owner ยังไม่ล็อกทั้งฉบับ · ระดับที่อ้างได้สูงสุด **BUILD_PASS** (เอกสารนี้ไม่ได้รันเทสต์ใดเพิ่ม) · ฐานที่ตรวจ: `origin/main` = `87906b4`
+**สถานะ:** DRAFT · docs-only · Owner ตัดสินข้อ 4.1 และ 4.2 แล้ว (D-20261104-06, 4 พ.ย. 2026) แต่ยังไม่มีผู้ตรวจอิสระ และ Owner ยังไม่ล็อกทั้งฉบับ · ระดับที่อ้างได้สูงสุด **BUILD_PASS** (เอกสารนี้ไม่ได้รันเทสต์ใดเพิ่ม) · ฐานที่ตรวจ: `origin/main` = `b080d57`
 
 เอกสารนี้ยังไม่ใช่ contract ที่ล็อก ข้อเสนอใน "contract v0.1 ที่เสนอ" ของแต่ละข้อจะมีผลเมื่อ Owner ล็อกเท่านั้น ตัวอย่าง TypeScript เป็นภาพประกอบ ไม่ใช่โค้ดที่จะ commit ตามไฟล์นี้ repo นี้ยัง public: ห้ามใส่ secret, project ref จริง, กฎร้านจริง หรือข้อมูลลูกค้า
 
@@ -82,7 +82,7 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 - `platform/contracts/tenancy/merchant.ts:12` `export interface MerchantMembershipRepositoryPort {`
 - ตาราง `supabase/migrations/20261023000100_g1_workspace_host.sql:24` `  channel text NOT NULL CHECK (channel IN ('web', 'line')),` (ตาราง `workspace_connections`, `UNIQUE (connection_id, channel)`)
 - `supabase/migrations/20261103000100_host_hardening.sql:100` `  USING (channel = 'web' AND aicp.is_active_workspace_member(workspace_id));` นโยบายอ่านจำกัดเฉพาะ `web` (M3 ตาม handoff)
-- LINE ฝั่งเดิมเก็บ secret ใน `platform/src/line/ingress.ts:13` `  channelSecret: string;` ผ่าน `LineConnectionLookup` (ingress.ts:21) ที่ inject เข้ามา; ที่เก็บ channel secret แบบ durable ยังไม่มีใน schema (ค้นไม่พบคอลัมน์/ตาราง secret ใน 4 migration ณ `87906b4` (รวม `20261103000200_host_hardening_revoke.sql`))
+- LINE ฝั่งเดิมเก็บ secret ใน `platform/src/line/ingress.ts:13` `  channelSecret: string;` ผ่าน `LineConnectionLookup` (ingress.ts:21) ที่ inject เข้ามา; ที่เก็บ channel secret แบบ durable ยังไม่มีใน schema (ค้นไม่พบคอลัมน์/ตาราง secret ใน 5 migration ณ `b080d57` (รวม `20261103000200_host_hardening_revoke.sql` และ `20261104000100_knowledge_visibility.sql`))
 
 **Contract v0.1 ที่เสนอ:**
 - `TrustedWorkspaceContext` คงรูปเดิม เป็นค่าเดียวที่ module ในแกนกลางรับ
@@ -101,14 +101,14 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 - `platform/contracts/data/conversation.ts:25` `export interface ConversationRepositoryPort {` (`create`, `load`, `append` พร้อม `expectedVersion`)
 - `platform/contracts/data/conversation.ts:24` คอมเมนต์ระบุว่า durable replay protection ต้องมี "adapter-owned unique delivery ledger"
 - `platform/modules/conversation/index.ts:90-91` `export function canSendAiReply(conversation: ConversationSnapshot): boolean {` / `  return conversation.status === "ai_active";`
-- `SupportOrchestrator` ตรวจสถานะสองครั้ง: `support-orchestrator.ts:269` และ `:370` `if (... .snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });`
+- `SupportOrchestrator` ตรวจสถานะสองครั้ง: `support-orchestrator.ts:281` และ `:382` `if (... .snapshot.status !== "ai_active") return Object.freeze({ kind: "ai_paused" });`
 - ที่เก็บ durable: ไม่พบตาราง conversation ใน `supabase/migrations/*.sql` (ค้น `create table` แล้วมีเฉพาะ knowledge, workspace, membership, connection, `knowledge_quarantine_records`, `knowledge_original_objects`) เทียบกับ `tasks/TASK-HANDOFF-002-DURABLE-HANDOFF.md` ที่ยังเป็น PLANNED; `platform/modules/handoff/README.md` อ้างใน task ว่า PARTIAL (ผู้เขียนไม่ได้เปิดไฟล์นั้นเอง = UNVERIFIED)
 
 **Contract v0.1 ที่เสนอ:**
 - คง state machine 3 สถานะและ event 4 ชนิดตามเดิม (`handoff_requested`, `operator_claimed`, `staff_reply_delivered`, `handoff_released`)
 - กติกาที่ล็อก: pause ต้อง durable; **ไม่มี event ใดที่ผู้เยี่ยมชมหรือลูกค้าปล่อย pause ได้**; resume ต้องผ่าน `StaffAuthorizationPort` ที่ resolve จาก session + membership ที่ active และต้องบังคับที่ **ชั้นเก็บข้อมูล** ไม่ใช่แค่ชั้นเรียก: ปัจจุบัน `assertCanRelease` กับ `repository.append` เป็นสองคำสั่งแยก (`platform/modules/conversation/index.ts:176-177`) และ `withEvent` ตรวจแค่ `assertId(event.staffId)` (`:77-85`) จึงเปิด TOCTOU และเขียน `handoff_released` ด้วย `staffId` ที่ผู้เรียกส่งมาได้ · ข้อกำหนด v0.1: ห้ามรับ `staffId` จากผู้เรียก ให้ derive จาก session · กฎนี้ใช้กับ **ทุก event ที่มี `staffId`** ไม่ใช่เฉพาะ release: `claimHandoff` (`index.ts:123-138`) และ `recordStaffReplyDelivery` (`index.ts:142-159`) มีรูปแบบ load → assert → append แยกกันเหมือนกัน และตรวจสิทธิ์ใน transaction/ฟังก์ชันฝั่งฐานข้อมูลเดียวกับการเขียน (แบบเดียวกับ `aicp.approve_knowledge_version` ที่ใช้ `auth.uid()` ใน SECURITY DEFINER) หรือให้ `append` รับ handle ของ transaction เดียวกับการ assert
 - การส่งต้อง atomic (compare-and-send หรือ outbox guard ตามข้อ 3.1) กันส่งซ้ำ/ส่งคำตอบ AI ขณะ pause
-- ช่อง "ใครเป็นผู้ส่ง" (ai / staff / customer) และ thread identity ที่ใช้ร่วมกันทั้ง web และ line ให้ใช้ `conversationId` เดียวกันเป็นกุญแจ ไม่ให้มีรูปแบบ id เฉพาะ channel ใน contract · `conversationId` ต้องออกโดย server, สุ่มพอ และผูกกับ `(workspaceId, connectionId, principal)` โดยตรวจซ้ำทุกครั้งที่ load/append (ปัจจุบัน `support-orchestrator.ts:384` โหลดด้วย workspace + conversationId โดยไม่ตรวจเจ้าของ)
+- ช่อง "ใครเป็นผู้ส่ง" (ai / staff / customer) และ thread identity ที่ใช้ร่วมกันทั้ง web และ line ให้ใช้ `conversationId` เดียวกันเป็นกุญแจ ไม่ให้มีรูปแบบ id เฉพาะ channel ใน contract · `conversationId` ต้องออกโดย server, สุ่มพอ และผูกกับ `(workspaceId, connectionId, principal)` โดยตรวจซ้ำทุกครั้งที่ load/append (ปัจจุบัน `support-orchestrator.ts:396` โหลดด้วย workspace + conversationId โดยไม่ตรวจเจ้าของ)
 
 **เจ้าของ:** A (งาน HANDOFF-002) · **ผู้ใช้:** B
 
@@ -117,17 +117,17 @@ interface OutboundPort { enqueue(ctx: TrustedWorkspaceContext, rec: Omit<Outboun
 ### 3.4 Knowledge: source/version/chunk/approval + visibility
 
 **สถานะในโค้ด:**
-- `platform/contracts/data/knowledge.ts:35` `export type KnowledgeVersionStatus =` (8 สถานะ: `uploaded`, `validating`, `extracting`, `indexed`, `approved`, `quarantined`, `failed`, `revoked`)
-- `platform/contracts/data/knowledge.ts:162` `export interface KnowledgeRepositoryPort {`; `:193` `export interface KnowledgeApprovalPort {`; `:197` `export interface KnowledgeRetrievalPort {`
-- กรองก่อน retrieval: `platform/modules/knowledge/index.ts:493` `    if (item.source.status !== "active" || item.version.status !== "approved") continue;`
+- `platform/contracts/data/knowledge.ts:42` `export type KnowledgeVersionStatus =` (8 สถานะ: `uploaded`, `validating`, `extracting`, `indexed`, `approved`, `quarantined`, `failed`, `revoked`)
+- `platform/contracts/data/knowledge.ts:177` `export interface KnowledgeRepositoryPort {`; `:212` `export interface KnowledgeApprovalPort {`; `:216` `export interface KnowledgeRetrievalPort {`
+- กรองก่อน retrieval: `platform/modules/knowledge/index.ts:524` `    if (item.source.status !== "active" || item.version.status !== "approved") continue;`
 - RLS แบบ `app.workspace_id`: `supabase/migrations/20261022000100_knowledge.sql:134` `  USING (workspace_id = current_setting('app.workspace_id', true))`
-- **visibility ไม่มีในโค้ด:** ค้น `visibility` ใน `platform/` และ `supabase/` (.ts/.sql) ไม่พบ (ผลค้นหาข้อความ) ตรงกับแผน 3 สายที่ว่า "approval มีแล้ว visibility ยังไม่มี"
+- **visibility มีในโค้ดแล้ว (PR #30):** `KnowledgeVisibility = "internal" | "customer"` (`platform/contracts/data/knowledge.ts:39`), `KnowledgeAudience = "customer" | "staff"` (`:41`), คอลัมน์ `visibility` ระดับ version ค่าเริ่มต้น `internal` พร้อม trigger กันแก้ภายหลังใน `supabase/migrations/20261104000100_knowledge_visibility.sql`, และ `KnowledgeRetrievalQuery.audience` (`knowledge.ts:152`); PR #32 เพิ่มการรับ `visibility` ตอนอัปโหลดผ่าน merchant console · migration นี้ยังไม่เคยรันบน Supabase จริง
 - เส้นทางอนุมัติ: ฟังก์ชัน DB `aicp.approve_knowledge_version` ใน `supabase/migrations/20261103000100_host_hardening.sql:36` (PR #26 ระบุว่ายังไม่เคยรันบน Supabase จริง = UNVERIFIED ว่าทำงานจริง)
 
 **Contract v0.1 ที่เสนอ (ขึ้นกับคำตัดสินข้อ 4.1):**
 - เพิ่ม `visibility: "internal" | "customer"` ที่ระดับ **version** (หรือ source; ดูข้อ 4.1) ค่าเริ่มต้นเมื่อไม่ระบุ = `internal` (fail closed)
 - `KnowledgeRetrievalQuery` เพิ่มฟิลด์ **audience** (`"customer" | "staff"`) ที่ server กำหนดจาก **ชนิด principal ที่ยืนยันแล้ว** ไม่ใช่จาก `ChannelId` และไม่รับจาก request (console ร้านกับแชตผู้เยี่ยมชมมี `channel = "web"` เหมือนกัน: `platform/modules/tenancy/merchant-identity.ts:46`): session สมาชิกร้านที่ active = `staff` เห็นได้ทั้งสอง; ผู้เยี่ยมชมแบบไม่ระบุตัวและ LINE ลูกค้า = `customer` เห็นเฉพาะ chunk ที่ `visibility = customer` · ฟิลด์นี้ไม่มีค่าเริ่มต้น ถ้าไม่ระบุหรือตัดสินไม่ได้ = `customer` (fail closed) · ที่ชั้นชนิดข้อมูล retrieval ควรรับ principal ที่ยืนยันแล้ว (branded type) หรือ derive audience ภายใน port เอง ไม่ใช่ฟิลด์ที่ caller ใน process เติมได้ (รายละเอียดตัดสินที่ WEBCHAT-001) · ต้องมีเทสต์ว่าการปลอม audience จากฝั่งลูกค้าถูกปฏิเสธ
-- กฎ: การตรวจ freshness ต้องตรวจ visibility ซ้ำด้วย กัน visibility เปลี่ยนระหว่างสร้างคำตอบ · มีสองชื่อในโค้ด: `areCurrentCitations` (`platform/contracts/data/knowledge.ts:183`) และ `EvidenceFreshnessPort.areCurrentAndApproved(workspace, citations)` (`support-orchestrator.ts:30`) ซึ่ง **ไม่มีพารามิเตอร์ audience** และ `KnowledgeCitation` (`knowledge.ts:97-103`) ไม่มีฟิลด์ visibility = ต้องเพิ่ม `audience` ใน port นี้ เป็น breaking delta ที่ต้องรายงานก่อนแก้ (ดู UNVERIFIED ข้อ 8)
+- กฎ: การตรวจ freshness ต้องตรวจ visibility ซ้ำด้วย กัน visibility เปลี่ยนระหว่างสร้างคำตอบ · มีสองชื่อในโค้ด: `areCurrentCitations` (`platform/contracts/data/knowledge.ts:198`) และ `EvidenceFreshnessPort.areCurrentAndApproved(workspace, citations, audience)` (`support-orchestrator.ts:38`) ซึ่ง ณ `b080d57` **มีพารามิเตอร์ `audience: KnowledgeAudience` แล้ว** ส่วน `KnowledgeCitation` (`knowledge.ts:110-116`) ยังไม่มีฟิลด์ visibility
 - การเปลี่ยน visibility ของ version ที่ approve แล้ว ถือเป็น event ที่ต้อง audit และต้องไม่ย้อนให้ citation เก่าอ้างได้ · ใช้แบบอย่างเดียวกับ `aicp.revoke_knowledge_version` / `archive_knowledge_source` ใน `supabase/migrations/20261103000200_host_hardening_revoke.sql`
 
 ```ts
@@ -164,11 +164,11 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 ### 3.6 Answer path
 
 **สถานะในโค้ด:**
-- `platform/modules/ai-engine/support-orchestrator.ts:235` `export class SupportOrchestrator {` รับ `SupportOrchestratorPorts` (`:64`) = `conversations`, `retrieval`, `evidenceFreshness`, `answerability`, `answer`, `handoff`
-- ลำดับ: เช็ค `ai_active` (`:269`) → `retrieval.search` (`:275`: `retrieval = await this.ports.retrieval.search({ workspace: request.workspace, query: request.query, limit: this.evidenceLimit });`) → answerability → generate → ตรวจ citation → `areCurrentAndApproved` (`:362`) → เช็ค `ai_active` ซ้ำ (`:370`) → ตอบ; ล้มเหลว/ไม่พอ = `handoff.request` (`:420`)
-- ผลลัพธ์ `SupportReply` (`:55`) 7 แบบ รวม `ai_paused` และ `conversation_changed`
-- `GroundedAnswerPort` (`:24`) คืนข้อความ + `citationRefs` ที่เป็น reference ทึบ แล้ว engine แมปเป็น citation มาตรฐานเอง
-- **extractive default ยังไม่มีในโค้ด:** คำว่า `extractive` ปรากฏเฉพาะในเอกสาร (`tasks/TASK-WEBCHAT-001-VISITOR-CHAT.md`, `plans/*`) ไม่มีในไฟล์ .ts/.sql; การทำ port แบบ extractive เป็นงาน WEBCHAT-001 (ยัง PLANNED)
+- `platform/modules/ai-engine/support-orchestrator.ts:243` `export class SupportOrchestrator {` รับ `SupportOrchestratorPorts` (`:72`) = `conversations`, `retrieval`, `evidenceFreshness`, `answerability`, `answer`, `handoff`
+- ลำดับ: เช็ค `ai_active` (`:281`) → `retrieval.search` (`:287`: `retrieval = await this.ports.retrieval.search({ workspace: request.workspace, query: request.query, limit: this.evidenceLimit, audience: request.audience });`) → answerability → generate → ตรวจ citation → `areCurrentAndApproved` (`:374`) → เช็ค `ai_active` ซ้ำ (`:382`) → ตอบ; ล้มเหลว/ไม่พอ = `handoff.request` (`:432`)
+- ผลลัพธ์ `SupportReply` (`:63`) 7 แบบ รวม `ai_paused` และ `conversation_changed`
+- `GroundedAnswerPort` (`:32`) คืนข้อความ + `citationRefs` ที่เป็น reference ทึบ แล้ว engine แมปเป็น citation มาตรฐานเอง
+- **extractive port มีในโค้ดแล้ว (PR #31/#33):** `platform/adapters/answers/extractive/extractive-answer-port.ts` และ `extractive-answerability-port.ts`; `platform/adapters/answers/answer-port-factory.ts` สร้าง model port เฉพาะเมื่อ `modelEnabled === true`; `platform/composition/web-chat-host.ts` ต่อ `SupportOrchestrator` กับ port เหล่านี้ · ยังไม่มีโฮสต์จริง (ไม่มี Next route ของ web chat) ระดับ BUILD_PASS
 
 **Contract v0.1 ที่เสนอ:**
 - ล็อก `SupportOrchestrator` + ports เป็นเส้นทางเดียวของคำตอบสำหรับทุก channel
@@ -251,7 +251,7 @@ interface BusinessConfigurationPort { loadActive(ctx: TrustedWorkspaceContext): 
 2. แผน 3 สายและ handoff ที่ใช้อ้างอยู่บน branch `origin/claude/project-thread-8xgsii` ยังไม่ merge เข้า main; ตารางเจ้าของ/ผู้ใช้ในข้อ 2 จึงเป็นข้อเสนอ
 3. `platform/modules/handoff/README.md` ว่า PARTIAL: อ้างจาก task ไม่ได้เปิดไฟล์
 4. migration, ฟังก์ชัน `approve_knowledge_version`, PostgREST RPC, `auth.uid()` ใต้ SECURITY DEFINER และนโยบาย RLS ไม่เคยรันบน Supabase จริง (PR #26 รายงานเอง); เอกสารนี้อ่านจากตัวไฟล์ SQL เท่านั้น
-5. ข้อความ "ไม่มี" (visibility, outbox, Business Configuration, extractive ในโค้ด, ตาราง conversation, ที่เก็บ channel secret) มาจากการค้นข้อความใน `platform/` และ `supabase/` ไม่ใช่การพิสูจน์ว่าไม่มีในทุกที่
+5. ข้อความ "ไม่มี" (outbox, Business Configuration, ตาราง conversation, ที่เก็บ channel secret) มาจากการค้นข้อความใน `platform/` และ `supabase/` ไม่ใช่การพิสูจน์ว่าไม่มีในทุกที่
 6. `platform/modules/*/README.md` อื่นและ `platform/src/core` ไม่ได้เปิดอ่านครบ สถานะ "partial/มีแล้ว" ของ module อ้างจากฟังก์ชันที่เปิดดูเท่านั้น
 7. ความเข้ากันได้ของโค้ดปัจจุบันกับ instance แยกต่อร้านและ SaaS พร้อมกัน ยังไม่เคยทดลอง
 8b. การผูก `conversationId` กับ principal (ข้อ 3.3) ต้องเพิ่ม principal binding ใน `ConversationRepositoryPort` และ `ConversationSnapshot` (`platform/contracts/data/conversation.ts:6-16, 26-33` ปัจจุบันไม่มี principal) = breaking delta ที่ต้องรายงานก่อนแก้
