@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
-import type { KnowledgeCitation, KnowledgeCitationLocator } from "../contracts/data/knowledge.js";
+import type { KnowledgeCitation } from "../contracts/data/knowledge.js";
 import type { SupportReply } from "../modules/ai-engine/support-orchestrator.js";
 import { createRateLimiter, type RateLimit } from "../apps/merchant-console/lib/rate-limit.js";
 import {
@@ -19,7 +19,7 @@ export type SupportResponder = (input: Readonly<{
   conversationId: string;
   query: string;
   audience: "customer";
-}>) => Promise<SupportReply>;
+}>) => Promise<SupportReply | Readonly<{ kind: "small_talk"; text: string }>>;
 
 export type CitationDescription = Readonly<{
   title: string;
@@ -42,27 +42,8 @@ export type WebChatRoutesDeps = Readonly<{
   now?: () => number;
 }>;
 
-export type CitationChip = Readonly<{
-  title: string;
-  sourceVersionId: string;
-  position?: string;
-  locator?: KnowledgeCitationLocator;
-}>;
-
-function formatLocatorPosition(locator: KnowledgeCitationLocator): string {
-  switch (locator.kind) {
-    case "page":
-      return `หน้า ${locator.page}`;
-    case "row":
-      return `แถว ${locator.row}`;
-    case "span":
-      return `ช่วง ${locator.start}-${locator.end}`;
-    case "chunk":
-      return `ส่วนที่ ${locator.chunkIndex + 1}`;
-    default:
-      return "";
-  }
-}
+/** Only the document title reaches the browser; versions and locators stay server-side. */
+export type CitationChip = Readonly<{ title: string }>;
 
 function jsonResponse(status: number, data: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -391,12 +372,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
                 if (deps.describeCitation) {
                   const desc = await deps.describeCitation(workspace, citation);
                   if (desc && typeof desc.title === "string" && desc.title.trim().length > 0) {
-                    chips.push({
-                      title: desc.title,
-                      sourceVersionId: citation.sourceVersionId,
-                      position: formatLocatorPosition(citation.locator),
-                      locator: citation.locator,
-                    });
+                    if (!chips.some((chip) => chip.title === desc.title)) chips.push({ title: desc.title });
                   }
                 }
               }
@@ -408,9 +384,24 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
             });
           }
 
-          case "handoff_requested":
-          case "handoff_unavailable":
+          case "small_talk":
+            return jsonResponse(200, { kind: "greeting", text: reply.text });
+
           case "ai_paused":
+            return jsonResponse(200, {
+              kind: "uncertain",
+              handoff: true,
+              text: "ส่งเรื่องให้พนักงานแล้วครับ ขอให้รอพนักงานตอบกลับสักครู่",
+            });
+
+          case "handoff_requested":
+            return jsonResponse(200, {
+              kind: "uncertain",
+              handoff: true,
+              text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ในระบบ ได้ส่งเรื่องให้พนักงานแล้ว กรุณารอพนักงานตอบกลับครับ",
+            });
+
+          case "handoff_unavailable":
             return jsonResponse(200, {
               kind: "uncertain",
               text: "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ในระบบ หากต้องการสอบถามเพิ่มเติม สามารถกดปุ่มขอคุยกับพนักงานได้ครับ",

@@ -440,7 +440,7 @@ test("message route executes handoff action and calls requestHandoff with server
   assert.equal(handoffCalls[0]!.conversationId, session.conversationId);
 });
 
-test("message route returns answer with citation chips describing source title and position", async () => {
+test("message route returns answer with title-only citation chips", async () => {
   const { routes, responderCalls } = createHarness();
   const session = issueWebChatSession({ connectionId: TRUSTED_WORKSPACE.connectionId });
   const token = signSessionToken(session, TEST_SECRET);
@@ -460,15 +460,14 @@ test("message route returns answer with citation chips describing source title a
   const data = await res.json() as {
     kind: string;
     text: string;
-    citations: { title: string; sourceVersionId: string; position: string }[];
+    citations: { title: string }[];
   };
 
   assert.equal(data.kind, "answer");
   assert.equal(data.text, "ตอบสำหรับ: สอบถามเวลาทำการ");
   assert.equal(data.citations.length, 1);
   assert.equal(data.citations[0]!.title, "คู่มือการใช้งาน");
-  assert.equal(data.citations[0]!.sourceVersionId, "v-1");
-  assert.equal(data.citations[0]!.position, "หน้า 3");
+  assert.deepEqual(data.citations[0], { title: "คู่มือการใช้งาน" });
 
   // Verify responder was called with server-resolved workspace and cookie conversationId
   assert.equal(responderCalls.length, 1);
@@ -664,11 +663,23 @@ test("message route maps responder status to standardized HTTP responses", async
   assert.equal(data1.kind, "uncertain");
   assert.match(data1.text, /ไม่พบข้อมูลที่ยืนยันได้/);
 
-  // ai_paused -> 200 uncertain
+  assert.equal((data1 as { handoff?: boolean }).handoff, true);
+  assert.match(data1.text, /ส่งเรื่องให้พนักงานแล้ว/);
+
+  // ai_paused -> 200 uncertain, already with staff: wait, do not press the button again
   const res2 = await callWithReply({ kind: "ai_paused" });
   assert.equal(res2.status, 200);
-  const data2 = await res2.json() as { kind: string };
+  const data2 = await res2.json() as { kind: string; text: string; handoff?: boolean };
   assert.equal(data2.kind, "uncertain");
+  assert.equal(data2.handoff, true);
+  assert.match(data2.text, /รอพนักงานตอบ/);
+  assert.doesNotMatch(data2.text, /ไม่พบข้อมูล|กดปุ่ม/);
+
+  // handoff_unavailable -> original wording that points to the button
+  const res2b = await callWithReply({ kind: "handoff_unavailable", reason: "NO_APPROVED_EVIDENCE" });
+  const data2b = await res2b.json() as { text: string; handoff?: boolean };
+  assert.match(data2b.text, /กดปุ่มขอคุยกับพนักงาน/);
+  assert.equal(data2b.handoff, undefined);
 
   // conversation_changed -> 409
   const res3 = await callWithReply({ kind: "conversation_changed" });
@@ -684,4 +695,27 @@ test("message route maps responder status to standardized HTTP responses", async
   const res5 = await callWithReply({ kind: "invalid_request" });
   assert.equal(res5.status, 400);
   assert.deepEqual(await res5.json(), { error: "INVALID_REQUEST" });
+});
+
+test("message route de-duplicates citation titles and passes small talk through as a greeting", async () => {
+  const citation = (chunkId: string) => ({
+    workspaceId: TRUSTED_WORKSPACE.workspaceId,
+    sourceId: "src-1",
+    sourceVersionId: "v-1",
+    chunkId,
+    locator: { kind: "page" as const, page: 1 },
+  });
+  const post = async (reply: SupportReply | { kind: "small_talk"; text: string }) => {
+    const { routes } = createHarness({ responder: async () => reply });
+    const res = await routes.message(new Request("https://example.com/message", {
+      method: "POST",
+      headers: { cookie: makeValidCookie(), origin: ALLOWED_ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, text: "ทดสอบ" }),
+    }));
+    return res.json() as Promise<{ kind: string; text: string; citations?: unknown[] }>;
+  };
+  const answer = await post({ kind: "answer", text: "ตอบ", citations: [citation("c1"), citation("c2")], conversationVersion: 1 });
+  assert.deepEqual(answer.citations, [{ title: "คู่มือการใช้งาน" }]);
+  const greeting = await post({ kind: "small_talk", text: "สวัสดีครับ" });
+  assert.deepEqual(greeting, { kind: "greeting", text: "สวัสดีครับ" });
 });

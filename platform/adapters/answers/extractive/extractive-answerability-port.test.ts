@@ -253,7 +253,7 @@ test("coverage threshold and minimum match count stay explicit and tunable", () 
   assert.equal(typeof MIN_QUERY_TERM_COVERAGE, "number");
   assert.ok(MIN_QUERY_TERM_COVERAGE >= 0.6 && MIN_QUERY_TERM_COVERAGE <= 1);
   assert.equal(MIN_MATCHED_KEY_TERMS, 2);
-  assert.equal(MIN_QUERY_KEY_TERMS, 6);
+  assert.equal(MIN_QUERY_KEY_TERMS, 3);
   assert.equal(MAX_ANSWERABILITY_QUERY_CHARS, 500);
 });
 
@@ -318,4 +318,73 @@ test("zero-width characters in the question do not change the decision", async (
       expected,
     );
   }
+});
+
+/**
+ * Short everyday questions, over three unrelated synthetic shops, so the gate
+ * is shown not to be tuned to one shop. Each shop answers its own questions and
+ * refuses the off-topic ones that ride on a shared word.
+ */
+type Shop = Readonly<{
+  docs: readonly (readonly [label: string, text: string])[];
+  answer: readonly string[];
+  refuse: readonly string[];
+}>;
+
+const shops: Readonly<Record<string, Shop>> = Object.freeze({
+  retail: {
+    docs: [
+      ["เวลาทำการ", "ร้านเปิดทุกวัน เวลา 09:00-18:00 น."],
+      ["การรับประกัน", "สินค้ารับประกัน 1 ปีเต็มนับจากวันที่ซื้อ"],
+      ["วิธีชำระเงิน", "รับชำระด้วยบัตรเครดิตและโอนผ่านธนาคาร"],
+      ["นโยบายคืนสินค้า", "เปลี่ยนคืนสินค้าได้ภายใน 7 วันหลังรับสินค้า"],
+    ],
+    answer: ["ปิดวันไหนบ้าง", "รับประกันนานแค่ไหน", "ชำระเงินได้ทางไหนบ้าง", "ปิดวันไหนบ้างครับ"],
+    refuse: ["จัดส่ง", "delivery", "ส่วนลดพนักงานเท่าไหร่", "ต้นทุนสินค้าเท่าไหร่", "วันนี้ฝนตกไหม ชำระเงินได้ไหม", "รับประกันดวงจันทร์ได้ไหม"],
+  },
+  clinic: {
+    docs: [
+      ["เวลาทำการคลินิก", "คลินิกเปิดให้บริการวันจันทร์ถึงเสาร์ ตั้งแต่ 10:00 น. ถึง 20:00 น."],
+      ["การนัดหมาย", "ลูกค้าต้องจองคิวล่วงหน้าอย่างน้อย 1 วันผ่านโทรศัพท์"],
+      ["ค่าบริการ", "ค่าตรวจเบื้องต้น 500 บาท รวมค่าปรึกษาแพทย์"],
+    ],
+    answer: ["เปิดวันไหนบ้าง", "จองคิวได้ทางไหนบ้าง", "ค่าตรวจเท่าไหร่", "นัดหมายล่วงหน้านานแค่ไหน"],
+    refuse: ["คลินิก", "ผ่าตัดหัวใจเท่าไหร่", "หมอชื่ออะไร", "ค่าเช่าห้องเท่าไหร่", "ส่วนลดพนักงานเท่าไหร่"],
+  },
+  autoparts: {
+    docs: [
+      ["การรับประกันอะไหล่", "อะไหล่แท้รับประกัน 6 เดือน อะไหล่เทียบรับประกัน 3 เดือน"],
+      ["การจัดส่งอะไหล่", "จัดส่งอะไหล่ทั่วประเทศด้วยขนส่งเอกชน ใช้เวลา 2-3 วันทำการ"],
+      ["การเปลี่ยนอะไหล่", "เปลี่ยนอะไหล่ได้หากสินค้าชำรุดจากโรงงาน พร้อมใบเสร็จ"],
+    ],
+    answer: ["รับประกันนานแค่ไหน", "จัดส่งนานแค่ไหน", "ส่งทั่วประเทศไหม", "เปลี่ยนอะไหล่ได้ไหม"],
+    refuse: ["อะไหล่", "ต้นทุนอะไหล่เท่าไหร่", "รถยนต์ไฟฟ้ามีไหม", "ขอเบอร์เจ้าของร้านหน่อย"],
+  },
+});
+
+test("short questions answer across unrelated shops and refuse bare or off-topic ones", async (t) => {
+  const port = createExtractiveAnswerabilityPort();
+  for (const [name, shop] of Object.entries(shops)) {
+    const evidence: readonly SupportEvidence[] = Object.freeze(shop.docs.map(([sourceLabel, text], index) => Object.freeze({
+      referenceId: `${name}-${index}`,
+      sourceLabel,
+      text,
+    })));
+    for (const query of shop.answer) {
+      await t.test(`${name} answers: ${query}`, async () => {
+        assert.deepEqual(await port.assess({ workspaceId, query, evidence }), { kind: "answerable" });
+      });
+    }
+    for (const query of shop.refuse) {
+      await t.test(`${name} refuses: ${query}`, async () => {
+        assert.notDeepEqual(await port.assess({ workspaceId, query, evidence }), { kind: "answerable" });
+      });
+    }
+  }
+});
+
+test("the document title helps match, but the quoted answer never comes from it", () => {
+  const evidence = [{ referenceId: "e1", sourceLabel: "วิธีชำระเงิน", text: "รับชำระด้วยบัตรเครดิตและโอนผ่านธนาคาร" }];
+  assert.deepEqual(selectSupportingEvidence("ชำระเงินได้ทางไหนบ้าง", evidence), evidence);
+  assert.deepEqual(selectSupportingEvidence("ชำระเงินได้ทางไหนบ้าง", [{ ...evidence[0]!, sourceLabel: "ไม่เกี่ยวข้อง" }]), []);
 });
