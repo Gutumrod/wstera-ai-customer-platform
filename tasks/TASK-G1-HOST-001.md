@@ -50,4 +50,4 @@ Let an authenticated staff member in one controlled workspace upload, validate, 
 
 ## Implementation status
 
-Implemented on the task branch; see [`../reports/G1-HOST-001-IMPLEMENTATION.md`](../reports/G1-HOST-001-IMPLEMENTATION.md). Code review, hosted CI and Owner merge decision remain pending. Local Docker-backed Supabase E2E could not run on the current machine because no Docker daemon is available; automated adapter, migration-policy, and synthetic integration tests are the evidence available so far.
+Merged via PR #18; see [`../reports/G1-HOST-001-IMPLEMENTATION.md`](../reports/G1-HOST-001-IMPLEMENTATION.md). Local Docker-backed Supabase E2E could not run on the machine used for that report because no Docker daemon was available; automated adapter, migration-policy, and synthetic integration tests were the evidence at that time.
