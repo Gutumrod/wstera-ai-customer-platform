@@ -344,7 +344,8 @@ export function renderChatPage(params: RenderChatPageParams): string {
     (function () {
       const connectionId = ${jsConnectionId};
       const messageEndpoint = ${jsEndpoint};
-      const REQUEST_TIMEOUT_MS = 15000;
+      // Leaves room for both model gates, the final answer, and database time.
+      const REQUEST_TIMEOUT_MS = 45000;
       const messagesContainer = document.getElementById("messages");
       const chatForm = document.getElementById("chat-form");
       const chatInput = document.getElementById("chat-input");

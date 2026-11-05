@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderChatPage } from "./render-chat-page.js";
+import { DEFAULT_TIMEOUT_MS } from "../../adapters/models/openai-compatible/chat-completions.js";
+
+test("renderChatPage gives model-backed requests 45 seconds, over two model timeouts", () => {
+  const html = renderChatPage({
+    connectionId: "conn-timeout",
+    nonce: "timeout-nonce",
+    messageEndpoint: "/chat/message",
+  });
+
+  assert.match(html, /const REQUEST_TIMEOUT_MS = 45000;/);
+  assert.ok(45_000 > 2 * DEFAULT_TIMEOUT_MS);
+});
 
 test("renderChatPage output contains no occurrences of innerHTML", () => {
   const html = renderChatPage({

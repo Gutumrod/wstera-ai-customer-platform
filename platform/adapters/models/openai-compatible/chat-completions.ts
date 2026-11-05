@@ -36,7 +36,7 @@ export type OpenAICompatibleChatConfig = Readonly<{
 
 type CompletionResult = Readonly<{ content: string }>;
 
-const DEFAULT_TIMEOUT_MS = 12_000;
+export const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_MAX_COMPLETION_TOKENS = 512;
 const DEFAULT_MAX_REQUEST_BYTES = 96_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 64_000;
