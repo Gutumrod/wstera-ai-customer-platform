@@ -39,11 +39,18 @@ export class HandoffService {
 
   list(workspace: TrustedWorkspaceContext, actorUserId: string) {
     return this.scoped(workspace, actorUserId, async (query) => {
-      const result = await query.query<ConversationRow>(
-        `SELECT conversation_id, status, version, handoff_reason, assigned_staff_id, created_at, updated_at
-         FROM aicp.conversations WHERE workspace_id = $1 AND status IN ('handoff_requested', 'human_active')
-         ORDER BY updated_at ASC, conversation_id ASC`, [workspace.workspaceId]);
-      return result.rows.map(conversation);
+      const result = await query.query<ConversationRow & { last_customer_message: string | null }>(
+        `SELECT c.conversation_id, c.status, c.version, c.handoff_reason, c.assigned_staff_id, c.created_at, c.updated_at,
+                latest_customer.body AS last_customer_message
+         FROM aicp.conversations AS c
+         LEFT JOIN LATERAL (
+           SELECT m.body FROM aicp.conversation_messages AS m
+           WHERE m.workspace_id = c.workspace_id AND m.conversation_id = c.conversation_id AND m.role = 'customer'
+           ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+         ) AS latest_customer ON true
+         WHERE c.workspace_id = $1 AND c.status IN ('handoff_requested', 'human_active')
+         ORDER BY c.updated_at ASC, c.conversation_id ASC`, [workspace.workspaceId]);
+      return result.rows.map((row) => ({ ...conversation(row), lastCustomerMessage: row.last_customer_message ? Array.from(row.last_customer_message).slice(0, 120).join("") : null }));
     });
   }
 
