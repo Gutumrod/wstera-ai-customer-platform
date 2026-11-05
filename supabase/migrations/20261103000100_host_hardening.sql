@@ -13,7 +13,7 @@ BEGIN
      OR role_state.rolcreatedb OR role_state.rolcreaterole OR role_state.rolreplication OR role_state.rolinherit THEN
     RAISE EXCEPTION 'AICP_MIGRATOR_ROLE_UNSAFE' USING ERRCODE = '42501';
   END IF;
-  EXECUTE format('GRANT aicp_migrator TO %I WITH ADMIN FALSE, INHERIT FALSE, SET TRUE', session_user);
+  EXECUTE format('GRANT aicp_migrator TO %I WITH INHERIT FALSE, SET TRUE', session_user);
 END $$;
 
 SET ROLE aicp_migrator;
@@ -120,5 +120,5 @@ CREATE UNIQUE INDEX workspace_one_active_web_connection
 
 RESET ROLE;
 DO $$ BEGIN
-  EXECUTE format('REVOKE aicp_migrator FROM %I', session_user);
+  EXECUTE format('REVOKE SET OPTION FOR aicp_migrator FROM %I', session_user);
 END $$;

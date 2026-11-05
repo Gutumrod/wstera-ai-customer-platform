@@ -101,9 +101,9 @@ BEGIN
   END IF;
 END $$;
 
--- Request SET only for this migration and for the original login, even under SET ROLE.
+-- Request SET only for this migration; revoke only the SET option afterwards so the creator's ADMIN option lets later files re-request it.
 DO $$ BEGIN
-  EXECUTE format('GRANT aicp_migrator TO %I WITH ADMIN FALSE, INHERIT FALSE, SET TRUE', session_user);
+  EXECUTE format('GRANT aicp_migrator TO %I WITH INHERIT FALSE, SET TRUE', session_user);
 END $$;
 
 -- The hosted migration caller owns these objects before this handoff.
@@ -202,5 +202,5 @@ GRANT UPDATE (object_path) ON aicp.knowledge_quarantine_records TO knowledge_run
 
 RESET ROLE;
 DO $$ BEGIN
-  EXECUTE format('REVOKE aicp_migrator FROM %I', session_user);
+  EXECUTE format('REVOKE SET OPTION FOR aicp_migrator FROM %I', session_user);
 END $$;

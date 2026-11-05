@@ -177,8 +177,8 @@ test("all Supabase migrations and seed writes work as hosted postgres without we
                JOIN pg_roles grantor ON grantor.oid = m.grantor WHERE r.rolname='aicp_migrator' AND member.rolname='hosted_postgres') AS grants`,
     );
     assert.deepEqual(migrationRolePrivileges.rows[0], {
-      membership: true, can_set: false, membership_rows: 1,
-      grants: "admin=t,inherit=f,set=f,grantor=postgres",
+      membership: true, can_set: false, membership_rows: 2,
+      grants: "admin=t,inherit=f,set=f,grantor=postgres;admin=f,inherit=f,set=f,grantor=hosted_postgres",
     }, "the creator retains ADMIN OPTION, but the migration must remove SET after each file");
     await database.exec("SET SESSION AUTHORIZATION hosted_postgres");
     await assert.rejects(database.exec("SET ROLE aicp_migrator"), /permission denied to set role/i);
