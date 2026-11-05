@@ -5,6 +5,7 @@ import { PgPostgresDatabase } from "../adapters/persistence/postgres/pg-database
 import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/knowledge-repository.js";
 import { PostgresConversationRepository } from "../adapters/persistence/postgres/conversation-repository.js";
 import { PostgresSupportHandoff } from "../adapters/persistence/postgres/support-handoff.js";
+import { PostgresConversationMessages } from "../adapters/persistence/postgres/conversation-messages.js";
 import { KnowledgeRetriever, areKnowledgeCitationsCurrent } from "../modules/knowledge/index.js";
 import type { PostgresDatabasePort } from "../adapters/persistence/postgres/knowledge-repository.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
@@ -42,6 +43,7 @@ export async function createWebChatRealHost(database: RuntimeDatabase = runtimeD
     },
     answerability: createExtractiveAnswerabilityPort(),
     handoff: new PostgresSupportHandoff(database),
+    messages: new PostgresConversationMessages(database),
     queryAliases: (workspace) => configuration.queryAliases(workspace),
   });
 

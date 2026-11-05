@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import type { KnowledgeCitation } from "../contracts/data/knowledge.js";
 import type { SupportReply } from "../modules/ai-engine/support-orchestrator.js";
+import type { StaffConversationMessage } from "../contracts/data/conversation-messages.js";
 import { createRateLimiter, type RateLimit } from "../apps/merchant-console/lib/rate-limit.js";
 import {
   issueWebChatSession,
@@ -32,11 +33,14 @@ export type WebChatRoutesDeps = Readonly<{
   sessionSecret: string;
   responder: SupportResponder;
   requestHandoff: (workspace: TrustedWorkspaceContext, conversationId: string) => Promise<void>;
+  persistTurn?: (workspace: TrustedWorkspaceContext, conversationId: string, customerText: string, botText: string) => Promise<void>;
+  staffUpdates?: (input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; after: string | null; limit: number }>) => Promise<Readonly<{ messages: readonly StaffConversationMessage[]; cursor: string | null }>>;
   describeCitation?: (workspace: TrustedWorkspaceContext, citation: KnowledgeCitation) => Promise<CitationDescription | null>;
   clientKey: (request: Request) => string;
   limits?: Readonly<{
     session?: RateLimit;
     client?: RateLimit;
+    updates?: RateLimit;
   }>;
   secureCookie?: boolean;
   now?: () => number;
@@ -181,6 +185,7 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
   const now = deps.now ?? Date.now;
   const clientLimiter = createRateLimiter(deps.limits?.client ?? { limit: 60, windowMs: 60_000 }, 10_000, now);
   const sessionLimiter = createRateLimiter(deps.limits?.session ?? { limit: 20, windowMs: 60_000 }, 10_000, now);
+  const updatesLimiter = createRateLimiter(deps.limits?.updates ?? { limit: 30, windowMs: 60_000 }, 10_000, now);
 
   return Object.freeze({
     async page(request: Request): Promise<Response> {
@@ -384,17 +389,21 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
                 }
               }
             }
-            return jsonResponse(200, {
+            const body = {
               kind: "answer",
               text: reply.text,
               citations: chips,
-            });
+            };
+            await deps.persistTurn?.(workspace, session.conversationId, body.text ? validation.body.kind === "chat" ? validation.body.text : "" : "", body.text);
+            return jsonResponse(200, body);
           }
 
           case "small_talk":
+            await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", reply.text);
             return jsonResponse(200, { kind: "greeting", text: reply.text });
 
           case "ai_paused":
+            await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", "ส่งเรื่องให้พนักงานแล้วครับ ขอให้รอพนักงานตอบกลับสักครู่");
             return jsonResponse(200, {
               kind: "uncertain",
               handoff: true,
@@ -402,12 +411,13 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
             });
 
           case "handoff_requested":
+            await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ");
             return jsonResponse(200, {
-              kind: "uncertain",
-              text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ในระบบ และส่งเรื่องให้พนักงานแล้วครับ",
+              kind: "uncertain", text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ",
             });
 
           case "handoff_unavailable":
+            await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ และตอนนี้แจ้งพนักงานไม่ได้ กรุณาติดต่อร้านผ่านช่องทางอื่นครับ");
             return jsonResponse(200, {
               kind: "uncertain",
               text: "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ในระบบ และตอนนี้ระบบยังส่งเรื่องให้พนักงานไม่ได้ กรุณาติดต่อร้านผ่านช่องทางอื่นครับ",
@@ -427,6 +437,34 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
         }
       } catch {
         return jsonErrorResponse(500, "INTERNAL_ERROR");
+      }
+    },
+
+    async updates(request: Request): Promise<Response> {
+      if (request.method !== "GET") return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET" } });
+      if (!deps.staffUpdates) return jsonErrorResponse(503, "SERVICE_UNAVAILABLE");
+      const session = inspectSessionCookie(request.headers.get("cookie"), deps.sessionSecret, now);
+      if (!session) return jsonErrorResponse(401, "UNAUTHENTICATED");
+      const workspace = await deps.resolveConnection(session.connectionId, "web");
+      if (!workspace) return jsonErrorResponse(404, "NOT_FOUND");
+      const origin = request.headers.get("origin");
+      if (origin) {
+        if (!(await deps.allowedOrigins(workspace)).includes(origin)) return jsonErrorResponse(403, "ORIGIN_DENIED");
+      } else if (!new Set(["same-origin", "same-site"]).has(request.headers.get("sec-fetch-site") ?? "")) {
+        return jsonErrorResponse(403, "ORIGIN_REQUIRED");
+      }
+      const key = `${session.connectionId}:${session.conversationId}`;
+      const retry = updatesLimiter.retryAfterSeconds(key);
+      if (retry > 0) return rateLimitResponse(retry);
+      const url = new URL(request.url);
+      const after = url.searchParams.get("after");
+      if ((after?.length ?? 0) > 256) return jsonErrorResponse(400, "INVALID_CURSOR");
+      try {
+        const result = await deps.staffUpdates({ workspace, conversationId: session.conversationId, after, limit: 100 });
+        return jsonResponse(200, { data: result.messages.filter((message) => typeof message.text === "string"), cursor: result.cursor });
+      } catch (error) {
+        if (error instanceof Error && (error.message === "INVALID_MESSAGE_CURSOR" || error.message === "INVALID_MESSAGE_LIMIT")) return jsonErrorResponse(400, "INVALID_CURSOR");
+        return jsonErrorResponse(503, "SERVICE_UNAVAILABLE");
       }
     },
   });

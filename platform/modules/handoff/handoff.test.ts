@@ -127,8 +127,11 @@ test("repeated handoff requests are idempotent and invalid transitions fail clos
   assert.equal(repeated.version, first.version);
   const repeatedCustomerRequest = await requestHandoff(repository, workspace, "thread-6", "customer_requested");
   assert.equal(repeatedCustomerRequest.version, first.version);
+  await claimHandoff(repository, authorization(), workspace, "thread-6", "staff-1");
+  const afterClaim = await requestHandoff(repository, workspace, "thread-6", "customer_requested");
+  assert.equal(afterClaim.status, "human_active");
   await assert.rejects(
-    () => repository.append(workspace, "thread-6", first.version, {
+    () => repository.append(workspace, "thread-6", afterClaim.version, {
       kind: "handoff_requested", reason: "customer_requested", occurredAt: new Date().toISOString(),
     }),
     (error: unknown) => error instanceof ConversationError && error.code === "INVALID_TRANSITION",

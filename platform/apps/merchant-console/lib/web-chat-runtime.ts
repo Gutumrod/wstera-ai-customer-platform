@@ -26,6 +26,8 @@ function configuredRoutes(): Promise<ReturnType<typeof createWebChatRoutes>> | n
       sessionSecret: secret,
       responder: host.responder,
       requestHandoff: host.requestHandoff,
+      persistTurn: host.persistTurn,
+      staffUpdates: host.staffUpdates,
       describeCitation: host.describeCitation,
       secureCookie: process.env.APP_ENV !== "local",
       clientKey(request) {
@@ -63,4 +65,11 @@ export async function webChatMessage(request: Request): Promise<Response> {
   try { routes = configuredRoutes(); } catch { return serviceUnavailable(); }
   if (!routes) return serviceUnavailable();
   try { return await (await routes).message(request); } catch { return serviceUnavailable(); }
+}
+
+export async function webChatUpdates(request: Request): Promise<Response> {
+  let routes: ReturnType<typeof configuredRoutes>;
+  try { routes = configuredRoutes(); } catch { return serviceUnavailable(); }
+  if (!routes) return serviceUnavailable();
+  try { return await (await routes).updates(request); } catch { return serviceUnavailable(); }
 }

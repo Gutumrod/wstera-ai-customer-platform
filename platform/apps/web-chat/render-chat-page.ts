@@ -274,6 +274,8 @@ export function renderChatPage(params: RenderChatPageParams): string {
       const chatInput = document.getElementById("chat-input");
       const sendBtn = document.getElementById("send-btn");
       const handoffBtn = document.getElementById("handoff-btn");
+      let updateCursor = null;
+      const seenStaffMessages = new Set();
 
       const STORAGE_KEY = "aicp-webchat:" + connectionId;
       const MAX_STORED_MESSAGES = 50;
@@ -442,6 +444,31 @@ export function renderChatPage(params: RenderChatPageParams): string {
           if (!state.h) handoffBtn.disabled = false;
         }
       });
+
+      async function pollStaffMessages() {
+        if (document.visibilityState !== "visible") return;
+        const suffix = updateCursor ? "?after=" + encodeURIComponent(updateCursor) : "";
+        try {
+          const response = await fetch("/chat/updates" + suffix, { method: "GET", cache: "no-store" });
+          if (!response.ok) return;
+          const result = await response.json();
+          if (!result || !Array.isArray(result.data)) return;
+          result.data.forEach(function (message) {
+            if (!message || typeof message.id !== "string" || typeof message.text !== "string" || seenStaffMessages.has(message.id)) return;
+            seenStaffMessages.add(message.id);
+            appendMessage(message.text, false, undefined, false);
+          });
+          if (typeof result.cursor === "string") updateCursor = result.cursor;
+        } catch (err) { /* polling resumes on the next interval */ }
+      }
+      const updatesTimer = setInterval(function () {
+        if (document.visibilityState === "visible") void pollStaffMessages();
+      }, 5000);
+      if (updatesTimer && typeof updatesTimer.unref === "function") updatesTimer.unref();
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") void pollStaffMessages();
+      });
+      void pollStaffMessages();
     })();
   </script>
 </body>

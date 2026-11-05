@@ -5,6 +5,7 @@ import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
 import { ConversationError } from "../../../modules/conversation/index.js";
 import { createMigratedDatabase, runtimePort } from "../../../composition/testing/merchant-host-harness.js";
 import { PostgresConversationRepository } from "./conversation-repository.js";
+import { PostgresConversationMessages } from "./conversation-messages.js";
 
 const workspace = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
 let database: PGlite;
@@ -30,4 +31,18 @@ test("Postgres conversation repository persists state across adapter recreation 
   assert.equal(active.status, "human_active");
   const events = await database.query<{ count: number }>("SELECT count(*)::int AS count FROM aicp.conversation_events WHERE workspace_id = 'shop-a' AND conversation_id = 'thread-durable'");
   assert.equal(events.rows[0]?.count, 2);
+});
+
+test("conversation message turns persist and customer updates reveal only staff messages with a moving cursor", async () => {
+  await new PostgresConversationRepository(runtimePort(database)).create(workspace, "thread-messages");
+  const messages = new PostgresConversationMessages(runtimePort(database));
+  await messages.appendTurn({ workspace, conversationId: "thread-messages", customerText: "คำถาม", botText: "ขออภัย แจ้งพนักงานแล้ว" });
+  await database.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, staff_id, created_at) VALUES ('shop-a','thread-messages','staff','พนักงานตอบ','staff-a','2999-01-01T00:00:00Z')");
+  const first = await messages.staffUpdates({ workspace, conversationId: "thread-messages", after: null, limit: 100 });
+  assert.equal(first.messages.length, 1);
+  assert.equal(first.messages[0]?.text, "พนักงานตอบ");
+  assert.ok(first.cursor);
+  await database.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, staff_id, created_at) VALUES ('shop-a','thread-messages','staff','คำตอบใหม่','staff-a','2999-01-02T00:00:00Z')");
+  const next = await messages.staffUpdates({ workspace, conversationId: "thread-messages", after: first.cursor, limit: 100 });
+  assert.deepEqual(next.messages.map((item) => item.text), ["คำตอบใหม่"]);
 });

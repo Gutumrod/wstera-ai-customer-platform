@@ -113,7 +113,7 @@ function runPage(storage: Map<string, string> | null, fetchReply: unknown): Reco
   };
   const ids = ["messages", "chat-form", "chat-input", "send-btn", "handoff-btn"];
   const els: Record<string, any> = Object.fromEntries(ids.map((id) => [id, make()]));
-  const document = { getElementById: (id: string) => els[id], createElement: () => make() };
+  const document = { visibilityState: "visible", addEventListener() {}, getElementById: (id: string) => els[id], createElement: () => make() };
   const sessionStorage = storage === null ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } } : {
     getItem: (k: string) => storage.get(k) ?? null,
     setItem: (k: string, v: string) => { storage.set(k, v); },
@@ -123,8 +123,8 @@ function runPage(storage: Map<string, string> | null, fetchReply: unknown): Reco
     status: 200,
     json: async () => (init.body.includes("handoff") ? { kind: "handoff_recorded" } : fetchReply),
   });
-  new Function("document", "sessionStorage", "fetch", "AbortController", "setTimeout", "clearTimeout", script)(
-    document, sessionStorage, fetch, AbortController, setTimeout, clearTimeout,
+  new Function("document", "sessionStorage", "fetch", "AbortController", "setTimeout", "clearTimeout", "setInterval", script)(
+    document, sessionStorage, fetch, AbortController, setTimeout, clearTimeout, () => ({ unref() {} }),
   );
   return els;
 }

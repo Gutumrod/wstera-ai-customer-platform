@@ -6,9 +6,11 @@ import { PostgresWebChatConfiguration } from "./web-chat-configuration.js";
 import { createFaqVersion, type KnowledgeCitation, type KnowledgeVersionDraft } from "../../../modules/knowledge/index.js";
 import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
 import { createMigratedDatabase, runtimePort } from "../../../composition/testing/merchant-host-harness.js";
-import { OWNER_A, authenticatedRpcClient } from "../../../composition/testing/merchant-host-harness.js";
+import { OWNER_A, STAFF_A, authenticatedRpcClient } from "../../../composition/testing/merchant-host-harness.js";
 import { SupabaseKnowledgeApproval } from "../supabase/knowledge-approval.js";
 import { createWebChatRoutes } from "../../../composition/web-chat-routes.js";
+import { HandoffService } from "../../../composition/handoff-service.js";
+import { inspectSessionCookie } from "../../../composition/web-chat-session.js";
 
 const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
@@ -113,6 +115,7 @@ test("real host answers approved knowledge and persists customer handoff to its 
     const routes = createWebChatRoutes({
       messageEndpoint: "/chat/message", resolveConnection: host.resolveConnection, allowedOrigins: host.allowedOrigins,
       sessionSecret: secret, responder: host.responder, requestHandoff: host.requestHandoff,
+      persistTurn: host.persistTurn, staffUpdates: host.staffUpdates,
       describeCitation: host.describeCitation, clientKey: () => "test-client",
     });
     process.env.WEB_CHAT_SESSION_SECRET = secret;
@@ -137,6 +140,17 @@ test("real host answers approved knowledge and persists customer handoff to its 
     assert.equal(denied.status, 403);
     const unknown = await POST(chatRequest("ข้อมูลที่ไม่มีในเอกสาร" , session));
     assert.equal((await unknown.json() as { kind: string }).kind, "uncertain");
+    const signedSession = inspectSessionCookie(session, secret);
+    assert.ok(signedSession);
+    const staff = new HandoffService(runtimePort(database));
+    await staff.claim(shopA, STAFF_A, signedSession.conversationId);
+    const customerWhileHumanActive = await POST(chatRequest("ขอถามอีกเรื่องระหว่างรอ", session));
+    assert.equal((await customerWhileHumanActive.json() as { kind: string }).kind, "uncertain");
+    const retainedCustomer = await database.query<{ count: number }>("SELECT count(*)::int AS count FROM aicp.conversation_messages WHERE workspace_id='shop-a' AND conversation_id=$1 AND role='customer' AND body='ขอถามอีกเรื่องระหว่างรอ'", [signedSession.conversationId]);
+    assert.equal(retainedCustomer.rows[0]?.count, 1);
+    await staff.reply(shopA, STAFF_A, signedSession.conversationId, "พนักงานรับเรื่องแล้ว", "staff-delivery-1");
+    const updates = await routes.updates(new Request("http://localhost/chat/updates", { headers: { cookie: session, "sec-fetch-site": "same-origin" } }));
+    assert.deepEqual((await updates.json() as { data: Array<{ text: string }> }).data.map((item) => item.text), ["พนักงานรับเรื่องแล้ว"]);
     const handoff = await POST(new Request("http://localhost/chat/message", {
       method: "POST", headers: { cookie: session, origin: "https://shop-a.example", "content-type": "application/json" },
       body: JSON.stringify({ connectionId: "web-a", action: "handoff" }),

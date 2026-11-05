@@ -117,7 +117,7 @@ export async function requestHandoff(
   const current = await repository.load(workspace, conversationId);
   if (!current) throw new ConversationError("CONVERSATION_NOT_FOUND");
   // A repeated customer request while staff notification is already open is a no-op.
-  if (current.status === "handoff_requested") return current;
+  if (current.status !== "ai_active") return current;
   return repository.append(workspace, conversationId, current.version, { kind: "handoff_requested", reason, occurredAt: now });
 }
 
