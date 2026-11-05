@@ -1,6 +1,6 @@
 # Blockers and Owner Gates
 
-Updated: 2026-11-02, after PRs #18–#21 and docs-only PR #24 merged; latest observed `main` is `e47bb57`.
+Updated: 2026-11-03, after PRs #22–#26 merged; latest observed `main` is `7de2649`. The B-03 row below predates that: PR #26 closed M1–M3, route tests, rate limiting and the revalidation race in code only. They are unproven against a real Supabase project and have no independent review yet, so B-03 stays open until the E2E and review exist.
 
 | ID | Gate | Evidence / next action |
 |---|---|---|

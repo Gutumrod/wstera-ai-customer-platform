@@ -1,6 +1,12 @@
 # Execution Status
 
-Updated: 2026-11-02 against `main` at `e47bb57a68e68c69e0093b5b3eff85eeed843194`. This records merged repository state, not product or release approval.
+Updated: 2026-11-03 against `main` at `7de2649`. This records merged repository state, not product or release approval. Sections below that quote `e47bb57` or `9b4f997` predate the sync section and are kept as history.
+
+## Sync 2026-11-03 against `main` at `7de2649`
+
+Merged since `e47bb57` (all 2026-11-02, Owner-merged): PR #22 (docs sync), PR #23 (schema `aicp` isolation, supersedes the Docker path), PR #25 (HOST-004: lab mode starts fail closed) and PR #26 (HOST-002: M1–M3, route tests, rate limiting, membership revalidation; evidence in `reports/host-002-2026-11-03/`). PR #26 reports 216 tests passing with typecheck and `next build`, and states these are **not** proven against a real Supabase project: PostgREST RPC, `auth.uid()` under SECURITY DEFINER, hosted migration apply, a real revoke/write race, browser `Sec-Fetch-Site` and `getClaims`. Level stays at most `BUILD_PASS`. The independent review of HOST-002 has not happened.
+
+Owner decisions after that merge (2026-11-03): the LINE track may proceed **offline only** (fake transport, no real LINE OA, no credential) in parallel with G1; real LINE sandbox stays behind G1 acceptance. The authenticated E2E target moves from `wstera-lab` to a separate disposable Supabase test project, with a GO to apply the migrations and seed synthetic data there. Nothing has been applied yet: the session's Supabase connector cannot see that project. The project ref is intentionally not recorded in this public repo. Plan and handoff: `plans/THREE-TRACK-PLAN-2026-11-02.md`, `plans/HANDOFF-2026-11-03.md`.
 
 ## Current milestone
 

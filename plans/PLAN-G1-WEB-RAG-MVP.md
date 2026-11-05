@@ -2,6 +2,8 @@
 
 **Status: PROPOSED execution plan, updated 2026-11-02 against `main` at `e47bb57`.** PRs #16, #18–#21 and #24 are merged; #24 only added Merchant Brain documents. The local synthetic knowledge host is implemented and merged, but G1 end-to-end acceptance remains open. Product goals remain those locked in `BRIEF.md`; this plan does not invent evaluation thresholds or authorize hosted/production work.
 
+> **Sync 2026-11-03:** `main` is `7de2649`. Steps 1 and 3 of the work order below are merged in code (PRs #22, #23, #25, #26) and step 2's HOST-004 is done; the E2E in step 2 has not run. The Owner moved the E2E target to a separate disposable Supabase test project and gave a GO to apply and seed it with synthetic data (see `plans/HANDOFF-2026-11-03.md`). Statements below that name `e47bb57`, Docker or a pending PR #23 are history.
+
 ## Problem and user
 
 A merchant needs to maintain its own approved knowledge and give website visitors accurate Thai answers with traceable sources, while staff can take over uncertain conversations. G1 proves one controlled shop end to end and includes negative tests for another workspace.
