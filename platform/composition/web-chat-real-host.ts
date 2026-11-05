@@ -4,6 +4,7 @@ import { PostgresWebChatConfiguration } from "../adapters/persistence/postgres/w
 import { PgPostgresDatabase } from "../adapters/persistence/postgres/pg-database.js";
 import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/knowledge-repository.js";
 import { PostgresConversationRepository } from "../adapters/persistence/postgres/conversation-repository.js";
+import { PostgresSupportHandoff } from "../adapters/persistence/postgres/support-handoff.js";
 import { KnowledgeRetriever, areKnowledgeCitationsCurrent } from "../modules/knowledge/index.js";
 import type { PostgresDatabasePort } from "../adapters/persistence/postgres/knowledge-repository.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
@@ -40,9 +41,7 @@ export async function createWebChatRealHost(database: RuntimeDatabase = runtimeD
         areKnowledgeCitationsCurrent(repository, workspace, citations, audience),
     },
     answerability: createExtractiveAnswerabilityPort(),
-    handoff: {
-      async request() { throw new Error("HANDOFF_UNAVAILABLE"); },
-    },
+    handoff: new PostgresSupportHandoff(database),
     queryAliases: (workspace) => configuration.queryAliases(workspace),
   });
 
@@ -52,7 +51,5 @@ export async function createWebChatRealHost(database: RuntimeDatabase = runtimeD
     allowedOrigins: (workspace: Parameters<typeof configuration.allowedOrigins>[0]) => configuration.allowedOrigins(workspace),
     describeCitation: (workspace: Parameters<typeof configuration.describeCitation>[0], citation: Parameters<typeof configuration.describeCitation>[1]) =>
       configuration.describeCitation(workspace, citation),
-    // Durable customer handoff is owned by HANDOFF-002. Never record a false success here.
-    async requestHandoff(_workspace: TrustedWorkspaceContext, _conversationId: string) { throw new Error("HANDOFF_UNAVAILABLE"); },
   });
 }

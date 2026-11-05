@@ -95,7 +95,7 @@ test("web chat route responds 503 when its signing secret is missing", async () 
   }
 });
 
-test("real host answers only customer approved knowledge, applies workspace aliases, and reports unavailable handoff honestly", async () => {
+test("real host answers approved knowledge and persists customer handoff to its outbox", async () => {
   register("data:text/javascript,export async function resolve(specifier, context, nextResolve) { if (specifier === 'server-only') return { url: 'data:text/javascript,', shortCircuit: true }; return nextResolve(specifier); }", import.meta.url);
   const database = await createMigratedDatabase();
   const previousSecret = process.env.WEB_CHAT_SESSION_SECRET;
@@ -135,13 +135,17 @@ test("real host answers only customer approved knowledge, applies workspace alia
     assert.match(answerBody.text ?? "", /จัดส่งใช้เวลา 2 วันทำการ/u);
     const denied = await POST(chatRequest("ส่งของใช้เวลากี่วัน", session, "https://foreign.example"));
     assert.equal(denied.status, 403);
+    const unknown = await POST(chatRequest("ข้อมูลที่ไม่มีในเอกสาร" , session));
+    assert.equal((await unknown.json() as { kind: string }).kind, "uncertain");
     const handoff = await POST(new Request("http://localhost/chat/message", {
       method: "POST", headers: { cookie: session, origin: "https://shop-a.example", "content-type": "application/json" },
       body: JSON.stringify({ connectionId: "web-a", action: "handoff" }),
     }));
-    assert.equal(handoff.status, 503);
-    assert.equal((await handoff.json() as { kind: string }).kind, "handoff_unavailable");
-    assert.equal((await host.requestHandoff(shopA, "conversation-id").then(() => "resolved", () => "threw")), "threw");
+    assert.equal(handoff.status, 200);
+    assert.equal((await handoff.json() as { kind: string }).kind, "handoff_recorded");
+    await host.requestHandoff(shopA, "conversation-id");
+    const notifications = await database.query<{ count: number }>("SELECT count(*)::int AS count FROM aicp.handoff_notifications WHERE workspace_id = 'shop-a'");
+    assert.equal(notifications.rows[0]?.count, 1);
     const internalOnly = await POST(chatRequest("ส่งของ VIP ใช้เวลาเท่าไหร่", session));
     const internalReply = await internalOnly.json() as { text?: string };
     assert.doesNotMatch(internalReply.text ?? "", /30 นาที/u);
