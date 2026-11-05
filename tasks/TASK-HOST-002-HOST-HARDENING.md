@@ -1,6 +1,6 @@
 # Task HOST-002 — Harden the local authenticated host boundary
 
-**Status: PLANNED — do not start without Owner GO/dispatch.** Base: `main` @ `9b4f997`. Follows merged G1-HOST-001 (PR #18). Owner decisions 2026-10-25: host hardening runs before Web Chat.
+**Status: MERGED — BUILD_PASS only.** Delivered on `main` by PR #26 (route tests, per-identity rate limits, transactional membership revalidation, M1–M3 and the Low items, migration `20261103000100_host_hardening.sql`) and PR #28 (review fixes F1/F2/F5/F6, migration `20261103000200_host_hardening_revoke.sql`). Evidence is PGlite only: the migrations have not been run on Supabase, and the browser-to-`wstera-lab` E2E was not run. CI runs recorded in `reports/host-002-2026-11-03/REPORT.md` are for `250bb67` and `acb0e9e`, not for `9b4f997`. Original base: `main` @ `9b4f997`; followed merged G1-HOST-001 (PR #18). Owner decisions 2026-10-25: host hardening runs before Web Chat.
 
 ## Goal
 

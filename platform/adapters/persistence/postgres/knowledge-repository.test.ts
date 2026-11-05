@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import type { PostgresDatabasePort, PostgresQueryPort, PostgresRow } from "./knowledge-repository.js";
@@ -9,12 +7,10 @@ import type { KnowledgeRepositoryPort } from "../../../contracts/data/knowledge.
 import { KnowledgeError, createFaqVersion, createImportedKnowledgeVersion, retrieveKnowledge } from "../../../modules/knowledge/index.js";
 import { InMemoryKnowledgeRepository } from "../../../modules/knowledge/testing/in-memory-repository.js";
 import { createTrustedWorkspace } from "../../../modules/tenancy/workspace.js";
+import { createMigratedDatabase } from "../../../composition/testing/merchant-host-harness.js";
 
 const shopA = createTrustedWorkspace({ workspaceId: "shop-a", connectionId: "web-a", channel: "web" });
 const shopB = createTrustedWorkspace({ workspaceId: "shop-b", connectionId: "web-b", channel: "web" });
-const migrationPath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
-const visibilityMigrationPath = resolve(process.cwd(), "supabase/migrations/20261104000100_knowledge_visibility.sql");
-
 function databasePort(database: PGlite, failOnChunkInsert = false, statements?: string[]): PostgresDatabasePort {
   return {
     async transaction<T>(operation: (query: PostgresQueryPort) => Promise<T>): Promise<T> {
@@ -37,11 +33,7 @@ function databasePort(database: PGlite, failOnChunkInsert = false, statements?: 
 }
 
 async function createRepository() {
-  const database = new PGlite();
-  await database.exec("CREATE ROLE knowledge_runtime NOLOGIN NOSUPERUSER NOBYPASSRLS;");
-  const migration = await readFile(migrationPath, "utf8");
-  await database.exec(migration);
-  await database.exec(await readFile(visibilityMigrationPath, "utf8"));
+  const database = await createMigratedDatabase();
   await database.exec(`
     GRANT USAGE ON SCHEMA aicp TO knowledge_runtime;
     GRANT SELECT ON aicp.knowledge_sources TO knowledge_runtime;

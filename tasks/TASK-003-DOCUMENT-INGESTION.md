@@ -1,6 +1,6 @@
 # Task 003 — Bounded PDF and CSV extraction (G1-B)
 
-**Status (2026-10-23):** Bounded local PDF/CSV extraction from this task was included in PR #16 and is merged on `main` (`857b2e5`). Authenticated upload, private original-file storage and deployed processing remain unimplemented.
+**Status (2026-10-23):** Bounded local PDF/CSV extraction from this task was included in PR #16 and is merged on `main` (`857b2e5`). Authenticated upload with private original-file storage and quarantine was merged later in PR #18 (local synthetic, BUILD_PASS only); deployed processing remains unimplemented.
 
 ## Goal
 
@@ -30,4 +30,4 @@ Add a replaceable document-extraction adapter that turns local PDF and CSV bytes
 
 ## Evidence
 
-See `../reports/G1B-DOCUMENT-INGESTION-2026-10-15.md`. This task's completion is local branch evidence only; PR review, parent PR merge, persistence, and the end-to-end G1 acceptance remain pending.
+See `../reports/G1B-DOCUMENT-INGESTION-2026-10-15.md`. This report is local branch evidence from 2026-10-15. The work later merged in PR #16 and PR #18; the end-to-end G1 acceptance remains pending.

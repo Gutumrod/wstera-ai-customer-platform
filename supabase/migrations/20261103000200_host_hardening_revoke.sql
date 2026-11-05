@@ -1,6 +1,23 @@
 -- HOST-002 fix (F1): revocation and archiving move out of the direct-Postgres runtime role, the way approval did
 -- in 20261103000100. The actor comes from auth.uid(), never from a caller, and only an active owner may act.
 
+DO $$
+DECLARE role_state record;
+BEGIN
+  SELECT rolsuper, rolbypassrls, rolcanlogin, rolcreatedb, rolcreaterole, rolreplication, rolinherit
+    INTO role_state FROM pg_roles WHERE rolname = 'aicp_migrator';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'AICP_MIGRATOR_ROLE_MISSING' USING ERRCODE = '42501';
+  END IF;
+  IF role_state.rolsuper OR role_state.rolbypassrls OR role_state.rolcanlogin
+     OR role_state.rolcreatedb OR role_state.rolcreaterole OR role_state.rolreplication OR role_state.rolinherit THEN
+    RAISE EXCEPTION 'AICP_MIGRATOR_ROLE_UNSAFE' USING ERRCODE = '42501';
+  END IF;
+  EXECUTE format('GRANT aicp_migrator TO %I WITH INHERIT FALSE, SET TRUE', session_user);
+END $$;
+
+SET ROLE aicp_migrator;
+
 CREATE FUNCTION aicp.revoke_knowledge_version(target_workspace_id text, target_source_id text, target_version_id text, reason text)
 RETURNS void
 LANGUAGE plpgsql
@@ -8,7 +25,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, aicp
 AS $$
 DECLARE
-  revoker text := (SELECT auth.uid())::text;
+  revoker text := (SELECT aicp.current_auth_uid())::text;
   version_status text;
 BEGIN
   IF revoker IS NULL THEN
@@ -47,7 +64,6 @@ BEGIN
     AND version.version_id = target_version_id;
 END;
 $$;
-ALTER FUNCTION aicp.revoke_knowledge_version(text, text, text, text) OWNER TO aicp_migrator;
 REVOKE ALL ON FUNCTION aicp.revoke_knowledge_version(text, text, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION aicp.revoke_knowledge_version(text, text, text, text) TO authenticated;
 
@@ -58,7 +74,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, aicp
 AS $$
 DECLARE
-  archiver text := (SELECT auth.uid())::text;
+  archiver text := (SELECT aicp.current_auth_uid())::text;
 BEGIN
   IF archiver IS NULL THEN
     RAISE EXCEPTION 'MEMBERSHIP_REQUIRED' USING ERRCODE = 'AC001';
@@ -76,7 +92,6 @@ BEGIN
   END IF;
 END;
 $$;
-ALTER FUNCTION aicp.archive_knowledge_source(text, text) OWNER TO aicp_migrator;
 REVOKE ALL ON FUNCTION aicp.archive_knowledge_source(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION aicp.archive_knowledge_source(text, text) TO authenticated;
 
@@ -110,3 +125,8 @@ ALTER FUNCTION aicp.protect_knowledge_source_identity() OWNER TO aicp_migrator;
 CREATE TRIGGER knowledge_source_identity_guard
   BEFORE UPDATE ON aicp.knowledge_sources
   FOR EACH ROW EXECUTE FUNCTION aicp.protect_knowledge_source_identity();
+
+RESET ROLE;
+DO $$ BEGIN
+  EXECUTE format('REVOKE SET OPTION FOR aicp_migrator FROM %I', session_user);
+END $$;
