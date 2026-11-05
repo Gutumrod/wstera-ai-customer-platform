@@ -26,7 +26,7 @@ export type KnowledgeRouteLimits = Readonly<{ upload?: RateLimit; search?: RateL
 
 const noStore = { "Cache-Control": "no-store" };
 
-function versionSummary(version: Pick<KnowledgeVersion, "sourceId" | "versionId" | "kind" | "title" | "status" | "createdAt" | "approvedAt" | "chunks">) {
+function versionSummary(version: Pick<KnowledgeVersion, "sourceId" | "versionId" | "kind" | "title" | "status" | "createdAt" | "approvedAt" | "chunks" | "visibility">) {
   return Object.freeze({
     sourceId: version.sourceId,
     versionId: version.versionId,
@@ -36,6 +36,7 @@ function versionSummary(version: Pick<KnowledgeVersion, "sourceId" | "versionId"
     createdAt: version.createdAt,
     approvedAt: version.approvedAt,
     chunkCount: version.chunks.length,
+    visibility: version.visibility,
   });
 }
 
