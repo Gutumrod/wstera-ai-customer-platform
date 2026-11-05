@@ -397,7 +397,6 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
           case "handoff_requested":
             return jsonResponse(200, {
               kind: "uncertain",
-              handoff: true,
               text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ในระบบ ได้ส่งเรื่องให้พนักงานแล้ว กรุณารอพนักงานตอบกลับครับ",
             });
 

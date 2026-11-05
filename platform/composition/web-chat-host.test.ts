@@ -576,7 +576,7 @@ test("end-to-end: no-evidence handoff tells the customer staff were notified", a
   const session = harness.openSession("conn-no-evidence");
   const body = await (await harness.send("conn-no-evidence", session.cookie, "ต้นทุนสินค้าและกำไรขั้นต้นเท่าไหร่")).json() as UncertainResponse & { handoff?: boolean };
   assert.equal(body.kind, "uncertain");
-  assert.equal(body.handoff, true);
+  assert.equal(body.handoff, undefined);
   assert.match(body.text, /ส่งเรื่องให้พนักงานแล้ว/u);
 });
 

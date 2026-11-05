@@ -663,7 +663,7 @@ test("message route maps responder status to standardized HTTP responses", async
   assert.equal(data1.kind, "uncertain");
   assert.match(data1.text, /ไม่พบข้อมูลที่ยืนยันได้/);
 
-  assert.equal((data1 as { handoff?: boolean }).handoff, true);
+  assert.equal((data1 as { handoff?: boolean }).handoff, undefined);
   assert.match(data1.text, /ส่งเรื่องให้พนักงานแล้ว/);
 
   // ai_paused -> 200 uncertain, already with staff: wait, do not press the button again
