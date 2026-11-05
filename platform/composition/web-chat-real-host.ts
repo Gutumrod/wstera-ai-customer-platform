@@ -6,12 +6,12 @@ import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/kn
 import { PostgresConversationRepository } from "../adapters/persistence/postgres/conversation-repository.js";
 import { PostgresSupportHandoff } from "../adapters/persistence/postgres/support-handoff.js";
 import { PostgresConversationMessages } from "../adapters/persistence/postgres/conversation-messages.js";
-import { KnowledgeRetriever, areKnowledgeCitationsCurrent } from "../modules/knowledge/index.js";
+import { KnowledgeRetriever, areKnowledgeCitationsCurrent, listBroadCustomerKnowledge } from "../modules/knowledge/index.js";
 import type { PostgresDatabasePort } from "../adapters/persistence/postgres/knowledge-repository.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import { PostgresModelSpendLedger } from "../adapters/persistence/postgres/model-usage.js";
 import { createWebChatHost } from "./web-chat-host.js";
-import { createModelPathFactory, readModelPathSettings } from "./model-path.js";
+import { createModelGate, createModelPathFactory, readModelPathSettings } from "./model-path.js";
 import { knowledgeDatabaseTls, requiredKnowledgeDatabaseUrl } from "./knowledge-database-url.js";
 
 type RuntimeDatabase = PostgresDatabasePort & Readonly<{ assertLeastPrivilege(): Promise<void> }>;
@@ -41,6 +41,7 @@ export async function createWebChatRealHost(
 
   // Off unless AICP_MODEL_ANSWERS_ENABLED=true and every model setting is valid; answers then stay extractive.
   const modelSettings = readModelPathSettings(modelPath.env ?? process.env, modelPath.log);
+  const ledger = new PostgresModelSpendLedger(database);
   const host = createWebChatHost({
     ...(modelSettings ? {
       model: {
@@ -52,6 +53,9 @@ export async function createWebChatRealHost(
           ...(modelPath.log ? { log: modelPath.log } : {}),
         }),
       },
+      modelGate: createModelGate({ settings: modelSettings, ledger,
+        ...(modelPath.fetch ? { fetch: modelPath.fetch } : {}), ...(modelPath.log ? { log: modelPath.log } : {}) }),
+      broadRetrieval: (workspace) => listBroadCustomerKnowledge(repository, workspace),
     } : {}),
     conversations,
     retrieval: new KnowledgeRetriever(repository),

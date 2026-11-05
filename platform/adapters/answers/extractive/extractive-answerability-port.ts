@@ -231,7 +231,7 @@ function analyzeQueryTerms(query: string): KeyTermAnalysis {
   return Object.freeze({ ...base, thaiWords, asksQuestion: questionWordPattern.test(normalized) });
 }
 
-function isInjectionOrMarkup(query: string): boolean {
+export function isInjectionOrMarkup(query: string): boolean {
   if (markupPattern.test(query)) return true;
   return instructionPatterns.some((pattern) => pattern.test(query));
 }

@@ -94,9 +94,12 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     const requests: string[] = [];
     const logs: string[] = [];
     let reply = '{"text":"จัดส่งใช้เวลา 2 วันทำการ ครับ","citationRefs":["evidence-1"]}';
+    let triage = "answerable";
     const fetcher = (async (_url: unknown, init: RequestInit) => {
-      requests.push(String(init.body));
-      return new Response(JSON.stringify({ choices: [{ message: { content: reply } }], usage: { prompt_tokens: 70, completion_tokens: 12, total_tokens: 82 } }), { status: 200 });
+      const body = String(init.body);
+      requests.push(body);
+      const isTriage = body.includes("Classify the customer query");
+      return new Response(JSON.stringify({ choices: [{ message: { content: isTriage ? JSON.stringify({ kind: triage }) : reply } }], usage: { prompt_tokens: 70, completion_tokens: 12, total_tokens: 82 } }), { status: 200 });
     }) as typeof fetch;
     const log = (event: string, fields: Readonly<Record<string, string | number>>) => logs.push(JSON.stringify({ event, ...fields }));
     const env = {
@@ -122,12 +125,12 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     assert.equal(answer.kind, "answer");
     assert.equal(answer.text, "จัดส่งใช้เวลา 2 วันทำการ ครับ");
     assert.deepEqual(answer.citations?.map((c) => c.sourceId), ["shipping"]);
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0]!.includes("ต้นทุนลับ"), false, "internal knowledge never reaches the provider");
-    assert.equal(requests[0]!.includes(KEY), false);
+    assert.equal(requests.length, 2);
+    assert.equal(requests.some((body) => body.includes("ต้นทุนลับ")), false, "internal knowledge never reaches the provider");
+    assert.equal(requests.some((body) => body.includes(KEY)), false);
     const ledgerRows = (await database.query<Record<string, unknown>>("SELECT * FROM aicp.model_usage")).rows;
-    assert.equal(ledgerRows.length, 1);
-    assert.deepEqual([ledgerRows[0]?.workspace_id, ledgerRows[0]?.conversation_id, ledgerRows[0]?.model, ledgerRows[0]?.status, ledgerRows[0]?.input_tokens, ledgerRows[0]?.output_tokens], ["shop-a", "conv-on", "test-model", "settled", 70, 12]);
+    assert.equal(ledgerRows.length, 2);
+    assert.ok(ledgerRows.every((row) => row.workspace_id === "shop-a" && row.conversation_id === "conv-on" && row.model === "test-model" && row.status === "settled" && row.input_tokens === 70 && row.output_tokens === 12));
     assert.equal(JSON.stringify(ledgerRows).includes("จัดส่ง"), false, "no message text in the ledger");
 
     // a reply that cites nothing real falls back to the extractive answer (still cited), second call uses the last allowed slot
@@ -143,6 +146,7 @@ test("real host: flag off never calls the provider; flag on answers with citatio
 
     // the model declining for lack of evidence becomes a handoff, not an answer
     await database.exec("UPDATE aicp.model_usage SET usage_day = usage_day - 1");
+    triage = "insufficient_evidence";
     reply = '{"text":"","citationRefs":[]}';
     const declined = await ask(host, "conv-decline");
     assert.equal(declined.kind, "handoff_requested");

@@ -12,7 +12,7 @@ import type {
 import { SupportOrchestrator } from "../modules/ai-engine/support-orchestrator.js";
 import { createConversation, requestHandoff as requestConversationHandoff } from "../modules/conversation/index.js";
 import { createAnswerPort } from "../adapters/answers/answer-port-factory.js";
-import { selectSupportingEvidence } from "../adapters/answers/extractive/extractive-answerability-port.js";
+import { isInjectionOrMarkup, selectSupportingEvidence } from "../adapters/answers/extractive/extractive-answerability-port.js";
 import type { SupportResponder } from "./web-chat-routes.js";
 
 /**
@@ -31,6 +31,8 @@ export type WebChatHostDeps = Readonly<{
   answer?: GroundedAnswerPort;
   /** Only consulted when `answer` is omitted; a model port is built only when enabled === true. */
   model?: Readonly<{ enabled?: boolean; createModelPort?: (context: Readonly<{ conversationId: string }>) => GroundedAnswerPort }>;
+  modelGate?: (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly SupportEvidence[] }>) => Promise<unknown | null>;
+  broadRetrieval?: (workspace: TrustedWorkspaceContext) => Promise<readonly import("../contracts/data/knowledge.js").KnowledgeRetrievalHit[]>;
   /**
    * Per-workspace [from, to] phrase swaps applied to the question before it
    * reaches the orchestrator (e.g. a shop's word for what its documents call
@@ -93,11 +95,11 @@ function withSupportingEvidence(port: GroundedAnswerPort): GroundedAnswerPort {
  */
 export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
   const now = deps.now ?? (() => new Date().toISOString());
-  const orchestratorFor = (conversationId: string): SupportOrchestrator => {
+  const orchestratorFor = (conversationId: string, allowModel = true): SupportOrchestrator => {
     const modelFactory = deps.model?.createModelPort;
     const answer = withSupportingEvidence(deps.answer ?? createAnswerPort({
-      modelEnabled: deps.model?.enabled === true,
-      ...(modelFactory ? { createModelPort: () => modelFactory({ conversationId }) } : {}),
+      modelEnabled: allowModel && deps.model?.enabled === true,
+      ...(allowModel && modelFactory ? { createModelPort: () => modelFactory({ conversationId }) } : {}),
     }));
     return new SupportOrchestrator({
       conversations: deps.conversations,
@@ -127,7 +129,8 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
     await ensureConversation(workspace, conversationId);
     // Small talk stays available while a handoff is waiting; staff ownership pauses the AI.
     const text = smallTalkReply(query);
-    if (text !== null && (await deps.conversations.load(workspace, conversationId))?.status !== "human_active") {
+    const current = await deps.conversations.load(workspace, conversationId);
+    if (text !== null && current?.status !== "human_active") {
       return Object.freeze({ kind: "small_talk", text });
     }
     // A greeting in front of a real question is not part of the question.
@@ -139,7 +142,45 @@ export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
     } catch {
       asked = query.replace(leadingGreetingPattern, "") || query;
     }
-    return orchestratorFor(conversationId).respond({ workspace, conversationId, query: asked, audience: "customer" });
+    let gateFailed = false;
+    if (deps.modelGate && deps.broadRetrieval && current?.status !== "human_active"
+      && asked.length <= 500 && !isInjectionOrMarkup(asked)) {
+      try {
+        const [ranked, broad] = await Promise.all([
+          deps.retrieval.search({ workspace, query: asked, limit: 8, audience: "customer" }),
+          deps.broadRetrieval(workspace),
+        ]);
+        const merged = new Map<string, import("../contracts/data/knowledge.js").KnowledgeRetrievalHit>();
+        if (ranked.kind === "evidence") for (const hit of ranked.hits) merged.set(hit.citation.chunkId, hit);
+        for (const hit of broad) if (!merged.has(hit.citation.chunkId)) merged.set(hit.citation.chunkId, hit);
+        const hits = [...merged.values()].slice(0, 8);
+        let chars = 0;
+        const bounded = hits.filter((hit) => {
+          const n = hit.text.length;
+          if (chars + n > 12_000) return false;
+          chars += n; return true;
+        });
+        const evidence = Object.freeze(bounded.map((hit, i) => Object.freeze({ referenceId: `evidence-${i + 1}`, sourceLabel: hit.title, text: hit.text })));
+        const gate = await deps.modelGate({ workspaceId: workspace.workspaceId, conversationId, query: asked, evidence });
+        const kind = typeof gate === "object" && gate !== null ? (gate as { kind?: unknown }).kind : null;
+        const recognized = ["small_talk", "answerable", "insufficient_evidence", "conflicting_evidence", "uncertain"].includes(String(kind));
+        if (!recognized) gateFailed = true;
+        if (kind === "small_talk") return Object.freeze({ kind: "small_talk", text: /[\u0E00-\u0E7F]/u.test(asked)
+          ? "ฉันเป็นผู้ช่วยของร้านนี้ครับ ลองถามเรื่องร้านได้เลยครับ" : "I’m this shop’s assistant. Feel free to ask about the shop." });
+        if (["answerable", "insufficient_evidence", "conflicting_evidence", "uncertain"].includes(String(kind))) {
+          const retrieval = { async search() { return bounded.length ? Object.freeze({ kind: "evidence" as const, hits: Object.freeze(bounded) })
+            : Object.freeze({ kind: "no_answer" as const, reason: "NO_APPROVED_EVIDENCE" as const }); } };
+          const answerability = { async assess() { return Object.freeze({ kind }); } };
+          const orchestrator = new SupportOrchestrator({ conversations: deps.conversations, retrieval,
+            evidenceFreshness: deps.evidenceFreshness, answerability, answer: withSupportingEvidence(deps.answer ?? createAnswerPort({
+              modelEnabled: deps.model?.enabled === true,
+              ...(deps.model?.createModelPort ? { createModelPort: () => deps.model!.createModelPort!({ conversationId }) } : {}),
+            })), handoff: deps.handoff }, 8);
+          return orchestrator.respond({ workspace, conversationId, query: asked, audience: "customer" });
+        }
+      } catch { gateFailed = true; /* Gate failure deliberately rejoins the unchanged legacy path below. */ }
+    }
+    return orchestratorFor(conversationId, !gateFailed).respond({ workspace, conversationId, query: asked, audience: "customer" });
   };
 
   return Object.freeze({

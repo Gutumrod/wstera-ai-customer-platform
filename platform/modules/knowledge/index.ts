@@ -566,6 +566,31 @@ export async function retrieveKnowledge(
   return hits.length > 0 ? Object.freeze({ kind: "evidence", hits }) : Object.freeze({ kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" });
 }
 
+/** Broad, deterministic approved customer retrieval for host-level semantic triage. */
+export async function listBroadCustomerKnowledge(
+  repository: KnowledgeRepositoryPort,
+  workspace: TrustedWorkspaceContext,
+): Promise<readonly KnowledgeRetrievalHit[]> {
+  const items = await repository.listRetrievableChunks(workspace, undefined, "customer");
+  const candidates: KnowledgeRetrievalHit[] = [];
+  for (const item of items) {
+    assertWorkspace(workspace, item.source.workspaceId);
+    assertWorkspace(workspace, item.version.workspaceId);
+    assertWorkspace(workspace, item.chunk.workspaceId);
+    if (item.source.status !== "active" || item.version.status !== "approved" || item.version.visibility !== "customer") continue;
+    candidates.push(Object.freeze({
+      sourceId: item.source.sourceId, versionId: item.version.versionId, title: item.source.title,
+      text: item.chunk.text, score: 1,
+      citation: Object.freeze({ workspaceId: item.chunk.workspaceId, sourceId: item.source.sourceId,
+        sourceVersionId: item.version.versionId, chunkId: item.chunk.chunkId,
+        locator: Object.freeze({ ...item.chunk.locator }) }),
+    }));
+  }
+  candidates.sort((a, b) => a.sourceId.localeCompare(b.sourceId) || a.versionId.localeCompare(b.versionId)
+    || compareLocator(a.citation.locator, b.citation.locator) || a.citation.chunkId.localeCompare(b.citation.chunkId));
+  return Object.freeze(candidates);
+}
+
 /** Revalidate cited identities against the current active and approved repository snapshot. */
 export async function areKnowledgeCitationsCurrent(
   repository: KnowledgeRepositoryPort,
