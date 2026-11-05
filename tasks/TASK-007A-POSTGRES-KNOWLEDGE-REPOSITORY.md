@@ -6,7 +6,7 @@
 
 ## Current state
 
-The G1 knowledge module and extractor can create, approve, revoke and retrieve FAQ/PDF/CSV versions. This task implements the PostgreSQL persistence half, including local database-level RLS/lifecycle tests and separate real-PostgreSQL concurrency evidence. There is still no authenticated upload host or production connection pool; those remain separate work.
+The G1 knowledge module and extractor can create, approve, revoke and retrieve FAQ/PDF/CSV versions. This task implements the PostgreSQL persistence half, including local database-level RLS/lifecycle tests and separate real-PostgreSQL concurrency evidence. A local synthetic authenticated upload host was added later in PR #18; there is still no hosted deployment or production connection pool, which remain separate work.
 
 ## Goal
 

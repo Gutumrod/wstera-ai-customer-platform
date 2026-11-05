@@ -9,17 +9,17 @@ PR #16 merged the consolidated Phase 0C and G1 foundation work. On 2026-10-25, P
 | Area | Merged evidence | Still required for G1 / release |
 |---|---|---|
 | Phase 0C | Shared tenancy/channel contracts, compatibility exports, and CI trigger update | Remaining modular increments only when separately scoped |
-| Knowledge | FAQ lifecycle, bounded local PDF/CSV extraction, deterministic Thai/SKU retrieval, citations, PostgreSQL adapter and PGlite tests; PR #18 adds local synthetic authenticated upload/review/approval and citation search | browser-to-`wstera-lab` E2E, route-level tests/rate limiting, membership-revalidation race resolution, production connection/role wiring, answer quality evidence |
+| Knowledge | FAQ lifecycle, bounded local PDF/CSV extraction, deterministic Thai/SKU retrieval, citations, PostgreSQL adapter and PGlite tests; PR #18 adds local synthetic authenticated upload/review/approval and citation search | browser-to-`wstera-lab` E2E, production connection/role wiring, answer quality evidence |
 | Handoff | Local state machine, authorization/repository ports, response orchestration | Durable staff state and atomic channel dispatch/compare-and-send |
 | AI | Citation provenance validator and metered OpenAI-compatible adapter with mocked transport | Approved live provider/model, semantic answer evaluation, durable usage and spend control |
 | PostgreSQL | PGlite RLS/lifecycle tests; historical two-session PostgreSQL evidence from 2026-10-18 | Hosted connection pool/runtime role, host threat review for custom-GUC RLS |
-| Verification | Prior PR #16 evidence: 129 tests and 30 synthetic retrieval queries. PR #18 candidate evidence: 145 tests, build and audit; independent review left M1–M3 open | Fresh unified CI on `9b4f997`; browser-to-`wstera-lab` host E2E; real one-shop upload → cited answer → durable human handoff trace and independent security acceptance |
+| Verification | Prior PR #16 evidence: 129 tests and 30 synthetic retrieval queries. PR #18 candidate evidence: 145 tests, build and audit; independent review left M1–M3 open, later closed in code by PR #26/#28 (CI recorded on `250bb67` and `acb0e9e`) | Unified CI result for `b080d57`; browser-to-`wstera-lab` host E2E; real one-shop upload → cited answer → durable human handoff trace and independent security acceptance |
 
 PR #19 provides a pure PromptPay EMVCo payload builder; it is not wired to a payment flow and has no real banking-app scan proof. PR #20 provides typed action contracts and a pure lifecycle reducer; it does not include an executor or business writes. PR #21 records provenance and pilot criteria. P3A executor and P4 PromptPay wiring remain planned and unauthorized tasks.
 
 ## Merged since 2026-11-02 (BUILD_PASS only)
 
-PR #25 (HOST-004: lab mode fails closed) and PR #23 (AICP objects in schema `aicp`) are merged. PR #26 and PR #28 merged HOST-002: route tests, per-identity rate limits, transactional membership revalidation and M1–M3 closed in code, with revoke/archive moved behind authenticated RPCs. PR #29 merged Core Contract v0.1 as a DRAFT with no independent review. PR #30–#33 merged WEBCHAT-001: per-version `visibility` and retrieval `audience`, the visitor chat page with signed session and rate limits, extractive answer and answerability ports, merchant intake `visibility`, and the wire to `SupportOrchestrator`. `npm run check` in the review worktree reports 425 tests, 425 pass, 0 fail.
+PR #25 (HOST-004: lab mode fails closed) and PR #23 (AICP objects in schema `aicp`) are merged. PR #26 and PR #28 merged HOST-002: route tests, per-identity rate limits, transactional membership revalidation and M1–M3 closed in code, with revoke/archive moved behind authenticated RPCs. PR #29 merged Core Contract v0.1 as a DRAFT; no independent review report is recorded in `reports/`. PR #30–#33 merged WEBCHAT-001: per-version `visibility` and retrieval `audience`, the visitor chat page with signed session and rate limits, extractive answer and answerability ports, merchant intake `visibility`, and the wire to `SupportOrchestrator`. `npm run check` on `b080d57` reported 423 tests.
 
 What this does not show: the migrations (including `20261104000100_knowledge_visibility.sql`) have never run on Supabase, all database evidence is PGlite, no real host serves the visitor chat, no model is enabled, durable handoff (HANDOFF-002) is not built, and the browser-to-`wstera-lab` E2E was not run. CI runs recorded for HOST-002 cover `250bb67` and `acb0e9e`; a unified CI result for `b080d57` is not asserted here. Nothing above is `PRODUCTION_READY`.
 
@@ -29,7 +29,7 @@ Docker Desktop is withdrawn from this machine; the host E2E runs against schema 
 
 ## Remaining G1 work
 
-Task G1-HOST-001 is merged via PR #18: local synthetic authenticated merchant console, workspace resolution, private knowledge upload/quarantine/approval and citation-backed search. Automated checks and reviews are reported in PR #18, with M1–M3 still open as debt; browser-to-Supabase E2E remains unverified. This slice does not include Web Chat, generated answers, or durable handoff.
+Task G1-HOST-001 is merged via PR #18: local synthetic authenticated merchant console, workspace resolution, private knowledge upload/quarantine/approval and citation-backed search. Automated checks and reviews are reported in PR #18, with M1–M3 later closed in code by PR #26/#28; browser-to-Supabase E2E remains unverified. This slice does not include Web Chat, generated answers, or durable handoff.
 
 The local synthetic host's Node.js + Next.js + Supabase Auth/Postgres/private Storage architecture was approved for G1-HOST-001; that approval does not extend to hosted deployment or production operation. The PDF extractor uses Node `worker_threads`, which Cloudflare Workers expose as a non-functional stub, so that extraction path cannot run there as-is. No provider spend, hosted migration, customer data or deployment has been authorized.
 

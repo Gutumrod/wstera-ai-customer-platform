@@ -1,6 +1,6 @@
 # Task 003 — Bounded PDF and CSV extraction (G1-B)
 
-**Status (2026-10-23):** Bounded local PDF/CSV extraction from this task was included in PR #16 and is merged on `main` (`857b2e5`). Authenticated upload, private original-file storage and deployed processing remain unimplemented.
+**Status (2026-10-23):** Bounded local PDF/CSV extraction from this task was included in PR #16 and is merged on `main` (`857b2e5`). Authenticated upload with private original-file storage and quarantine was merged later in PR #18 (local synthetic, BUILD_PASS only); deployed processing remains unimplemented.
 
 ## Goal
 

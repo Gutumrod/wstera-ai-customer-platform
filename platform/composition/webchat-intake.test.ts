@@ -189,14 +189,20 @@ test("replaying an idempotency key with a different visibility returns 409 VERSI
   assert.equal(first.status, 201);
   const before = await harness.rowCounts();
 
+  const sameReplay = await routes.createSource(uploadRequest({ ...fields, visibility: "internal" }, key));
+  assert.equal(sameReplay.status, 201);
+  assert.deepEqual(await harness.rowCounts(), before);
+
   const replay = await routes.createSource(uploadRequest({ ...fields, visibility: "customer" }, key));
   assert.equal(replay.status, 409);
   assert.deepEqual(await replay.json(), { error: "VERSION_CONFLICT" });
   assert.deepEqual(await harness.rowCounts(), before);
 });
 
-test("intake rejects repeated, File-typed and uppercase visibility fields and writes nothing", async () => {
-  const base = { kind: "faq", title: "Returns", content: "คืนสินค้าได้ภายใน 7 วัน" };
+const visibilityBase = { kind: "faq", title: "Returns", content: "คืนสินค้าได้ภายใน 7 วัน" };
+
+test("intake rejects a repeated visibility field with INVALID_FORM_FIELDS and writes nothing", async () => {
+  const base = visibilityBase;
 
   // repeated field -> INVALID_FORM_FIELDS (assertKnownFields)
   const dupForm = new FormData();
@@ -211,8 +217,10 @@ test("intake rejects repeated, File-typed and uppercase visibility fields and wr
   assert.equal(resDup.status, 400);
   assert.deepEqual(await resDup.json(), { error: "INVALID_FORM_FIELDS" });
   assert.deepEqual(await harness.rowCounts(), emptyCounts);
+});
 
-  // File-typed -> INVALID_KNOWLEDGE_INPUT
+test("intake rejects a File-typed visibility field with INVALID_KNOWLEDGE_INPUT and writes nothing", async () => {
+  const base = visibilityBase;
   const resFile = await routes.createSource(uploadRequest({
     ...base,
     visibility: new File(["customer"], "visibility.txt", { type: "text/plain" }),
@@ -220,8 +228,10 @@ test("intake rejects repeated, File-typed and uppercase visibility fields and wr
   assert.equal(resFile.status, 400);
   assert.deepEqual(await resFile.json(), { error: "INVALID_KNOWLEDGE_INPUT" });
   assert.deepEqual(await harness.rowCounts(), emptyCounts);
+});
 
-  // uppercase -> INVALID_KNOWLEDGE_INPUT (case-sensitive)
+test("intake rejects uppercase visibility (case-sensitive) with INVALID_KNOWLEDGE_INPUT and writes nothing", async () => {
+  const base = visibilityBase;
   const resUpper = await routes.createSource(uploadRequest({ ...base, visibility: "CUSTOMER" }));
   assert.equal(resUpper.status, 400);
   assert.deepEqual(await resUpper.json(), { error: "INVALID_KNOWLEDGE_INPUT" });

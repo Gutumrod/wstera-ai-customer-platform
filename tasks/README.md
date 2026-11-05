@@ -14,7 +14,7 @@ Read [AGENTS.md](../AGENTS.md) and [Master Brief](../BRIEF.md) before editing.
 - [TASK-007A-POSTGRES-KNOWLEDGE-REPOSITORY.md](TASK-007A-POSTGRES-KNOWLEDGE-REPOSITORY.md) — merged (PR #16; `visibility` added by PR #30); workspace-scoped PostgreSQL knowledge persistence with local RLS/transaction integration tests on PGlite; no hosted database, hosted migration or production connection.
 - [TASK-CI-001-CROSS-BRANCH-PR-CHECKS.md](TASK-CI-001-CROSS-BRANCH-PR-CHECKS.md) — CI runs on pull requests targeting any branch.
 - [TASK-ARCH-001-MODULAR-BOUNDARIES.md](TASK-ARCH-001-MODULAR-BOUNDARIES.md) — approved I1/single-boundary I2 migration is implemented in the candidate; later increments remain gated.
-- HOST-004 — PROPOSED, no brief yet; make `APP_ENV=lab` start and stop setup docs requiring Docker, on top of branch `codex/aicp-schema-isolation-20261025`.
+- HOST-004 — MERGED (PR #25, `acb0e9e`), BUILD_PASS only; `APP_ENV=lab` mode fails closed. No separate task brief file; no lab or hosted run is claimed.
 - [TASK-HOST-002-HOST-HARDENING.md](TASK-HOST-002-HOST-HARDENING.md) — MERGED (PR #26, fixes in PR #28), BUILD_PASS only; route tests, rate limiting, transactional membership revalidation, M1–M3. PGlite evidence; migrations not run on Supabase.
 - [TASK-WEBCHAT-001-VISITOR-CHAT.md](TASK-WEBCHAT-001-VISITOR-CHAT.md) — MERGED (PR #30–#33), BUILD_PASS only; visitor chat with extractive cited answers and the model path behind an off-by-default flag. No real host serves it yet.
 - [TASK-HANDOFF-002-DURABLE-HANDOFF.md](TASK-HANDOFF-002-DURABLE-HANDOFF.md) — PLANNED; durable pause/resume, staff authorization and atomic send.
