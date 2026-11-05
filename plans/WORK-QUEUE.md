@@ -37,7 +37,7 @@ G2 real LINE sandbox follows G1. G3 onboarding and G4 commercial validation rema
 | Authenticated host / knowledge upload / approval / search | E2E ระดับ API ผ่านบนโปรเจกต์ทดสอบ (26/26, ซ้ำ 25/26 จากสคริปต์) | Owner ลองฟอร์ม login และ knowledge console บนเบราว์เซอร์ |
 | Web Chat | merge แล้ว ลองมือบนหน้าแชตกับฐานทดสอบจริงผ่าน | วัดความเร็วบนโฮสต์จริง (ดู B-06) |
 | Durable handoff | merge แล้ว บั๊ก 3 ข้อแก้ใน PR #44 ลองซ้ำผ่าน (`50`, `51`) | Owner ลองหน้า `/handoffs` บนเบราว์เซอร์ |
-| Live model และ usage | เส้นโมเดลอยู่ใน main (PR #45) flag ปิดเป็นค่าเริ่มต้น; เรียกโมเดลจริง 7 ครั้งบนข้อมูลสังเคราะห์ ledger และเพดานตกกลับทำงาน | เทสต์ 4 คีย์ provider (รอ Owner สร้างคีย์), ปรับด่าน answerability (B-07) |
+| Live model และ usage | เส้นโมเดลอยู่ใน main (PR #45) flag ปิดเป็นค่าเริ่มต้น; เรียกโมเดลจริง 7 ครั้งบนข้อมูลสังเคราะห์ ledger และเพดานตกกลับทำงาน | ปรับด่าน answerability (B-07) |
 | รายการใหม่จากการรัน | region 8 วินาทีต่อข้อความ (B-06), ด่าน answerability (B-07), ไม่มี route revoke (B-08), อัปโหลดเนื้อซ้ำไม่กัน (B-09), extractive แสดงคำสั่งซ่อน (B-10) | Owner จัดลำดับ |
 | เก็บกวาดโปรเจกต์ทดสอบ | ยังไม่ทำ; rollback ยังไม่เคยลอง | ลบค่าลับ ปิดโปรเจกต์ หรือใช้ `scripts/e2e-rollback.sql` |
 | G1 acceptance | ยังไม่ครบ ไม่มีการตรวจอิสระของหลักฐานชุดนี้ | ตรวจอิสระ + ลองเบราว์เซอร์ที่ค้าง |

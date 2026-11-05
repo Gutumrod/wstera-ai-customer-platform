@@ -43,7 +43,7 @@ HANDOFF-002 candidate (2026-11-05, branch `codex/aicp-handoff-002-20261105`, bas
 | เส้นโมเดล flag ปิด/เปิด | เรียกโมเดลจริง 7 ครั้ง ledger settled 7 แถว 2,028 token, ถึงเพดานตกกลับ extractive | 60, 61, 62 |
 | latency บน build จริง (`start:console`) | ตอบ P50 8.4 วินาที, ส่งพนักงาน P50 7.8 วินาที (n=24) | 70 |
 
-**ยังไม่ได้ลอง (รอ Owner):** ฟอร์ม login บนเบราว์เซอร์, knowledge console, หน้า `/handoffs` · **ยังไม่ได้ทำ:** rollback และเก็บกวาดโปรเจกต์ทดสอบ, เทสต์ 4 คีย์ provider · **เส้นโมเดลปิดอยู่** (flag `AICP_MODEL_ANSWERS_ENABLED` ปิดโดยตัวห่อ เว้นแต่ใส่ `AICP_TEST_MODEL=on`) · ไม่มี deploy ไม่มีการใช้จ่ายจริง (ราคาตั้ง 0 ตามแผนเหมา)
+**ลองบนเบราว์เซอร์แล้ว:** ฟอร์ม login, knowledge console, หน้า `/handoffs`, เทสต์ 4 คีย์ provider ดู runbook หัวข้อ 4, 9, 10 · **ยังไม่ได้ทำ:** rollback และเก็บกวาดโปรเจกต์ทดสอบ · **เส้นโมเดลปิดอยู่** (flag `AICP_MODEL_ANSWERS_ENABLED` ปิดโดยตัวห่อ เว้นแต่ใส่ `AICP_TEST_MODEL=on`) · ไม่มี deploy ไม่มีการใช้จ่ายจริง (ราคาตั้ง 0 ตามแผนเหมา)
 
 ตัวเลขเวลา 8 วินาทีต่อข้อความ **ไม่ใช่ค่าบนโฮสต์จริง**: วัดจากเครื่องในไทยไปฐานข้อมูล eu-central-1 (คำสั่งละประมาณ 190 ms) ดูรายการใน `plans/BLOCKERS.md` B-06
 
