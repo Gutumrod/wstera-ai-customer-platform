@@ -3,7 +3,7 @@ import { createExtractiveAnswerabilityPort } from "../adapters/answers/extractiv
 import { PostgresWebChatConfiguration } from "../adapters/persistence/postgres/web-chat-configuration.js";
 import { PgPostgresDatabase } from "../adapters/persistence/postgres/pg-database.js";
 import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/knowledge-repository.js";
-import { InMemoryConversationRepository } from "../modules/conversation/testing/in-memory-repository.js";
+import { PostgresConversationRepository } from "../adapters/persistence/postgres/conversation-repository.js";
 import { KnowledgeRetriever, areKnowledgeCitationsCurrent } from "../modules/knowledge/index.js";
 import type { PostgresDatabasePort } from "../adapters/persistence/postgres/knowledge-repository.js";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
@@ -13,7 +13,6 @@ import { knowledgeDatabaseTls, requiredKnowledgeDatabaseUrl } from "./knowledge-
 type RuntimeDatabase = PostgresDatabasePort & Readonly<{ assertLeastPrivilege(): Promise<void> }>;
 type HostGlobal = typeof globalThis & {
   __merchantKnowledgeDatabase?: RuntimeDatabase;
-  __webChatConversations?: InMemoryConversationRepository;
 };
 
 function runtimeDatabase(): RuntimeDatabase {
@@ -31,10 +30,7 @@ export async function createWebChatRealHost(database: RuntimeDatabase = runtimeD
   const configuration = new PostgresWebChatConfiguration(database);
   // Empty actor id makes every repository write fail closed; this host only reads approved knowledge.
   const repository = new PostgresKnowledgeRepository(database, "");
-  const shared = globalThis as HostGlobal;
-  // ponytail: memory conversations disappear on restart and do not coordinate across instances; replace with durable storage in HANDOFF-002.
-  const conversations = shared.__webChatConversations ?? new InMemoryConversationRepository();
-  shared.__webChatConversations = conversations;
+  const conversations = new PostgresConversationRepository(database);
 
   const host = createWebChatHost({
     conversations,

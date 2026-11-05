@@ -11,6 +11,7 @@ const migrationNames = [
   "20261103000200_host_hardening_revoke.sql",
   "20261104000100_knowledge_visibility.sql",
   "20261105000100_web_chat_host.sql",
+  "20261105000200_durable_handoff.sql",
 ];
 const migrationPaths = migrationNames.map((name) => resolve(process.cwd(), "supabase/migrations", name));
 const mirroredKnowledgePath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");
@@ -310,7 +311,7 @@ test("migrations fail clearly when an existing product role has unsafe attribute
   }
 });
 
-test("the six Supabase migrations remain applicable on a local superuser", async () => {
+test("the seven Supabase migrations remain applicable on a local superuser", async () => {
   const migrations = await Promise.all(migrationPaths.map((path) => readFile(path, "utf8")));
   const database = new PGlite();
   try {
@@ -325,6 +326,43 @@ test("the six Supabase migrations remain applicable on a local superuser", async
       CREATE FUNCTION storage.foldername(object_name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ SELECT string_to_array(object_name, '/') $$;
     `);
     for (const migration of migrations) await database.exec(migration);
+  } finally {
+    await database.close();
+  }
+});
+
+test("durable handoff tables enforce workspace RLS and immutable ordered conversation events", async () => {
+  const database = new PGlite();
+  const migrations = await Promise.all(migrationPaths.map((path) => readFile(path, "utf8")));
+  try {
+    await database.exec(`
+      CREATE ROLE authenticated NOLOGIN;
+      CREATE SCHEMA auth; CREATE TABLE auth.users (id uuid PRIMARY KEY);
+      CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+      CREATE SCHEMA storage;
+      CREATE TABLE storage.buckets (id text PRIMARY KEY, name text NOT NULL, public boolean NOT NULL, file_size_limit bigint NOT NULL, allowed_mime_types text[]);
+      CREATE TABLE storage.objects (id uuid PRIMARY KEY, bucket_id text NOT NULL, name text NOT NULL);
+      CREATE FUNCTION storage.foldername(object_name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ SELECT string_to_array(regexp_replace(object_name, '/[^/]*$', ''), '/') $$;
+    `);
+    for (const migration of migrations) await database.exec(migration);
+    await database.exec("INSERT INTO aicp.workspaces (workspace_id, name) VALUES ('shop-a', 'A'), ('shop-b', 'B')");
+    const runtime = (operation: (tx: any) => Promise<void>) => database.transaction(async (tx) => {
+      await tx.exec("SET LOCAL ROLE knowledge_runtime");
+      await tx.query("SELECT set_config('app.workspace_id', 'shop-a', true)");
+      await operation(tx);
+    });
+    await runtime(async (tx) => {
+      await tx.query("INSERT INTO aicp.conversations (workspace_id, conversation_id) VALUES ('shop-a', 'thread-a')");
+      await tx.query("INSERT INTO aicp.conversation_events (workspace_id, conversation_id, version, event_kind, payload) VALUES ('shop-a', 'thread-a', 1, 'handoff_requested', '{}'::jsonb)");
+      await tx.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body) VALUES ('shop-a', 'thread-a', 'customer', 'คำถามสังเคราะห์')");
+    });
+    await runtime(async (tx) => {
+      const invisible = await tx.query("SELECT * FROM aicp.conversations WHERE workspace_id = 'shop-b'");
+      assert.equal(invisible.rows.length, 0);
+    });
+    await assert.rejects(runtime(async (tx) => { await tx.query("INSERT INTO aicp.conversations (workspace_id, conversation_id) VALUES ('shop-b', 'forged')"); }), /row-level security/u);
+    await assert.rejects(database.query("UPDATE aicp.conversation_events SET payload = '{}'::jsonb WHERE workspace_id = 'shop-a'"), /CONVERSATION_EVENTS_IMMUTABLE/u);
+    await assert.rejects(runtime(async (tx) => { await tx.query("INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body) VALUES ('shop-a', 'thread-a', 'customer', repeat('x', 5001))"); }), /check constraint/u);
   } finally {
     await database.close();
   }
