@@ -44,8 +44,9 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
   const [messages, setMessages] = useState<Message[]>([]);
   const [tab, setTab] = useState<Tab>("handoff_requested");
   const [sort, setSort] = useState<Sort>("asc");
-  const [text, setText] = useState("");
-  const [error, setError] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [pollError, setPollError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const busyRef = useRef(false);
@@ -58,6 +59,8 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
     if (!listResponse.ok) throw listResponse;
     const body = await listResponse.json() as { data: Handoff[] };
     setItems(body.data);
+    const present = new Set(body.data.map((item) => item.conversationId));
+    setDrafts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => present.has(id))));
     if (!conversationId) return;
     if (!body.data.some((item) => item.conversationId === conversationId)) {
       // เรื่องที่เปิดอยู่หายจากรายการ (เช่น พนักงานอื่นปล่อยคืน): ล้าง selected/ข้อความ/draft และไม่ poll ข้อความเรื่องนั้นต่อ
@@ -65,7 +68,6 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
         selectedRef.current = null;
         setSelected(null);
         setMessages([]);
-        setText("");
       }
       return;
     }
@@ -78,7 +80,7 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
   // เปลี่ยนเรื่อง: เคลียร์ข้อความเก่าทันที แล้วโหลดเรื่องใหม่ (polling effect ไม่ผูกกับ selected จึงไม่ตายเมื่อคลิกระหว่าง poll)
   useEffect(() => {
     setMessages([]);
-    if (selected) refresh(selected).catch((reason) => setError(thaiError(reason, "โหลดข้อมูลบทสนทนาไม่ได้")));
+    if (selected) refresh(selected).catch((reason) => setPollError(thaiError(reason, "โหลดข้อมูลบทสนทนาไม่ได้")));
   }, [selected, refresh]);
 
   useEffect(() => {
@@ -90,9 +92,9 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
       pollingRef.current = true;
       try {
         await refresh();
-        setError("");
+        setPollError("");
       } catch (reason) {
-        if (!disposed) setError(thaiError(reason, selectedRef.current ? "โหลดข้อมูลบทสนทนาไม่ได้" : "โหลดรายการไม่ได้"));
+        if (!disposed) setPollError(thaiError(reason, selectedRef.current ? "โหลดข้อมูลบทสนทนาไม่ได้" : "โหลดรายการไม่ได้"));
       } finally {
         pollingRef.current = false;
         setNow(Date.now());
@@ -116,25 +118,49 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
 
   async function action(path: "claim" | "release" | "reply", body?: unknown) {
     if (!selected || busyRef.current) return;
+    const conversationId = selected;
+    const replyText = path === "reply" ? (drafts[conversationId] ?? "") : "";
+    if (path === "reply" && !replyText.trim()) return;
     busyRef.current = true;
     setBusy(true);
-    setError("");
+    setActionError("");
     try {
-      const response = await fetch(`/api/handoffs/${encodeURIComponent(selected)}/${path}`, {
-        method: "POST", headers: { "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}),
+      const response = await fetch(`/api/handoffs/${encodeURIComponent(conversationId)}/${path}`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        ...(body ? { body: JSON.stringify(path === "reply" ? { ...(body as Record<string, unknown>), text: replyText } : body) } : {}),
       });
       if (!response.ok) throw response;
-      if (path === "reply") setText("");
+      if (path === "reply") setDrafts((current) => {
+        if (current[conversationId] !== replyText) return current;
+        const next = { ...current };
+        delete next[conversationId];
+        return next;
+      });
       if (path === "claim") setTab("human_active");
       if (path === "release") {
         selectedRef.current = null;
         setSelected(null);
         setMessages([]);
-        setText("");
+        setDrafts((current) => {
+          if (!(conversationId in current)) return current;
+          const next = { ...current };
+          delete next[conversationId];
+          return next;
+        });
         await refresh(null);
-      } else await refresh(selected);
+      } else {
+        try {
+          await refresh(conversationId);
+        } catch (reason) {
+          if (path === "reply") {
+            setActionError(`ส่งคำตอบแล้ว แต่โหลดรายการใหม่ไม่ได้ (${thaiError(reason, "กรุณารีเฟรชเพื่อตรวจสอบรายการ")})`);
+            return;
+          }
+          throw reason;
+        }
+      }
     } catch (reason) {
-      setError(thaiError(reason, path === "reply" ? "ส่งคำตอบไม่ได้ กรุณาลองอีกครั้ง" : "ทำรายการไม่ได้ กรุณาลองอีกครั้ง"));
+      setActionError(thaiError(reason, path === "reply" ? "ส่งคำตอบไม่ได้ กรุณาลองอีกครั้ง" : "ทำรายการไม่ได้ กรุณาลองอีกครั้ง"));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -149,7 +175,7 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
 
   function switchTab(next: Tab, focus = false) {
     setTab(next);
-    if (active && active.status !== next) { selectedRef.current = null; setSelected(null); setMessages([]); setText(""); }
+    if (active && active.status !== next) { selectedRef.current = null; setSelected(null); setMessages([]); }
     if (focus) document.getElementById(`handoffs-tab-${next}`)?.focus();
   }
   function tabKey(event: React.KeyboardEvent, index: number) {
@@ -160,6 +186,8 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
     switchTab(TABS[to].id, true);
   }
   const current = TABS.find((t) => t.id === tab)!;
+  const error = actionError || pollError;
+  const text = selected ? (drafts[selected] ?? "") : "";
   return <main className="handoffs-shell">
     <header className="handoffs-header"><div><p className="handoffs-eyebrow">กล่องข้อความพนักงาน</p><h1>เรื่องที่รอพนักงาน</h1></div><a href="/">กลับหน้าความรู้</a></header>
     {error ? <p className="handoffs-error" role="alert">{error}</p> : null}
@@ -193,11 +221,11 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
             {active?.status === "human_active" && active.assignedStaffId === currentStaffId ? <button className="handoffs-secondary" disabled={busy} onClick={() => void action("release")}>{busy ? "กำลังทำรายการ…" : "ปล่อยคืนให้บอท"}</button> : null}
           </div>
           {active?.status === "human_active" && active.assignedStaffId === currentStaffId ? <form className="handoffs-reply" onSubmit={(event) => { event.preventDefault(); void action("reply", { text, deliveryId: crypto.randomUUID() }); }}>
-            <label htmlFor="handoffs-reply-text">ข้อความตอบลูกค้า</label><textarea id="handoffs-reply-text" maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} />
+            <label htmlFor="handoffs-reply-text">ข้อความตอบลูกค้า</label><textarea id="handoffs-reply-text" maxLength={5000} value={text} onChange={(event) => { const value = event.target.value; if (selected) setDrafts((current) => ({ ...current, [selected]: value })); }} />
             <button disabled={busy || !text.trim()}>{busy ? "กำลังส่ง…" : "ส่งคำตอบ"}</button>
           </form> : null}
-        </> : <p className="handoffs-empty">เลือกรายการทางซ้ายเพื่ออ่านบทสนทนา</p>}
-      </section>
+        </> : <p className="handoffs-empty">เลือกรายการเพื่ออ่านบทสนทนา</p>}
+        </section>
     </div>
   </main>;
 }

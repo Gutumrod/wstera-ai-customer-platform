@@ -43,6 +43,13 @@ test("list returns latest customer text capped at 120 characters, null when abse
     await query.query(
       "INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, created_at) VALUES ($1, $2, 'customer', $3, $4)",
       [shopA.workspaceId, "thread-with-customer", longText, "2026-11-04T00:02:00.000Z"]);
+    await query.query(
+      "INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, created_at) VALUES ($1, $2, 'bot', $3, $4)",
+      [shopA.workspaceId, "thread-with-customer", "บอทตอบทีหลังและต้องไม่กลายเป็นข้อความลูกค้าล่าสุด", "2026-11-04T00:03:00.000Z"]);
+    await query.query("UPDATE aicp.conversations SET updated_at = $3 WHERE workspace_id = $1 AND conversation_id = $2",
+      [shopA.workspaceId, "thread-with-customer", "2026-11-04T00:05:00.000Z"]);
+    await query.query("UPDATE aicp.conversations SET updated_at = $3 WHERE workspace_id = $1 AND conversation_id = $2",
+      [shopA.workspaceId, "thread-without-customer", "2026-11-04T00:04:00.000Z"]);
   });
 
   const statements: string[] = [];
@@ -52,6 +59,7 @@ test("list returns latest customer text capped at 120 characters, null when abse
   assert.match(listingQueries[0]!, /LEFT JOIN LATERAL/u);
   const withCustomer = listed.find((item) => item.conversationId === "thread-with-customer");
   const withoutCustomer = listed.find((item) => item.conversationId === "thread-without-customer");
+  assert.deepEqual(listed.map((item) => item.conversationId), ["thread-without-customer", "thread-with-customer"]);
   assert.equal(withCustomer?.lastCustomerMessage, longText.slice(0, 120));
   assert.equal(withCustomer?.lastCustomerMessage?.length, 120);
   assert.equal(withoutCustomer?.lastCustomerMessage, null);
