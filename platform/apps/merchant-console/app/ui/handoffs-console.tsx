@@ -10,6 +10,12 @@ type Handoff = {
   updatedAt: string;
   lastCustomerMessage: string | null;
 };
+type Tab = Handoff["status"];
+type Sort = "asc" | "desc";
+const TABS: { id: Tab; label: string; empty: string }[] = [
+  { id: "handoff_requested", label: "รอรับเรื่อง", empty: "ยังไม่มีเรื่องที่รอรับ" },
+  { id: "human_active", label: "กำลังดูแล", empty: "ยังไม่มีเรื่องที่กำลังดูแล" },
+];
 type Message = { id: string; role: "customer" | "bot" | "staff"; text: string; createdAt: string };
 
 function relativeTime(value: string, now: number) {
@@ -36,6 +42,8 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
   const [items, setItems] = useState<Handoff[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [tab, setTab] = useState<Tab>("handoff_requested");
+  const [sort, setSort] = useState<Sort>("asc");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,6 +59,16 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
     const body = await listResponse.json() as { data: Handoff[] };
     setItems(body.data);
     if (!conversationId) return;
+    if (!body.data.some((item) => item.conversationId === conversationId)) {
+      // เรื่องที่เปิดอยู่หายจากรายการ (เช่น พนักงานอื่นปล่อยคืน): ล้าง selected/ข้อความ/draft และไม่ poll ข้อความเรื่องนั้นต่อ
+      if (selectedRef.current === conversationId) {
+        selectedRef.current = null;
+        setSelected(null);
+        setMessages([]);
+        setText("");
+      }
+      return;
+    }
     const messageResponse = await fetch(`/api/handoffs/${encodeURIComponent(conversationId)}/messages`, { cache: "no-store" });
     if (!messageResponse.ok) throw messageResponse;
     const messageBody = await messageResponse.json() as { data: Message[] };
@@ -107,7 +125,14 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
       });
       if (!response.ok) throw response;
       if (path === "reply") setText("");
-      await refresh(selected);
+      if (path === "claim") setTab("human_active");
+      if (path === "release") {
+        selectedRef.current = null;
+        setSelected(null);
+        setMessages([]);
+        setText("");
+        await refresh(null);
+      } else await refresh(selected);
     } catch (reason) {
       setError(thaiError(reason, path === "reply" ? "ส่งคำตอบไม่ได้ กรุณาลองอีกครั้ง" : "ทำรายการไม่ได้ กรุณาลองอีกครั้ง"));
     } finally {
@@ -117,18 +142,45 @@ export default function HandoffsConsole({ currentStaffId }: { currentStaffId: st
   }
 
   const active = items.find((item) => item.conversationId === selected);
+  const visible = items.filter((item) => item.status === tab).sort((a, b) => {
+    const diff = Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
+    return (diff || a.conversationId.localeCompare(b.conversationId)) * (sort === "asc" ? 1 : -1);
+  });
+
+  function switchTab(next: Tab, focus = false) {
+    setTab(next);
+    if (active && active.status !== next) { selectedRef.current = null; setSelected(null); setMessages([]); setText(""); }
+    if (focus) document.getElementById(`handoffs-tab-${next}`)?.focus();
+  }
+  function tabKey(event: React.KeyboardEvent, index: number) {
+    const last = TABS.length - 1;
+    const to = event.key === "ArrowRight" ? (index + 1) % TABS.length : event.key === "ArrowLeft" ? (index + last) % TABS.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
+    if (to < 0) return;
+    event.preventDefault();
+    switchTab(TABS[to].id, true);
+  }
+  const current = TABS.find((t) => t.id === tab)!;
   return <main className="handoffs-shell">
     <header className="handoffs-header"><div><p className="handoffs-eyebrow">กล่องข้อความพนักงาน</p><h1>เรื่องที่รอพนักงาน</h1></div><a href="/">กลับหน้าความรู้</a></header>
     {error ? <p className="handoffs-error" role="alert">{error}</p> : null}
     <div className="handoffs-grid">
       <section className="handoffs-card" aria-labelledby="handoffs-list-title">
-        <div className="handoffs-section-heading"><h2 id="handoffs-list-title">รายการ</h2><span>{items.length} เรื่อง</span></div>
-        {items.length === 0 ? <p className="handoffs-empty">ยังไม่มีเรื่องที่รอพนักงาน</p> : <div className="handoffs-list">
-          {items.map((item) => <button className={`handoffs-row${selected === item.conversationId ? " is-selected" : ""}`} key={item.conversationId} onClick={() => setSelected(item.conversationId)} aria-pressed={selected === item.conversationId}>
+        <div className="handoffs-section-heading"><h2 id="handoffs-list-title">รายการ</h2><span>{visible.length} เรื่อง</span></div>
+        <div className="handoffs-tabs" role="tablist" aria-label="สถานะเรื่อง">
+          {TABS.map((t, index) => <button type="button" role="tab" key={t.id} id={`handoffs-tab-${t.id}`} aria-selected={tab === t.id} aria-controls="handoffs-tabpanel" tabIndex={tab === t.id ? 0 : -1} className={`handoffs-tab${tab === t.id ? " is-current" : ""}`} onClick={() => switchTab(t.id)} onKeyDown={(event) => tabKey(event, index)}>{t.label} ({items.filter((item) => item.status === t.id).length})</button>)}
+        </div>
+        <div className="handoffs-sort" role="group" aria-label="เรียงลำดับ">
+          <button type="button" aria-pressed={sort === "asc"} onClick={() => setSort("asc")}>เก่าไปใหม่</button>
+          <button type="button" aria-pressed={sort === "desc"} onClick={() => setSort("desc")}>ใหม่ไปเก่า</button>
+        </div>
+        <div role="tabpanel" id="handoffs-tabpanel" aria-labelledby={`handoffs-tab-${tab}`}>
+        {visible.length === 0 ? <p className="handoffs-empty">{current.empty}</p> : <div className="handoffs-list">
+          {visible.map((item) => <button className={`handoffs-row${selected === item.conversationId ? " is-selected" : ""}`} key={item.conversationId} onClick={() => setSelected(item.conversationId)} aria-pressed={selected === item.conversationId}>
             <span className="handoffs-row-top"><strong>{item.lastCustomerMessage?.trim() || "ลูกค้ายังไม่ได้ส่งข้อความ"}</strong><span className={`handoffs-status ${item.status === "human_active" ? "is-active" : "is-waiting"}`}>{item.status === "human_active" ? "พนักงานกำลังดูแล" : "รอรับเรื่อง"}</span></span>
             <span className="handoffs-row-bottom"><span>{item.reason === "customer_requested" ? "ลูกค้าขอคุยพนักงาน" : "บอทตอบไม่ได้"}</span><time dateTime={item.updatedAt}>{relativeTime(item.updatedAt, now)}</time></span>
           </button>)}
         </div>}
+        </div>
       </section>
       <section className="handoffs-card handoffs-detail" aria-labelledby="handoffs-detail-title">
         <h2 id="handoffs-detail-title">{selected ? (active?.lastCustomerMessage?.trim() || "บทสนทนากับลูกค้า") : "เลือกบทสนทนา"}</h2>

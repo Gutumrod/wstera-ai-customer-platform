@@ -34,6 +34,10 @@
 .handoffs-reply textarea { min-height: 100px; resize: vertical; }
 .handoffs-error { margin: 0 0 16px; padding: 11px 13px; border: 1px solid #e5bdbd; border-radius: 10px; color: #9e3434; background: var(--card); }
 .handoffs-shell :focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.handoffs-tabs, .handoffs-sort { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.handoffs-tab, .handoffs-sort button { min-height: 42px; padding: 8px 14px; border: 1px solid var(--field-line); border-radius: 999px; background: var(--card); color: var(--ink); font-weight: 700; cursor: pointer; }
+.handoffs-tab.is-current, .handoffs-sort button[aria-pressed="true"] { border-color: var(--green); background: var(--paper); color: var(--green); }
+.handoffs-sort button { font-size: .82rem; font-weight: 600; }
 @media (max-width: 760px) {
   .handoffs-shell { padding: 24px 15px 42px; }
   .handoffs-grid { grid-template-columns: minmax(0, 1fr); }
