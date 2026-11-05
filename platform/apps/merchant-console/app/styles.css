@@ -1,10 +1,10 @@
-:root { color-scheme: light; --ink: #172923; --muted: #738179; --line: #e4eae5; --paper: #f5f7f3; --green: #285c46; --lime: #d7efaa; --card: #fff; }
+:root { color-scheme: light; --ink: #172923; --muted: #738179; --line: #e4eae5; --paper: #f5f7f3; --green: #285c46; --lime: #d7efaa; --card: #fff; --field-line: #6b7b72; }
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--ink); background: var(--paper); font-family: "Manrope", "IBM Plex Sans Thai", sans-serif; }
 button, input, textarea, select { font: inherit; }
 button { border: 0; border-radius: 10px; padding: 11px 15px; background: var(--green); color: white; font-weight: 700; cursor: pointer; }
 button:disabled { cursor: wait; opacity: .55; }
-input, textarea, select { width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); padding: 11px 12px; outline: none; }
+input, textarea, select { width: 100%; border: 1px solid var(--field-line); border-radius: 9px; background: #fff; color: var(--ink); padding: 11px 12px; outline: none; }
 input:focus, textarea:focus, select:focus { border-color: #679479; box-shadow: 0 0 0 3px #d9e8dc; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { font-size: clamp(2rem, 3vw, 2.7rem); letter-spacing: -.055em; margin-bottom: 0; }

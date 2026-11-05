@@ -11,6 +11,7 @@ type Version = Readonly<{
   createdAt: string;
   approvedAt?: string;
   chunkCount: number;
+  visibility?: "customer" | "internal";
 }>;
 type SourceGroup = Readonly<{
   source: Readonly<{ sourceId: string; title: string; kind: string; status: string; createdAt: string }>;
@@ -28,6 +29,7 @@ type SearchResult = Readonly<{
   }>[];
 }>;
 
+const VISIBILITY_LABEL = { customer: "ลูกค้าเห็นได้", internal: "ภายในร้าน" } as const;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "staff" }>) {
@@ -148,6 +150,7 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
         <p className="eyebrow">01 / KNOWLEDGE INTAKE</p><h2>เพิ่ม FAQ หรือเอกสาร</h2>
         <form className="stack" onSubmit={upload}>
           <label>ชนิดข้อมูล<select name="kind" defaultValue="faq"><option value="faq">FAQ</option><option value="pdf">PDF</option><option value="csv">CSV</option></select></label>
+          <label>การมองเห็น<select name="visibility" defaultValue="" required><option value="" disabled>เลือกการมองเห็น</option><option value="customer">ลูกค้าเห็นได้ บอทใช้ตอบลูกค้า</option><option value="internal">ภายในร้าน พนักงานเท่านั้น</option></select></label>
           <label>ชื่อ source<input name="title" required maxLength={200} /></label>
           <label>เนื้อหา FAQ<textarea name="content" rows={5} maxLength={20000} placeholder="ใช้เมื่อเลือก FAQ" /></label>
           <label>ไฟล์ PDF/CSV<input name="file" type="file" accept=".pdf,.csv,application/pdf,text/csv,text/plain" /></label>
@@ -162,7 +165,7 @@ export default function KnowledgeConsole({ role }: Readonly<{ role: "owner" | "s
           {sources.map(({ source, versions }) => <article className="source" key={source.sourceId}>
             <div className="source-heading"><div><span className="kind-chip">{source.kind}</span><h3>{source.title}</h3></div><span className="muted">{source.status}</span></div>
             {versions.map((version) => <div className="version" key={version.versionId}>
-              <div><strong>{version.status}</strong><span className="muted"> · {version.chunkCount} chunks</span><small>{version.versionId}</small></div>
+              <div><strong>{version.status}</strong><span className="muted"> · {version.chunkCount} chunks · {version.visibility ? VISIBILITY_LABEL[version.visibility] : "ไม่ระบุ"}</span><small>{version.versionId}</small></div>
               {version.status === "indexed" && role === "owner" && <button className="button-small" disabled={busy} onClick={() => void approve(source.sourceId, version.versionId)}>อนุมัติ</button>}
             </div>)}
           </article>)}

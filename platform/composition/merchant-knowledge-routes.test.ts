@@ -270,3 +270,14 @@ test("F6: an approval that committed answers 200 even when the read-back fails",
   assert.deepEqual(await response.json(), { data: { sourceId: version.sourceId, versionId: version.versionId, status: "approved" } });
   assert.deepEqual(await versionRow(version.versionId), { status: "approved", approved_by: OWNER_A });
 });
+
+test("the source list reports each version's visibility, and an upload without one stays internal", async () => {
+  for (const visibility of ["customer", "internal"]) {
+    assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: visibility, visibility }))).status, 201);
+  }
+  assert.equal((await routes.createSource(uploadRequest({ ...faqFields, title: "omitted" }))).status, 201);
+  const list = await (await routes.listSources(new Request(url("sources"), { headers: { origin: APP_ORIGIN } }))).json() as
+    { data: Array<{ source: { title: string }; versions: Array<{ visibility?: string }> }> };
+  const byTitle = Object.fromEntries(list.data.map((group) => [group.source.title, group.versions[0]?.visibility]));
+  assert.deepEqual(byTitle, { customer: "customer", internal: "internal", omitted: "internal" });
+});
