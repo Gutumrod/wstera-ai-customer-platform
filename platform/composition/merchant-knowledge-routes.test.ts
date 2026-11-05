@@ -45,6 +45,10 @@ function uploadRequest(fields: Record<string, string | File>, headers: Record<st
 
 const faqFields = { kind: "faq", title: "Returns", content: "คืนสินค้าได้ภายใน 7 วันนับจากวันที่ได้รับสินค้า" };
 const approveRequest = () => new Request(url("sources/x/versions/y/approve"), { method: "POST", headers: originHeaders });
+const revokeRequest = (body: string, headers: Record<string, string> = {}) => new Request(url("sources/x/versions/y/revoke"), {
+  method: "POST", headers: { ...originHeaders, "content-type": "application/json", ...headers }, body,
+});
+const versionRequest = (headers: Record<string, string> = {}) => new Request(url("sources/x/versions/y"), { headers });
 const params = (sourceId: string, versionId: string) => ({ params: Promise.resolve({ sourceId, versionId }) });
 
 async function expectError(response: Response, status: number, code: string) {
@@ -67,6 +71,8 @@ test("every route answers 401 without a session and writes nothing", async () =>
   await expectError(await routes.listSources(new Request(url("sources"), { headers: originHeaders })), 401, "UNAUTHENTICATED");
   await expectError(await routes.createSource(uploadRequest(faqFields)), 401, "UNAUTHENTICATED");
   await expectError(await routes.approveVersion(approveRequest(), params("x", "y")), 401, "UNAUTHENTICATED");
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "แก้ไข" })), params("x", "y")), 401, "UNAUTHENTICATED");
+  await expectError(await routes.getVersion(versionRequest(originHeaders), params("x", "y")), 401, "UNAUTHENTICATED");
   await expectError(await routes.search(searchRequest(JSON.stringify({ query: "x" }))), 401, "UNAUTHENTICATED");
   assert.deepEqual(await harness.rowCounts(), emptyCounts);
 });
@@ -76,7 +82,61 @@ test("state-changing routes refuse a missing or foreign origin", async () => {
   await expectError(await routes.createSource(uploadRequest(faqFields, foreign)), 403, "ORIGIN_DENIED");
   await expectError(await routes.search(searchRequest(JSON.stringify({ query: "x" }), foreign)), 403, "ORIGIN_DENIED");
   await expectError(await routes.approveVersion(new Request(url("a"), { method: "POST" }), params("x", "y")), 403, "ORIGIN_REQUIRED");
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "แก้ไข" }), foreign), params("x", "y")), 403, "ORIGIN_DENIED");
+  await expectError(await routes.getVersion(versionRequest(foreign), params("x", "y")), 403, "ORIGIN_DENIED");
   assert.deepEqual(await harness.rowCounts(), emptyCounts);
+});
+
+test("only the owner can revoke and read knowledge versions; another shop sees not found", async () => {
+  const version = await uploadFaq();
+  harness.session.userId = STAFF_A;
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "ข้อมูลเก่า" })), params(version.sourceId, version.versionId)), 403, "OWNER_ROLE_REQUIRED");
+  await expectError(await routes.getVersion(versionRequest(originHeaders), params(version.sourceId, version.versionId)), 403, "OWNER_ROLE_REQUIRED");
+
+  harness.session.userId = OWNER_B;
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "ข้อมูลเก่า" })), params(version.sourceId, version.versionId)), 404, "SOURCE_NOT_FOUND");
+  await expectError(await routes.getVersion(versionRequest(originHeaders), params(version.sourceId, version.versionId)), 404, "VERSION_NOT_FOUND");
+  assert.equal((await versionRow(version.versionId))?.status, "indexed");
+});
+
+test("owner revocation validates reason, returns 409 when ineligible, then hides the source from retrieval", async () => {
+  const version = await uploadFaq();
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "   " })), params(version.sourceId, version.versionId)), 400, "INVALID_KNOWLEDGE_INPUT");
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "x".repeat(501) })), params(version.sourceId, version.versionId)), 400, "INVALID_KNOWLEDGE_INPUT");
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "ข้อมูลเก่า", extra: true })), params(version.sourceId, version.versionId)), 400, "INVALID_KNOWLEDGE_INPUT");
+  await expectError(await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "ยังไม่อนุมัติ" })), params(version.sourceId, version.versionId)), 409, "REVOCATION_NOT_ELIGIBLE");
+
+  assert.equal((await routes.approveVersion(approveRequest(), params(version.sourceId, version.versionId))).status, 200);
+  const revoked = await routes.revokeVersion(revokeRequest(JSON.stringify({ reason: "  เปลี่ยนข้อมูลแล้ว  " })), params(version.sourceId, version.versionId));
+  assert.equal(revoked.status, 200);
+  assert.equal(revoked.headers.get("cache-control"), "no-store");
+  assert.equal(((await revoked.json()) as { data: { status: string } }).data.status, "revoked");
+  assert.equal((await versionRow(version.versionId))?.status, "revoked");
+  assert.deepEqual(await (await routes.search(searchRequest(JSON.stringify({ query: "คืนสินค้า" })))).json(), {
+    data: { kind: "no_answer", reason: "NO_APPROVED_EVIDENCE" },
+  });
+});
+
+test("version read-back is owner scoped, no-store, and truncates long content", async () => {
+  const version = await uploadFaq();
+  const oversized = createKnowledgeRoutes(async () => {
+    const host = await harness.requireHost();
+    return { ...host, repository: new Proxy(host.repository, {
+      get: (target, property, receiver) => property === "getVersion"
+        ? async (...args: Parameters<typeof target.getVersion>) => {
+          const stored = await target.getVersion(...args);
+          return stored ? { ...stored, content: "x".repeat(20_001) } : null;
+        }
+        : Reflect.get(target, property, receiver),
+    }) };
+  });
+  const response = await oversized.getVersion(versionRequest(originHeaders), params(version.sourceId, version.versionId));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const body = (await response.json()) as { data: { content: string; truncated: boolean } };
+  assert.equal(body.data.content.length, 20_000);
+  assert.equal(body.data.truncated, true);
+  await expectError(await routes.getVersion(versionRequest(originHeaders), params("../bad", version.versionId)), 404, "VERSION_NOT_FOUND");
 });
 
 test("GET accepts the console's own same-origin fetch and refuses cross-site reads", async () => {
