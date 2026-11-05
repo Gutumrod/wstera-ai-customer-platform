@@ -36,175 +36,246 @@ export function renderChatPage(params: RenderChatPageParams): string {
 <html lang="th">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ระบบสนทนาสอบถามข้อมูล</title>
   <style nonce="${safeNonce}">
     :root {
-      --bg-color: #f8fafc;
-      --card-bg: #ffffff;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --primary: #0284c7;
-      --primary-hover: #0369a1;
-      --border: #e2e8f0;
-      --user-bubble: #e0f2fe;
-      --bot-bubble: #f1f5f9;
-      --chip-bg: #f8fafc;
-      --chip-border: #cbd5e1;
-      --chip-text: #334155;
-      --handoff-btn: #f59e0b;
-      --handoff-hover: #d97706;
+      --bg-base: #f5f5f7;
+      --surface: #ffffff;
+      --surface-2: #e8e8ed;
+      --text: #1d1d1f;
+      --text-2: #515154;
+      --text-3: #6e6e73;
+      --blue: #0071e3;
+      --blue-hover: #0062c4;
+      --hairline: rgba(0, 0, 0, 0.12);
+      --staff-bg: #e8f5ec;
+      --staff-border: #b4dcc2;
+      --staff-badge: #1b6a38;
+      --radius-bubble: 20px;
+      --ease: cubic-bezier(0.25, 1, 0.5, 1);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Leelawadee UI", "Thonburi", "Noto Sans Thai", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-main);
+      font-family: var(--font);
+      background-color: var(--bg-base);
+      color: var(--text);
       display: flex;
       flex-direction: column;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
+      -webkit-font-smoothing: antialiased;
     }
+    button, input { font-family: inherit; }
+    :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
     header {
-      background-color: var(--card-bg);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 20px;
+      background-color: rgba(245, 245, 247, 0.85);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid var(--hairline);
+      padding: 8px 16px;
+      padding-top: max(8px, env(safe-area-inset-top));
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
       flex-shrink: 0;
     }
     header h1 {
-      font-size: 1.125rem;
-      font-weight: 600;
+      font-size: 1.0625rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.35;
+      min-width: 0;
     }
-    .header-actions {
-      display: flex;
-      gap: 10px;
-    }
+    .header-actions { flex-shrink: 0; }
     .btn {
-      padding: 6px 14px;
-      border-radius: 6px;
+      min-height: 44px;
+      padding: 8px 16px;
+      border-radius: 999px;
       font-size: 0.875rem;
-      font-weight: 500;
+      font-weight: 600;
+      line-height: 1.3;
       cursor: pointer;
-      border: 1px solid transparent;
-      transition: background-color 0.15s ease-in-out;
+      border: 1px solid var(--hairline);
+      transition: background-color 200ms var(--ease), border-color 200ms var(--ease);
     }
-    .btn-handoff {
-      background-color: var(--handoff-btn);
-      color: #ffffff;
+    .btn-handoff { background-color: var(--surface); color: var(--text); }
+    .btn-handoff:hover:not(:disabled) { background-color: var(--surface-2); }
+    .btn-handoff .label-done { display: none; }
+    .btn-handoff:disabled {
+      cursor: default;
+      background-color: var(--staff-bg);
+      border-color: var(--staff-border);
+      color: var(--staff-badge);
     }
-    .btn-handoff:hover:not(:disabled) {
-      background-color: var(--handoff-hover);
-    }
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+    .btn-handoff:disabled .label-idle { display: none; }
+    .btn-handoff:disabled .label-done { display: inline; }
     main {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-      max-width: 800px;
       width: 100%;
+      max-width: 760px;
       margin: 0 auto;
-      background-color: var(--card-bg);
-      border-left: 1px solid var(--border);
-      border-right: 1px solid var(--border);
+      background-color: var(--bg-base);
     }
     .messages-area {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
-      padding: 20px;
+      overscroll-behavior: contain;
+      padding: 16px;
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 10px;
     }
     .message-item {
-      max-width: 80%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 0.9375rem;
-      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-width: 0;
+      max-width: 85%;
+      padding: 10px 16px;
+      border-radius: var(--radius-bubble);
+      font-size: 1rem;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
       word-break: break-word;
       white-space: pre-wrap;
     }
     .message-user {
       align-self: flex-end;
-      background-color: var(--user-bubble);
-      color: var(--text-main);
-      border-bottom-right-radius: 2px;
+      background-color: var(--blue);
+      color: #ffffff;
+      border-bottom-right-radius: 6px;
     }
     .message-bot {
       align-self: flex-start;
-      background-color: var(--bot-bubble);
-      color: var(--text-main);
-      border-bottom-left-radius: 2px;
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--hairline);
+      border-bottom-left-radius: 6px;
+    }
+    .message-staff {
+      align-self: flex-start;
+      background-color: var(--staff-bg);
+      color: var(--text);
+      border: 1px solid var(--staff-border);
+      border-bottom-left-radius: 6px;
+    }
+    .staff-badge {
+      order: -1;
+      align-self: flex-start;
+      margin-bottom: 4px;
+      padding: 1px 10px;
+      border-radius: 999px;
+      background-color: var(--staff-badge);
+      color: #ffffff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1.6;
+      white-space: nowrap;
     }
     .citation-list {
+      align-self: stretch;
       margin-top: 8px;
       padding-top: 8px;
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--hairline);
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
     }
     .citation-chip {
-      font-size: 0.75rem;
-      background-color: var(--chip-bg);
-      border: 1px solid var(--chip-border);
-      color: var(--chip-text);
-      padding: 2px 8px;
-      border-radius: 12px;
+      max-width: 100%;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      background-color: var(--bg-base);
+      border: 1px solid var(--hairline);
+      color: var(--text-2);
+      padding: 1px 10px;
+      border-radius: 999px;
+      overflow-wrap: anywhere;
+    }
+    .typing {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin: 0 16px 8px;
+      padding: 8px 14px;
+      align-self: flex-start;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      background-color: var(--surface);
+      color: var(--text-2);
+      font-size: 0.875rem;
+    }
+    main:has(#send-btn:disabled) .typing { display: flex; }
+    .typing-dots { display: inline-flex; gap: 4px; }
+    .typing-dots i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--text-3);
+      opacity: 0.6;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .typing-dots i { animation: dot-pulse 1.2s var(--ease) infinite; }
+      .typing-dots i:nth-child(2) { animation-delay: 0.2s; }
+      .typing-dots i:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes dot-pulse {
+        0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+        40% { opacity: 1; transform: translateY(-3px); }
+      }
     }
     .input-area {
-      padding: 16px 20px;
-      border-top: 1px solid var(--border);
+      padding: 10px 16px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+      border-top: 1px solid var(--hairline);
       display: flex;
-      gap: 10px;
-      background-color: var(--card-bg);
+      gap: 8px;
+      background-color: rgba(255, 255, 255, 0.9);
       flex-shrink: 0;
     }
-    .input-wrapper {
-      flex: 1;
-      position: relative;
-    }
+    .input-wrapper { flex: 1; min-width: 0; }
     .chat-input {
       width: 100%;
-      padding: 10px 14px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 0.9375rem;
-      outline: none;
+      min-height: 44px;
+      padding: 10px 16px;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      background-color: var(--surface);
+      color: var(--text);
+      font-size: 1rem;
     }
-    .chat-input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
-    }
+    .chat-input::placeholder { color: var(--text-3); }
+    .chat-input:focus-visible { border-color: var(--blue); outline-offset: 0; }
     .send-button {
+      min-width: 64px;
+      min-height: 44px;
       padding: 10px 20px;
-      background-color: var(--primary);
+      background-color: var(--blue);
       color: #ffffff;
       border: none;
-      border-radius: 8px;
-      font-size: 0.9375rem;
-      font-weight: 500;
+      border-radius: 999px;
+      font-size: 1rem;
+      font-weight: 600;
       cursor: pointer;
       flex-shrink: 0;
+      transition: background-color 200ms var(--ease);
     }
-    .send-button:hover:not(:disabled) {
-      background-color: var(--primary-hover);
-    }
-    .send-button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+    .send-button:hover:not(:disabled) { background-color: var(--blue-hover); }
+    .send-button:disabled { background-color: var(--surface-2); color: var(--text-3); cursor: not-allowed; }
     .sr-only {
       position: absolute;
       width: 1px;
@@ -226,9 +297,9 @@ export function renderChatPage(params: RenderChatPageParams): string {
         type="button"
         id="handoff-btn"
         class="btn btn-handoff"
-        aria-label="ขอคุยกับเจ้าหน้าที่พนักงาน"
       >
-        ขอคุยกับพนักงาน
+        <span class="label-idle">ขอคุยกับพนักงาน</span>
+        <span class="label-done">ส่งเรื่องแล้ว รอพนักงานตอบ</span>
       </button>
     </div>
   </header>
@@ -243,6 +314,11 @@ export function renderChatPage(params: RenderChatPageParams): string {
       aria-label="ประวัติการสนทนา"
     >
       <div class="message-item message-bot">สวัสดีครับ ยินดีต้อนรับสู่ระบบบริการลูกค้า มีอะไรให้ช่วยเหลือสามารถพิมพ์สอบถามได้เลยครับ</div>
+    </div>
+
+    <div class="typing" role="status">
+      <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>กำลังหาคำตอบ…</span>
     </div>
 
     <form id="chat-form" class="input-area" action="#" method="post">
@@ -294,8 +370,15 @@ export function renderChatPage(params: RenderChatPageParams): string {
       // staffId keeps a staff message in its place in the stored history and lets the poll skip it after a refresh.
       function appendMessage(text, isUser, citations, persist, staffId) {
         const item = document.createElement("div");
-        item.className = isUser ? "message-item message-user" : "message-item message-bot";
+        const isStaff = typeof staffId === "string";
+        item.className = isUser ? "message-item message-user" : isStaff ? "message-item message-staff" : "message-item message-bot";
         item.textContent = text;
+        if (isStaff) {
+          const badge = document.createElement("span");
+          badge.className = "staff-badge";
+          badge.textContent = "พนักงาน";
+          item.appendChild(badge);
+        }
 
         const titles = [];
         if (Array.isArray(citations)) {
