@@ -13,6 +13,7 @@ const migrationNames = [
   "20261105000100_web_chat_host.sql",
   "20261105000200_durable_handoff.sql",
   "20261105000300_model_usage.sql",
+  "20261112000100_shop_profile_catalog.sql",
 ];
 const migrationPaths = migrationNames.map((name) => resolve(process.cwd(), "supabase/migrations", name));
 const mirroredKnowledgePath = resolve(process.cwd(), "platform/adapters/persistence/postgres/migrations/001-knowledge.sql");

@@ -130,14 +130,15 @@ export async function searchCatalog(
   const cleanQuery = normalized.replace(thaiFiller, " ");
   const queryAnalysis = analyzeText(cleanQuery);
   const latinTokens = [...new Set([...queryAnalysis.terms].filter((token) => latinTokenPattern.test(token) && /[a-z]/u.test(token)))];
-  const thaiRuns = cleanQuery.match(/[\u0E00-\u0E7F]+/gu) ?? [];
-  const thaiBigrams = new Set<string>();
-  for (const run of thaiRuns) {
+  // Thai has no word breaks: use 4-character windows (shorter runs use their own length) and require
+  // half of them in the row, so one shared bigram of filler text ("ร้านอยู่ที่ไหน") is not a match.
+  const thaiGrams = new Set<string>();
+  for (const run of cleanQuery.match(/[\u0E00-\u0E7F]+/gu) ?? []) {
     const chars = Array.from(run);
-    for (let i = 0; i + 1 < chars.length; i += 1) thaiBigrams.add(chars[i]! + chars[i + 1]!);
+    if (chars.length < 2) continue;
+    const size = Math.min(4, chars.length);
+    for (let i = 0; i + size <= chars.length; i += 1) thaiGrams.add(chars.slice(i, i + size).join(""));
   }
-  const ignored = new Set(["ราคา", "เท่าไหร่", "เท่าไร", "ครับ", "ค่ะ", "มี", "ไหม"]);
-  for (const term of [...thaiBigrams]) if (ignored.has(term)) thaiBigrams.delete(term);
   const versions = await repository.listApprovedCatalogItems(workspace);
   const ranked: CatalogMatch[] = [];
   for (const version of versions) {
@@ -145,16 +146,15 @@ export async function searchCatalog(
     const item = version.item;
     const haystack = [item.sku, item.name, ...item.fitments, item.note ?? ""].join(" ").normalize("NFKC").toLocaleLowerCase("th-TH");
     const haystackTokens = [...(haystack.match(tokenPattern) ?? [])];
-    const haystackTerms = analyzeText(haystack).terms;
     const exactSku = [...(normalized.match(tokenPattern) ?? [])].some((token) => {
       const sku = item.sku.normalize("NFKC").toLocaleLowerCase("th-TH");
       return token === sku || compact(token) === compact(sku);
     });
     if (!exactSku && latinTokens.some((token) => !haystackTokens.some((candidate) => candidate === token || candidate.startsWith(token)))) continue;
-    const exact = exactSku ? 100 : 0;
-    const matchedThai = [...thaiBigrams].filter((term) => haystackTerms.has(term)).length;
+    const thaiCoverage = thaiGrams.size ? [...thaiGrams].filter((gram) => haystack.includes(gram)).length / thaiGrams.size : 0;
+    if (thaiGrams.size && thaiCoverage < 0.5) continue;
     const latinMatched = latinTokens.filter((token) => haystackTokens.some((candidate) => candidate === token || candidate.startsWith(token))).length;
-    const score = exact || (thaiBigrams.size ? matchedThai / thaiBigrams.size : 0) + (latinTokens.length ? latinMatched / latinTokens.length : 0);
+    const score = exactSku ? 100 : thaiCoverage + (latinTokens.length ? latinMatched / latinTokens.length : 0);
     if (score <= 0) continue;
     ranked.push(Object.freeze({ item, score, citation: citation(workspace, "catalog_item", item.sku, version.versionId) }));
   }

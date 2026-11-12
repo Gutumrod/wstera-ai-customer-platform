@@ -74,7 +74,7 @@ export class InMemoryShopKnowledgeRepository implements ShopKnowledgeRepositoryP
     const versionId = required(input.versionId);
     const item = validateCatalogItem(input.item);
     const id = itemKey(workspace.workspaceId, item.sku, versionId);
-    if (this.items.has(id) || [...this.items.values()].some((version) => version.workspaceId === workspace.workspaceId && version.versionId === versionId)) {
+    if (this.items.has(id)) {
       throw new KnowledgeError("VERSION_CONFLICT");
     }
     const count = new Set([...this.items.values()].filter((version) => version.workspaceId === workspace.workspaceId).map((version) => version.item.sku)).size;
