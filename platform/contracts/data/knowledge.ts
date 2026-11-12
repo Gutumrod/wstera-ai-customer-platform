@@ -21,7 +21,8 @@ export type KnowledgeErrorCode =
   | "INVALID_EXTRACTION_RESULT"
   | "DOCUMENT_TOO_LARGE"
   | "MEMBERSHIP_REQUIRED"
-  | "OWNER_ROLE_REQUIRED";
+  | "OWNER_ROLE_REQUIRED"
+  | "UNSAFE_KNOWLEDGE_TEXT";
 
 /** Safe domain error shared by the knowledge core and replaceable repositories. */
 export class KnowledgeError extends Error {
