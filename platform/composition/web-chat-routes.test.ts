@@ -768,3 +768,29 @@ test("message route de-duplicates citation titles and passes small talk through 
   const greeting = await post({ kind: "small_talk", text: "สวัสดีครับ" });
   assert.deepEqual(greeting, { kind: "greeting", text: "สวัสดีครับ" });
 });
+
+test("message route reports a model/system fault distinctly from no-information and without claiming staff were told", async () => {
+  const cookie = makeValidCookie();
+  const call = async (reply: Awaited<ReturnType<Parameters<typeof createWebChatRoutes>[0]["responder"]>>) => {
+    const { routes } = createHarness({ responder: async () => reply });
+    const res = await routes.message(new Request("https://example.com/message", {
+      method: "POST",
+      headers: { cookie, origin: ALLOWED_ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ connectionId: TRUSTED_WORKSPACE.connectionId, text: "ทดสอบ" }),
+    }));
+    return await res.json() as { kind: string; text: string; handoff?: boolean };
+  };
+  const faults = [
+    await call({ kind: "model_unavailable" }),
+    await call({ kind: "handoff_requested", reason: "GENERATION_UNAVAILABLE" }),
+    await call({ kind: "handoff_requested", reason: "ANSWERABILITY_UNAVAILABLE" }),
+  ];
+  for (const fault of faults) {
+    assert.equal(fault.kind, "uncertain");
+    assert.match(fault.text, /ขัดข้อง/);
+    assert.doesNotMatch(fault.text, /ไม่พบข้อมูลที่ยืนยันได้|แจ้งพนักงาน/);
+    assert.equal(fault.handoff, undefined);
+  }
+  const noInfo = await call({ kind: "handoff_requested", reason: "INSUFFICIENT_EVIDENCE" });
+  assert.match(noInfo.text, /ยังไม่พบข้อมูลที่ยืนยันได้/);
+});

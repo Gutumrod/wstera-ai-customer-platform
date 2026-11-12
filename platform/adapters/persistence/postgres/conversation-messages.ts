@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ConversationMessagePort, StaffConversationMessage } from "../../../contracts/data/conversation-messages.js";
+import type { ConversationMessagePort, RecentTurn, StaffConversationMessage } from "../../../contracts/data/conversation-messages.js";
 import type { TrustedWorkspaceContext } from "../../../contracts/tenancy/index.js";
 import type { PostgresDatabasePort, PostgresRow } from "./knowledge-repository.js";
 
@@ -28,6 +28,18 @@ export class PostgresConversationMessages implements ConversationMessagePort {
       await query.query("SELECT set_config('app.workspace_id', $1, true)", [input.workspace.workspaceId]);
       await query.query(`INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, created_at) VALUES ($1,$2,'customer',$3,${nextCreatedAt})`, [input.workspace.workspaceId, input.conversationId, input.customerText]);
       await query.query(`INSERT INTO aicp.conversation_messages (workspace_id, conversation_id, role, body, delivery_id, created_at) VALUES ($1,$2,'bot',$3,$4,${nextCreatedAt})`, [input.workspace.workspaceId, input.conversationId, input.botText, randomUUID()]);
+    });
+  }
+
+  async recentTurns(input: Readonly<{ workspace: TrustedWorkspaceContext; conversationId: string; limit: number }>): Promise<readonly RecentTurn[]> {
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 20) throw new Error("INVALID_MESSAGE_LIMIT");
+    return this.database.transaction(async (query) => {
+      await query.query("SELECT set_config('app.workspace_id', $1, true)", [input.workspace.workspaceId]);
+      const rows = await query.query<MessageRow>(
+        `SELECT id, role, body, created_at FROM aicp.conversation_messages
+         WHERE workspace_id=$1 AND conversation_id=$2 AND role IN ('customer','bot') ORDER BY created_at DESC, id DESC LIMIT $3`,
+        [input.workspace.workspaceId, input.conversationId, input.limit]);
+      return [...rows.rows].reverse().map((row) => Object.freeze({ role: row.role === "bot" ? "assistant" as const : "customer" as const, text: row.body }));
     });
   }
 

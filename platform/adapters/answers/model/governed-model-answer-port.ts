@@ -1,5 +1,6 @@
 import type { ModelSpendLedgerPort, ModelSpendLimits, ModelUsagePort } from "../../../contracts/models/index.js";
-import type { GroundedAnswerPort, SupportEvidence } from "../../../modules/ai-engine/support-orchestrator.js";
+import type { ChatHistoryItem, GroundedAnswerPort, SupportEvidence } from "../../../modules/ai-engine/support-orchestrator.js";
+import { callWithOneRetry, isProviderFault } from "../../models/openai-compatible/chat-completions.js";
 
 export type ModelPricing = Readonly<{
   /** Millionths of billing currency per token (numerically equal to currency per million tokens). 0 is allowed (flat-rate or unknown price). */
@@ -46,12 +47,13 @@ export function reserveCostMicros(
 /**
  * Wraps a model-backed port with the ledger. Every provider call is reserved first; any refusal or failure
  * serves the extractive fallback instead and is logged by reason code only (never text or credentials).
- * No retry: a retry would be another reserved call against the same ceilings.
+ * A provider fault (timeout, network, 429, 5xx) is retried once inside the same reservation, so the ceilings are not exceeded.
+ * If the provider is still down and the extractive fallback has nothing, this throws so the caller can tell an outage from "no information".
  */
 export function createGovernedModelAnswerPort(options: GovernedModelAnswerOptions): GroundedAnswerPort {
   const log = options.log ?? defaultModelPathLog;
   return Object.freeze({
-    async generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown> {
+    async generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[]; history?: readonly ChatHistoryItem[] }>): Promise<unknown> {
       const fallback = (reason: string) => {
         log("model_path.fallback_extractive", { reason });
         return options.fallback.generate(input);
@@ -85,12 +87,14 @@ export function createGovernedModelAnswerPort(options: GovernedModelAnswerOption
         },
       };
       try {
-        return await options.createModelPort(usage).generate(input);
+        return await callWithOneRetry(() => options.createModelPort(usage).generate(input));
       } catch (error) {
         if (!settled) await options.ledger.fail({ workspaceId: input.workspaceId, callId }).catch(() => undefined);
         const code = typeof error === "object" && error !== null && (error as { name?: unknown }).name === "ModelAdapterError"
           ? String((error as { code?: unknown }).code) : "UNEXPECTED";
-        return fallback(`MODEL_${code}`);
+        const served = await fallback(`MODEL_${code}`);
+        if (served === null && isProviderFault(error)) throw new Error("MODEL_UNAVAILABLE");
+        return served;
       }
     },
   });

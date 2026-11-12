@@ -6,6 +6,7 @@ import type {
   AnswerabilityPort,
   EvidenceFreshnessPort,
   GroundedAnswerPort,
+  ChatHistoryItem,
   SupportEvidence,
   SupportHandoffPort,
 } from "../modules/ai-engine/support-orchestrator.js";
@@ -28,7 +29,7 @@ export type WebChatHostDeps = Readonly<{
   answer?: GroundedAnswerPort;
   /** Only consulted when `answer` is omitted; a model port is built only when enabled === true. */
   model?: Readonly<{ enabled?: boolean; createModelPort?: (context: Readonly<{ conversationId: string }>) => GroundedAnswerPort }>;
-  modelGate?: (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly SupportEvidence[] }>) => Promise<unknown | null>;
+  modelGate?: (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly SupportEvidence[]; history?: readonly ChatHistoryItem[] }>) => Promise<unknown | null>;
   broadRetrieval?: (workspace: TrustedWorkspaceContext) => Promise<readonly import("../contracts/data/knowledge.js").KnowledgeRetrievalHit[]>;
   /**
    * Per-workspace [from, to] phrase swaps applied to the question before it
@@ -50,8 +51,12 @@ export type WebChatHost = Readonly<{
 export function createWebChatHost(deps: WebChatHostDeps): WebChatHost {
   const brain = createAnswerBrain(deps);
   // The responder ignores the caller-supplied audience and always answers as "customer".
-  const responder: SupportResponder = ({ workspace, conversationId, query }) =>
-    brain.respond({ workspace, conversationId, query });
+  const responder: SupportResponder = async ({ workspace, conversationId, query }) => {
+    // History is optional context: any failure to read it just means the model sees none.
+    const wantsHistory = deps.modelGate !== undefined || deps.model?.enabled === true; // extractive answers ignore history: skip the DB read
+    const history = !wantsHistory ? [] : await deps.messages?.recentTurns?.({ workspace, conversationId, limit: 4 }).catch(() => []) ?? [];
+    return brain.respond({ workspace, conversationId, query, ...(history.length > 0 ? { history } : {}) });
+  };
 
   return Object.freeze({
     responder,

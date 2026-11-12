@@ -109,7 +109,7 @@ test("a provider that sends no usage is recorded as null, not guessed", async ()
   assert.deepEqual([ledger.rows[0]?.usage?.inputTokens, ledger.rows[0]?.usage?.outputTokens, ledger.rows[0]?.usage?.totalTokens], [null, null, null]);
 });
 
-test("provider failure, timeout, bad shape and missing citations all fall back without retry or leaking the key", async (t) => {
+test("provider failure, timeout, bad shape and missing citations all fall back (retrying provider faults once) without leaking the key", async (t) => {
   const cases: Array<[string, (body: string) => Response | Promise<Response>, Record<string, string>]> = [
     ["http error", () => new Response("upstream says " + KEY, { status: 500 }), {}],
     ["timeout", () => new Promise<Response>(() => undefined), { AICP_MODEL_TIMEOUT_MS: "30" }],
@@ -125,7 +125,8 @@ test("provider failure, timeout, bad shape and missing citations all fall back w
       const { port, ledger, requests, logs } = setup(env, memoryLedger(), respond);
       const result = await port.generate(input);
       assert.deepEqual(result, extractiveAnswer);
-      assert.equal(requests.length, 1, "no retry");
+      // Provider faults (5xx, timeout) are retried exactly once; every other failure is not.
+      assert.equal(requests.length, name === "http error" || name === "timeout" ? 2 : 1, "retry only provider faults, once");
       assert.ok(ledger.rows[0]?.status === "failed" || ledger.rows[0]?.status === "settled");
       assert.equal(JSON.stringify([result, logs]).includes(KEY), false);
     });

@@ -5,6 +5,7 @@ import type {
   AnswerabilityPort,
   EvidenceFreshnessPort,
   GroundedAnswerPort,
+  ChatHistoryItem,
   SupportEvidence,
   SupportHandoffPort,
   SupportReply,
@@ -26,7 +27,7 @@ export type AnswerBrainDeps = Readonly<{
   answer?: GroundedAnswerPort;
   /** Only consulted when `answer` is omitted; a model port is built only when enabled === true. */
   model?: Readonly<{ enabled?: boolean; createModelPort?: (context: Readonly<{ conversationId: string }>) => GroundedAnswerPort }>;
-  modelGate?: (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly SupportEvidence[] }>) => Promise<unknown | null>;
+  modelGate?: (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly SupportEvidence[]; history?: readonly ChatHistoryItem[] }>) => Promise<unknown | null>;
   broadRetrieval?: (workspace: TrustedWorkspaceContext) => Promise<readonly KnowledgeRetrievalHit[]>;
   /**
    * Per-workspace [from, to] phrase swaps applied to the question before it
@@ -42,9 +43,12 @@ export type BrainRequest = Readonly<{
   workspace: TrustedWorkspaceContext;
   conversationId: string;
   query: string;
+  /** Latest turns of this conversation (oldest first), for follow-up questions. */
+  history?: readonly ChatHistoryItem[];
 }>;
 
-export type BrainReply = SupportReply | Readonly<{ kind: "small_talk"; text: string }>;
+/** The model provider is down and nothing else could answer. No handoff was requested. */
+export type BrainReply = SupportReply | Readonly<{ kind: "small_talk"; text: string }> | Readonly<{ kind: "model_unavailable" }>;
 
 export type AnswerBrain = Readonly<{
   respond(req: BrainRequest): Promise<BrainReply>;
@@ -76,6 +80,7 @@ function withSupportingEvidence(port: GroundedAnswerPort): GroundedAnswerPort {
       workspaceId: string;
       query: string;
       evidence: readonly SupportEvidence[];
+      history?: readonly ChatHistoryItem[];
     }>) {
       const selected = selectSupportingEvidence(input.query, input.evidence);
       if (selected.length === 0) return null;
@@ -83,6 +88,7 @@ function withSupportingEvidence(port: GroundedAnswerPort): GroundedAnswerPort {
         workspaceId: input.workspaceId,
         query: input.query,
         evidence: selected,
+        ...(input.history ? { history: input.history } : {}),
       }));
     },
   });
@@ -124,7 +130,22 @@ export function createAnswerBrain(deps: AnswerBrainDeps): AnswerBrain {
     }
   };
 
-  const respond = async ({ workspace, conversationId, query }: BrainRequest): Promise<BrainReply> => {
+  // Model provider is down: serve what the extractive path can prove, otherwise report the outage without opening a handoff.
+  const outageFallback = async (
+    asked: string, workspace: TrustedWorkspaceContext, conversationId: string,
+    historyField: Readonly<{ history?: readonly ChatHistoryItem[] }>,
+  ): Promise<BrainReply> => {
+    const silent = new SupportOrchestrator({
+      conversations: deps.conversations, retrieval: deps.retrieval, evidenceFreshness: deps.evidenceFreshness,
+      answerability: deps.answerability, answer: withSupportingEvidence(deps.answer ?? createExtractiveAnswerPort()),
+      handoff: { async request() { /* an outage is not a reason to page staff */ } },
+    });
+    const reply = await silent.respond({ workspace, conversationId, query: asked, audience: "customer", ...historyField });
+    return reply.kind === "handoff_requested" || reply.kind === "handoff_unavailable" ? Object.freeze({ kind: "model_unavailable" }) : reply;
+  };
+
+  const respond = async ({ workspace, conversationId, query, history }: BrainRequest): Promise<BrainReply> => {
+    const historyField = history && history.length > 0 ? { history } : {};
     const current = await ensureConversation(workspace, conversationId);
     // Small talk stays available while a handoff is waiting; staff ownership pauses the AI.
     const text = smallTalkReply(query);
@@ -159,13 +180,14 @@ export function createAnswerBrain(deps: AnswerBrainDeps): AnswerBrain {
           chars += n; return true;
         });
         const evidence = Object.freeze(bounded.map((hit, i) => Object.freeze({ referenceId: `evidence-${i + 1}`, sourceLabel: hit.title, text: hit.text })));
-        const gate = await deps.modelGate({ workspaceId: workspace.workspaceId, conversationId, query: asked, evidence });
+        const gate = await deps.modelGate({ workspaceId: workspace.workspaceId, conversationId, query: asked, evidence, ...historyField });
         const kind = typeof gate === "object" && gate !== null ? (gate as { kind?: unknown }).kind : null;
-        const recognized = ["small_talk", "answerable", "insufficient_evidence", "conflicting_evidence", "uncertain"].includes(String(kind));
+        const recognized = ["small_talk", "answerable", "partially_answerable", "insufficient_evidence", "conflicting_evidence", "uncertain", "model_unavailable"].includes(String(kind));
         if (!recognized) gateFailed = true;
+        if (kind === "model_unavailable") return await outageFallback(asked, workspace, conversationId, historyField);
         if (kind === "small_talk") return Object.freeze({ kind: "small_talk", text: /[\u0E00-\u0E7F]/u.test(asked)
           ? "ฉันเป็นผู้ช่วยของร้านนี้ครับ ลองถามเรื่องร้านได้เลยครับ" : "I’m this shop’s assistant. Feel free to ask about the shop." });
-        if (["answerable", "insufficient_evidence", "conflicting_evidence", "uncertain"].includes(String(kind))) {
+        if (["answerable", "partially_answerable", "insufficient_evidence", "conflicting_evidence", "uncertain"].includes(String(kind))) {
           const retrieval = { async search() { return bounded.length ? Object.freeze({ kind: "evidence" as const, hits: Object.freeze(bounded) })
             : Object.freeze({ kind: "no_answer" as const, reason: "NO_APPROVED_EVIDENCE" as const }); } };
           const answerability = { async assess() { return Object.freeze({ kind }); } };
@@ -174,11 +196,11 @@ export function createAnswerBrain(deps: AnswerBrainDeps): AnswerBrain {
             : deps.answer ? withSupportingEvidence(deps.answer) : createExtractiveAnswerPort();
           const orchestrator = new SupportOrchestrator({ conversations: deps.conversations, retrieval,
             evidenceFreshness: deps.evidenceFreshness, answerability, answer: gateAnswer, handoff: deps.handoff }, 8);
-          return orchestrator.respond({ workspace, conversationId, query: asked, audience: "customer" });
+          return orchestrator.respond({ workspace, conversationId, query: asked, audience: "customer", ...historyField });
         }
       } catch { gateFailed = true; /* Gate failure deliberately rejoins the unchanged legacy path below. */ }
     }
-    return orchestratorFor(conversationId, !gateFailed).respond({ workspace, conversationId, query: asked, audience: "customer" });
+    return orchestratorFor(conversationId, !gateFailed).respond({ workspace, conversationId, query: asked, audience: "customer", ...historyField });
   };
 
   return Object.freeze({ respond, ensureConversation });

@@ -17,20 +17,24 @@ export type SupportEvidence = Readonly<{
   text: string;
 }>;
 
+/** Recent turns of the same conversation, oldest first. Untrusted context for follow-up questions only. */
+export type ChatHistoryItem = Readonly<{ role: "customer" | "assistant"; text: string }>;
+
 export type AnswerabilityAssessment =
   | Readonly<{ kind: "answerable" }>
+  | Readonly<{ kind: "partially_answerable" }>
   | Readonly<{ kind: "insufficient_evidence" }>
   | Readonly<{ kind: "conflicting_evidence" }>
   | Readonly<{ kind: "uncertain" }>;
 
 /** Provider-neutral port. Implementations must treat evidence text as untrusted data. */
 export interface AnswerabilityPort {
-  assess(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
+  assess(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[]; history?: readonly ChatHistoryItem[] }>): Promise<unknown>;
 }
 
 /** Returns only opaque evidence references; the engine maps them to canonical citations. */
 export interface GroundedAnswerPort {
-  generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[] }>): Promise<unknown>;
+  generate(input: Readonly<{ workspaceId: string; query: string; evidence: readonly SupportEvidence[]; history?: readonly ChatHistoryItem[] }>): Promise<unknown>;
 }
 
 /** Rechecks every model-visible source/version after generation in one consistent snapshot. */
@@ -230,6 +234,7 @@ function parseAssessmentKind(value: unknown): AnswerabilityAssessment["kind"] | 
     if (Reflect.ownKeys(value).length !== 1) return null;
     const kind = fields.kind?.value;
     return kind === "answerable"
+      || kind === "partially_answerable"
       || kind === "insufficient_evidence"
       || kind === "conflicting_evidence"
       || kind === "uncertain"
@@ -253,6 +258,7 @@ export class SupportOrchestrator {
     query: string;
     /** Who is asking; an absent or unrecognised value is treated as "customer". */
     audience: KnowledgeAudience;
+    history?: readonly ChatHistoryItem[];
   }>): Promise<SupportReply> {
     // Shape checks are defensive only; callers must resolve this context from a trusted server binding.
     if (!isRecord(input)
@@ -269,12 +275,14 @@ export class SupportOrchestrator {
     }
     if (!workspace) return Object.freeze({ kind: "invalid_request" });
     const audience = resolveKnowledgeAudience((input as { audience?: unknown }).audience);
+    const history = Array.isArray(input.history) && input.history.length > 0 ? input.history : undefined;
     const request = Object.freeze({
       workspace,
       conversationId: input.conversationId,
       query: input.query,
       audience,
     });
+    const historyField = history ? { history } : {};
 
     const initialConversation = await this.loadConversation(request);
     if (initialConversation.kind !== "loaded") return initialConversation;
@@ -329,7 +337,7 @@ export class SupportOrchestrator {
 
     let assessment: unknown;
     try {
-      assessment = await this.ports.answerability.assess({ workspaceId: request.workspace.workspaceId, query: request.query, evidence });
+      assessment = await this.ports.answerability.assess({ workspaceId: request.workspace.workspaceId, query: request.query, evidence, ...historyField });
     } catch {
       return this.handoff(guardedRequest, "ANSWERABILITY_UNAVAILABLE");
     }
@@ -341,7 +349,7 @@ export class SupportOrchestrator {
 
     let generated: unknown;
     try {
-      generated = await this.ports.answer.generate({ workspaceId: request.workspace.workspaceId, query: request.query, evidence });
+      generated = await this.ports.answer.generate({ workspaceId: request.workspace.workspaceId, query: request.query, evidence, ...historyField });
     } catch {
       return this.handoff(guardedRequest, "GENERATION_UNAVAILABLE");
     }

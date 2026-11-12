@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { TrustedWorkspaceContext } from "../contracts/tenancy/index.js";
 import type { KnowledgeCitation } from "../contracts/data/knowledge.js";
-import type { SupportReply } from "../modules/ai-engine/support-orchestrator.js";
+import type { ChatHistoryItem, SupportReply } from "../modules/ai-engine/support-orchestrator.js";
 import type { StaffConversationMessage } from "../contracts/data/conversation-messages.js";
 import { createRateLimiter, type RateLimit } from "../apps/merchant-console/lib/rate-limit.js";
 import {
@@ -20,7 +20,12 @@ export type SupportResponder = (input: Readonly<{
   conversationId: string;
   query: string;
   audience: "customer";
-}>) => Promise<SupportReply | Readonly<{ kind: "small_talk"; text: string }>>;
+  history?: readonly ChatHistoryItem[];
+}>) => Promise<SupportReply | Readonly<{ kind: "small_talk"; text: string }> | Readonly<{ kind: "model_unavailable" }>>;
+
+/** Shown when the answering system itself failed. It must never claim staff were notified or that no information exists. */
+export const SYSTEM_FAULT_TEXT = "ขออภัยครับ ระบบตอบอัตโนมัติขัดข้องชั่วคราว ยังตอบไม่ได้ในตอนนี้ กรุณาลองส่งข้อความอีกครั้งในอีกสักครู่ หรือติดต่อร้านโดยตรงครับ";
+const systemFaultReasons: readonly string[] = ["ANSWERABILITY_UNAVAILABLE", "GENERATION_UNAVAILABLE", "RETRIEVAL_UNAVAILABLE", "RESPONSE_PIPELINE_UNAVAILABLE"];
 
 export type CitationDescription = Readonly<{
   title: string;
@@ -412,13 +417,25 @@ export function createWebChatRoutes(deps: WebChatRoutesDeps) {
               text: "ส่งเรื่องให้พนักงานแล้วครับ ขอให้รอพนักงานตอบกลับสักครู่",
             });
 
+          case "model_unavailable":
+            await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", SYSTEM_FAULT_TEXT);
+            return jsonResponse(200, { kind: "uncertain", text: SYSTEM_FAULT_TEXT });
+
           case "handoff_requested":
+            if (systemFaultReasons.includes(reply.reason)) {
+              await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", SYSTEM_FAULT_TEXT);
+              return jsonResponse(200, { kind: "uncertain", text: SYSTEM_FAULT_TEXT });
+            }
             await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ");
             return jsonResponse(200, {
               kind: "uncertain", handoff: true, text: "ขออภัยครับ ยังไม่พบข้อมูลที่ยืนยันได้ และแจ้งพนักงานให้ช่วยดูแล้วครับ ระหว่างนี้ถามเรื่องอื่นได้เลยครับ",
             });
 
           case "handoff_unavailable":
+            if (systemFaultReasons.includes(reply.reason)) {
+              await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", SYSTEM_FAULT_TEXT);
+              return jsonResponse(200, { kind: "uncertain", text: SYSTEM_FAULT_TEXT });
+            }
             await deps.persistTurn?.(workspace, session.conversationId, validation.body.kind === "chat" ? validation.body.text : "", "ขออภัยครับ ไม่พบข้อมูลที่ยืนยันได้ และตอนนี้แจ้งพนักงานไม่ได้ กรุณาติดต่อร้านผ่านช่องทางอื่นครับ");
             return jsonResponse(200, {
               kind: "uncertain",

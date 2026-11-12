@@ -143,7 +143,8 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     const answer = await ask(host, "conv-on");
     const openFlagCommands = countedStatements.length;
     const openFlagTransactions = countedStatements.filter((sql) => sql === "BEGIN").length;
-    assert.ok(openFlagCommands <= 50, `flag-on DB command ceiling: ${openFlagCommands}`);
+    // 50 -> 60: lane A reads the last 4 turns (one small transaction) per message when the model path is on.
+    assert.ok(openFlagCommands <= 60, `flag-on DB command ceiling: ${openFlagCommands}`);
     console.log("CHAT_DB_COMMANDS_FLAG_ON", openFlagCommands, openFlagTransactions);
     assert.equal(answer.kind, "answer");
     assert.equal(answer.text, "จัดส่งใช้เวลา 2 วันทำการ ครับ");
@@ -188,7 +189,8 @@ test("real host: flag off never calls the provider; flag on answers with citatio
       const beforeFailure: number = requests.length;
       const fallback = await ask(host, `conv-gate-${failure}`);
       assert.equal(fallback.text, "จัดส่งใช้เวลา 2 วันทำการ");
-      assert.equal(requests.length, beforeFailure + 1, `${failure} gate failure must not trigger a second model call`);
+      // A provider fault is retried once inside the gate (lane A); a malformed reply is not. Neither reaches the answer model.
+      assert.equal(requests.length, beforeFailure + (failure === "provider" ? 2 : 1), `${failure} gate failure must not trigger an answer model call`);
     }
     gateFailure = "none";
 

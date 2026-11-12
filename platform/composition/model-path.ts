@@ -7,7 +7,8 @@ import {
   type ModelPricing,
 } from "../adapters/answers/model/governed-model-answer-port.js";
 import type { ModelSpendLedgerPort, ModelSpendLimits, ModelUsagePort } from "../contracts/models/index.js";
-import type { GroundedAnswerPort } from "../modules/ai-engine/support-orchestrator.js";
+import type { ChatHistoryItem, GroundedAnswerPort } from "../modules/ai-engine/support-orchestrator.js";
+import { callWithOneRetry, isProviderFault } from "../adapters/models/openai-compatible/chat-completions.js";
 import { selectSupportingEvidence } from "../adapters/answers/extractive/extractive-answerability-port.js";
 
 /**
@@ -136,7 +137,7 @@ export function createModelPathFactory(options: Readonly<{
 /** One separately reserved semantic triage call; malformed/provider/ledger failures fail closed. */
 export function createModelGate(options: Readonly<{
   settings: ModelPathSettings; ledger: ModelSpendLedgerPort; fetch?: typeof fetch; log?: ModelPathLog;
-}>): (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly import("../modules/ai-engine/support-orchestrator.js").SupportEvidence[] }>) => Promise<unknown | null> {
+}>): (input: Readonly<{ workspaceId: string; conversationId: string; query: string; evidence: readonly import("../modules/ai-engine/support-orchestrator.js").SupportEvidence[]; history?: readonly ChatHistoryItem[] }>) => Promise<unknown | null> {
   const log = options.log ?? defaultModelPathLog;
   return async (input) => {
     const bytes = new TextEncoder().encode(input.query + input.evidence.map((e) => e.text + e.sourceLabel).join("" )).byteLength;
@@ -156,11 +157,12 @@ export function createModelGate(options: Readonly<{
     } };
     try {
       const adapter = adapterFor(options.settings, usage, options.fetch) as ReturnType<typeof adapterFor> & { triage(input: unknown): Promise<unknown> };
-      return await adapter.triage({ workspaceId: input.workspaceId, query: input.query, evidence: input.evidence });
+      return await callWithOneRetry(() => adapter.triage({ workspaceId: input.workspaceId, query: input.query, evidence: input.evidence, ...(input.history ? { history: input.history } : {}) }));
     } catch (error) {
       if (!settled) await options.ledger.fail({ workspaceId: input.workspaceId, callId: reservation.callId }).catch(() => undefined);
       log("model_path.triage_fallback", { reason: error instanceof Error && "code" in error ? String((error as { code: unknown }).code) : "UNEXPECTED" });
-      return null;
+      // Provider still down after one retry: say so, so the brain does not mistake it for "no information".
+      return isProviderFault(error) ? Object.freeze({ kind: "model_unavailable" }) : null;
     }
   };
 }
