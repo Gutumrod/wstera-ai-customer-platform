@@ -143,8 +143,8 @@ test("real host: flag off never calls the provider; flag on answers with citatio
     const answer = await ask(host, "conv-on");
     const openFlagCommands = countedStatements.length;
     const openFlagTransactions = countedStatements.filter((sql) => sql === "BEGIN").length;
-    // 50 -> 60: lane A reads the last 4 turns (one small transaction) per message when the model path is on.
-    assert.ok(openFlagCommands <= 60, `flag-on DB command ceiling: ${openFlagCommands}`);
+    // 50 -> 66: lane A reads the last 4 turns and the shop profile + catalog (three small transactions) per message when the model path is on.
+    assert.ok(openFlagCommands <= 66, `flag-on DB command ceiling: ${openFlagCommands}`);
     console.log("CHAT_DB_COMMANDS_FLAG_ON", openFlagCommands, openFlagTransactions);
     assert.equal(answer.kind, "answer");
     assert.equal(answer.text, "จัดส่งใช้เวลา 2 วันทำการ ครับ");

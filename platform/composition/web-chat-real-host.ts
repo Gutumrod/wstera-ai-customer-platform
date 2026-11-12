@@ -5,6 +5,8 @@ import { PgPostgresDatabase } from "../adapters/persistence/postgres/pg-database
 import { PostgresKnowledgeRepository } from "../adapters/persistence/postgres/knowledge-repository.js";
 import { PostgresConversationRepository } from "../adapters/persistence/postgres/conversation-repository.js";
 import { PostgresSupportHandoff } from "../adapters/persistence/postgres/support-handoff.js";
+import { PostgresShopKnowledgeRepository } from "../adapters/persistence/postgres/shop-knowledge-repository.js";
+import { describeShopCitations, shopBroadEvidence, withShopEvidence, withShopFreshness } from "./shop-evidence.js";
 import { PostgresConversationMessages } from "../adapters/persistence/postgres/conversation-messages.js";
 import { KnowledgeRetriever, areKnowledgeCitationsCurrent, listBroadCustomerKnowledge } from "../modules/knowledge/index.js";
 import type { PostgresDatabasePort } from "../adapters/persistence/postgres/knowledge-repository.js";
@@ -42,6 +44,8 @@ export async function createWebChatRealHost(
   // Off unless AICP_MODEL_ANSWERS_ENABLED=true and every model setting is valid; answers then stay extractive.
   const modelSettings = readModelPathSettings(modelPath.env ?? process.env, modelPath.log);
   const ledger = new PostgresModelSpendLedger(database);
+  // Structured shop facts (profile, catalog rows) join the document evidence and share its citation checks.
+  const shop = new PostgresShopKnowledgeRepository(database);
   const host = createWebChatHost({
     ...(modelSettings ? {
       model: {
@@ -55,14 +59,14 @@ export async function createWebChatRealHost(
       },
       modelGate: createModelGate({ settings: modelSettings, ledger,
         ...(modelPath.fetch ? { fetch: modelPath.fetch } : {}), ...(modelPath.log ? { log: modelPath.log } : {}) }),
-      broadRetrieval: (workspace) => listBroadCustomerKnowledge(repository, workspace),
+      broadRetrieval: async (workspace) => [...await shopBroadEvidence(shop, workspace), ...await listBroadCustomerKnowledge(repository, workspace)],
     } : {}),
     conversations,
-    retrieval: new KnowledgeRetriever(repository),
-    evidenceFreshness: {
+    retrieval: withShopEvidence(new KnowledgeRetriever(repository), shop),
+    evidenceFreshness: withShopFreshness({
       areCurrentAndApproved: (workspace, citations, audience) =>
         areKnowledgeCitationsCurrent(repository, workspace, citations, audience),
-    },
+    }, shop),
     answerability: createExtractiveAnswerabilityPort(),
     handoff: new PostgresSupportHandoff(database),
     messages: new PostgresConversationMessages(database),
@@ -73,9 +77,14 @@ export async function createWebChatRealHost(
     ...host,
     resolveConnection: (connectionId: string, channel: "web") => configuration.resolveConnection(connectionId, channel),
     allowedOrigins: (workspace: Parameters<typeof configuration.allowedOrigins>[0]) => configuration.allowedOrigins(workspace),
-    describeCitation: (workspace: Parameters<typeof configuration.describeCitation>[0], citation: Parameters<typeof configuration.describeCitation>[1]) =>
-      configuration.describeCitation(workspace, citation),
-    describeCitations: (workspace: Parameters<typeof configuration.describeCitations>[0], citations: Parameters<typeof configuration.describeCitations>[1]) =>
-      configuration.describeCitations(workspace, citations),
+    describeCitation: async (workspace: Parameters<typeof configuration.describeCitation>[0], citation: Parameters<typeof configuration.describeCitation>[1]) =>
+      (await describeShopCitations(shop, workspace, [citation]))[0] ?? configuration.describeCitation(workspace, citation),
+    describeCitations: async (workspace: Parameters<typeof configuration.describeCitations>[0], citations: Parameters<typeof configuration.describeCitations>[1]) => {
+      const shopTitles = await describeShopCitations(shop, workspace, citations);
+      const documentCitations = citations.filter((_, index) => shopTitles[index] === undefined);
+      const documentTitles = documentCitations.length > 0 ? await configuration.describeCitations(workspace, documentCitations) : [];
+      let next = 0;
+      return citations.map((_, index) => shopTitles[index] ?? documentTitles[next++] ?? null);
+    },
   });
 }

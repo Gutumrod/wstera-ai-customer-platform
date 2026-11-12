@@ -146,7 +146,8 @@ test("real host answers approved knowledge and persists customer handoff to its 
     const aliasAnswer = await POST(chatRequest("ส่งของใช้เวลากี่วัน", session));
     const closedFlagCommands = countedStatements.length;
     const closedFlagTransactions = countedStatements.filter((sql) => sql === "BEGIN").length;
-    assert.ok(closedFlagCommands <= 37, `flag-off DB command ceiling: ${closedFlagCommands}`);
+    // 37 -> 45: shop profile + catalog reads (two small transactions) join every message (lane A, shop evidence).
+    assert.ok(closedFlagCommands <= 45, `flag-off DB command ceiling: ${closedFlagCommands}`);
     console.log("CHAT_DB_COMMANDS_FLAG_OFF", closedFlagCommands, closedFlagTransactions);
     const answerBody = await aliasAnswer.json() as { kind: string; text?: string };
     assert.equal(answerBody.kind, "answer");
