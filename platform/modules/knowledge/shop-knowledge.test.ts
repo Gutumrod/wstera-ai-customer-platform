@@ -191,3 +191,13 @@ test("a single shared Thai bigram is not a match", async () => {
   assert.deepEqual(await searchCatalog(repository, shopA, "ท้อง"), []);
   assert.deepEqual(await searchCatalog(repository, shopA, "ราคาน้ำมัน"), []);
 });
+
+test("model spelled with a space matches, and an exact SKU survives extra Thai words", async () => {
+  const repository = new InMemoryShopKnowledgeRepository();
+  const item: CatalogItem = { sku: "CG-ADV-01", name: "กันล้ม ADV350", fitments: ["Honda ADV350 ปี 2022-2025"], priceThb: 3290, stockStatus: "in_stock" };
+  repository.approveCatalogItemVersion(shopA, item.sku, repository.createCatalogItemVersion(shopA, { versionId: "v1", item }).versionId, { approvedBy: "owner" });
+  assert.equal((await searchCatalog(repository, shopA, "กันล้ม ADV 350"))[0]?.item.sku, "CG-ADV-01");
+  assert.equal((await searchCatalog(repository, shopA, "Honda ADV 350"))[0]?.item.sku, "CG-ADV-01");
+  assert.equal((await searchCatalog(repository, shopA, "CG-ADV-01 ร้านเปิดกี่โมง"))[0]?.item.sku, "CG-ADV-01");
+  assert.deepEqual(await searchCatalog(repository, shopA, "กันล้ม ADV 400"), []);
+});

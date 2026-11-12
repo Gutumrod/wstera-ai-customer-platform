@@ -13,6 +13,8 @@ const contactChannels = new Set<ShopContactChannel>(["phone", "mobile", "line", 
 const thaiFiller = /ราคา|เท่าไหร่|เท่าไร|ครับผม|ครับ|ค่ะ|คะ|มี|ไหม/gu;
 const tokenPattern = /[a-z0-9]+(?:[-_./][a-z0-9]+)*|[\u0E00-\u0E7F]+/gu;
 const latinTokenPattern = /^[a-z0-9]+(?:[-_./][a-z0-9]+)*$/u;
+// "ADV 350" and "ADV350" are the same model: glue letters to the digits that follow them.
+const joinModel = (value: string): string => value.replace(/([a-z])\s+(\d)/gu, "$1$2");
 const compact = (value: string): string => value.replace(/[-_./]/gu, "");
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -125,7 +127,7 @@ export async function searchCatalog(
       i += 1;
     } else if (code >= 0xdc00 && code <= 0xdfff) throw new KnowledgeError("INVALID_RETRIEVAL_QUERY");
   }
-  const normalized = query.normalize("NFKC").toLocaleLowerCase("th-TH");
+  const normalized = joinModel(query.normalize("NFKC").toLocaleLowerCase("th-TH"));
   if (isInjectionOrMarkup(normalized)) return Object.freeze([]);
   const cleanQuery = normalized.replace(thaiFiller, " ");
   const queryAnalysis = analyzeText(cleanQuery);
@@ -144,7 +146,7 @@ export async function searchCatalog(
   for (const version of versions) {
     if (version.workspaceId !== workspace.workspaceId || version.status !== "approved") continue;
     const item = version.item;
-    const haystack = [item.sku, item.name, ...item.fitments, item.note ?? ""].join(" ").normalize("NFKC").toLocaleLowerCase("th-TH");
+    const haystack = joinModel([item.sku, item.name, ...item.fitments, item.note ?? ""].join(" ").normalize("NFKC").toLocaleLowerCase("th-TH"));
     const haystackTokens = [...(haystack.match(tokenPattern) ?? [])];
     const exactSku = [...(normalized.match(tokenPattern) ?? [])].some((token) => {
       const sku = item.sku.normalize("NFKC").toLocaleLowerCase("th-TH");
@@ -152,7 +154,7 @@ export async function searchCatalog(
     });
     if (!exactSku && latinTokens.some((token) => !haystackTokens.some((candidate) => candidate === token || candidate.startsWith(token)))) continue;
     const thaiCoverage = thaiGrams.size ? [...thaiGrams].filter((gram) => haystack.includes(gram)).length / thaiGrams.size : 0;
-    if (thaiGrams.size && thaiCoverage < 0.5) continue;
+    if (!exactSku && thaiGrams.size && thaiCoverage < 0.5) continue;
     const latinMatched = latinTokens.filter((token) => haystackTokens.some((candidate) => candidate === token || candidate.startsWith(token))).length;
     const score = exactSku ? 100 : thaiCoverage + (latinTokens.length ? latinMatched / latinTokens.length : 0);
     if (score <= 0) continue;
