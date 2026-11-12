@@ -25,17 +25,32 @@ function truncateSafely(str: string, maxLen: number): string {
  * not a guarantee against all prompt injection or harmful content.
  */
 function displayableEvidence(text: string): string {
-  const normalized = text.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/gu, "");
-  if (!isInjectionOrMarkup(normalized)) return text;
-  // Only keep a clean, explicitly separated prefix; never guess where an
-  // embedded instruction ends or reuse any text following it.
-  const segments = text.split(/\s+\/\s+|\r?\n/u);
-  const safe: string[] = [];
-  for (const segment of segments) {
-    if (isInjectionOrMarkup(segment.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/gu, ""))) break;
-    safe.push(segment);
+  const normalizedText = (value: string) => value.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/gu, "");
+  let displayText = text;
+  if (/<!--|<(?:script|style)\b|<\/?[a-z][^>]*>/iu.test(text)) {
+    displayText = text
+      .replace(/<!--[\s\S]*?(?:-->|$)/gu, " ")
+      .replace(/<(script|style)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/giu, " ")
+      .replace(/<[^>]*>/gu, " ")
+      .split("\n").map((line) => line.replace(/[\t\f\v ]+/gu, " ").trim()).join("\n");
   }
-  return safe.join("\n").trim();
+  const segments = displayText.split(/\s+\/\s+|\r?\n/u), normalizedSegments = segments.map(normalizedText);
+  if (!isInjectionOrMarkup(normalizedSegments.join("\n"))) return displayText;
+  // Stop before the earliest segment containing any part of the instruction.
+  let end = 0;
+  for (; end < normalizedSegments.length; end += 1) {
+    if (isInjectionOrMarkup(normalizedSegments.slice(0, end + 1).join("\n"))) break;
+  }
+  let start = end;
+  if (!isInjectionOrMarkup(normalizedSegments[end] ?? "")) {
+    for (let candidate = end - 1; candidate >= 0; candidate -= 1) {
+      if (isInjectionOrMarkup(normalizedSegments.slice(candidate, end + 1).join("\n"))) {
+        start = candidate;
+        break;
+      }
+    }
+  }
+  return segments.slice(0, start).join("\n").trim();
 }
 
 export class ExtractiveAnswerAdapter implements GroundedAnswerPort {
